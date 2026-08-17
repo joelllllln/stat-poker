@@ -77,6 +77,23 @@ export function modelOpponentRange(state: HandState, seat: number): Range {
   return rangeForWidth(modelledWidth(state, seat))
 }
 
+/**
+ * The range a seat would be *perceived* to hold if it bet or raised now.
+ *
+ * When pricing a bet, what matters is not the range the opponent currently
+ * puts you on but the one they would put you on after seeing the bet. Using
+ * the pre-bet range makes every bluff look hopeless, because the model has the
+ * villain defending against a range far wider than the one actually
+ * threatening them.
+ */
+export function perceivedRangeAfterAggression(state: HandState, seat: number): Range {
+  const width =
+    state.street === 'preflop'
+      ? PREFLOP_WIDTH.raised
+      : modelledWidth(state, seat) * POSTFLOP_NARROWING.raised
+  return rangeForWidth(width)
+}
+
 /** Modelled ranges for every opponent still in the hand. */
 export function liveOpponentRanges(state: HandState, heroSeat: number): Range[] {
   return state.seats

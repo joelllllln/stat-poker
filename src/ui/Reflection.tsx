@@ -1,0 +1,180 @@
+import { useMemo, useState } from 'react'
+import { describe as describeHand } from '../engine/evaluator'
+import { gradeHand, type DecisionGrade, type HandGrade, type Verdict } from '../coach/grade'
+import type { HandRecord } from '../game/session'
+import { useStore } from './store'
+
+const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; bar: string }> = {
+  optimal: { label: 'Optimal', chip: 'bg-emerald-900/70 text-emerald-200', bar: 'bg-emerald-500' },
+  fine: { label: 'Fine', chip: 'bg-sky-900/70 text-sky-200', bar: 'bg-sky-500' },
+  mistake: { label: 'Mistake', chip: 'bg-amber-900/70 text-amber-200', bar: 'bg-amber-500' },
+  blunder: { label: 'Blunder', chip: 'bg-rose-900/70 text-rose-200', bar: 'bg-rose-500' },
+}
+
+const pct = (value: number) => `${(value * 100).toFixed(1)}%`
+
+function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind: number }) {
+  const [open, setOpen] = useState(false)
+  const style = VERDICT_STYLE[decision.verdict]
+  const best = Math.max(...decision.options.map((o) => o.ev))
+  const worst = Math.min(...decision.options.map((o) => o.ev), 0)
+  const span = best - worst || 1
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-3 px-3 py-2 text-left"
+      >
+        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${style.chip}`}>
+          {style.label}
+        </span>
+        <span className="text-xs uppercase tracking-wide text-slate-500">{decision.street}</span>
+        <span className="text-sm">{decision.chosenLabel}</span>
+        <span className="ml-auto font-mono text-xs text-slate-400">
+          {decision.evLossBB > 0.005 ? `−${decision.evLossBB.toFixed(2)}bb` : '—'}
+        </span>
+        <span className="text-slate-600">{open ? '▾' : '▸'}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-3 border-t border-slate-800 px-3 py-3">
+          <p className="text-sm text-slate-300">{decision.explanation}</p>
+
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <div>
+              <div className="text-slate-500">Your equity</div>
+              <div className="font-mono">{pct(decision.equity)}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Needed</div>
+              <div className="font-mono">
+                {decision.toCall > 0 ? pct(decision.requiredEquity) : '—'}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Pot</div>
+              <div className="font-mono">{decision.potBefore}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">To call</div>
+              <div className="font-mono">{decision.toCall || '—'}</div>
+            </div>
+          </div>
+
+          {/* Every action priced side by side: the point is to show the whole
+              decision, not just a verdict on the one taken. */}
+          <div className="space-y-1">
+            {decision.options.map((option) => {
+              const chosen = option.label === decision.chosenLabel
+              const isBest = option.ev === best
+              return (
+                <div key={option.label} className="flex items-center gap-2 text-xs">
+                  <span
+                    className={`w-28 shrink-0 ${chosen ? 'font-medium text-white' : 'text-slate-400'}`}
+                  >
+                    {option.label}
+                    {chosen && ' ←'}
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded bg-slate-800">
+                    <div
+                      className={`h-full ${isBest ? style.bar : 'bg-slate-600'}`}
+                      style={{ width: `${Math.max(1, ((option.ev - worst) / span) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-20 shrink-0 text-right font-mono text-slate-400">
+                    {(option.ev / bigBlind).toFixed(2)}bb
+                  </span>
+                  {option.foldEquity !== undefined && (
+                    <span className="w-16 shrink-0 text-right text-slate-600">
+                      {pct(option.foldEquity)} fold
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Summary({ grade, record, heroSeat }: { grade: HandGrade; record: HandRecord; heroSeat: number }) {
+  const value = record.state.result?.handValues[heroSeat]
+  const showdown = record.state.result?.showdown
+
+  if (grade.correctAndLost) {
+    return (
+      <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2">
+        <div className="text-sm font-medium text-emerald-200">
+          You played this hand correctly and lost it.
+        </div>
+        <div className="mt-1 text-xs text-emerald-200/70">
+          Every decision was the highest-value one available. Losing {-grade.net} chips here is
+          variance, not a mistake — the same decisions win this pot more often than not.
+        </div>
+      </div>
+    )
+  }
+
+  if (grade.worst) {
+    return (
+      <div className="rounded-lg border border-amber-900 bg-amber-950/30 px-3 py-2">
+        <div className="text-sm font-medium text-amber-200">
+          Biggest leak: {grade.worst.chosenLabel} on the {grade.worst.street}, costing{' '}
+          {grade.worst.evLossBB.toFixed(2)}bb
+        </div>
+        <div className="mt-1 text-xs text-amber-200/70">{grade.worst.explanation}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-slate-300">
+      No mistakes in this hand.
+      {showdown && value != null && ` You showed down ${describeHand(value).toLowerCase()}.`}
+    </div>
+  )
+}
+
+/** Post-hand review: what you did, what it cost, and what was better. */
+export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const grade = useMemo(() => gradeHand(record, heroSeat), [record, heroSeat])
+  const showReview = useStore((s) => s.showReview)
+
+  if (!showReview || grade.decisions.length === 0) return null
+
+  return (
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] uppercase tracking-wide text-slate-500">
+          Hand {record.handNumber} review
+        </span>
+        <span className="font-mono text-xs text-slate-400">
+          {grade.totalEvLossBB > 0.005
+            ? `−${grade.totalEvLossBB.toFixed(2)}bb given up`
+            : 'nothing given up'}
+        </span>
+      </div>
+
+      <Summary grade={grade} record={record} heroSeat={heroSeat} />
+
+      {expanded ? (
+        <div className="space-y-1.5">
+          {grade.decisions.map((decision, i) => (
+            <DecisionRow key={i} decision={decision} bigBlind={record.bigBlind} />
+          ))}
+        </div>
+      ) : (
+        <button
+          onClick={() => setExpanded(true)}
+          className="w-full rounded-lg border border-slate-800 py-1.5 text-xs text-slate-400 hover:bg-slate-900"
+        >
+          Show all {grade.decisions.length} decisions
+        </button>
+      )}
+    </div>
+  )
+}

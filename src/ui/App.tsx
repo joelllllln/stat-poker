@@ -3,6 +3,7 @@ import { aggregate } from '../stats/hand-stats'
 import { recordsForSeat } from '../game/session'
 import { ActionBar } from './ActionBar'
 import { OddsPanel } from './OddsPanel'
+import { Reflection } from './Reflection'
 import { Table } from './Table'
 import { useStore } from './store'
 
@@ -85,6 +86,8 @@ export function App() {
   const deal = useStore((s) => s.deal)
   const hudLevel = useStore((s) => s.hudLevel)
   const setHudLevel = useStore((s) => s.setHudLevel)
+  const showReview = useStore((s) => s.showReview)
+  const toggleReview = useStore((s) => s.toggleReview)
 
   const state = session.current
   const handOver = state === null || state.result !== null
@@ -116,6 +119,14 @@ export function App() {
             ))}
           </div>
           <button
+            onClick={toggleReview}
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              showReview ? 'border-slate-700 text-slate-200' : 'border-slate-800 text-slate-500'
+            }`}
+          >
+            Review
+          </button>
+          <button
             onClick={deal}
             disabled={!handOver}
             className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium hover:bg-emerald-600 disabled:opacity-30"
@@ -132,6 +143,9 @@ export function App() {
       )}
       {state && <ActionBar state={state} heroSeat={heroSeat} />}
       <HandResult />
+      {handOver && session.history.length > 0 && (
+        <Reflection record={session.history[session.history.length - 1]!} heroSeat={heroSeat} />
+      )}
       <SessionStats />
     </div>
   )

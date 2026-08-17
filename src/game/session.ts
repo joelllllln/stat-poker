@@ -33,6 +33,10 @@ export interface HandRecord {
   /** The seed this hand's deck came from: replay needs nothing else. */
   seed: number
   buttonSeat: number
+  /** Stacks as the hand was dealt, which replay needs to reconstruct it. */
+  startingStacks: number[]
+  smallBlind: number
+  bigBlind: number
   state: HandState
   stats: SeatHandStats[]
 }
@@ -47,6 +51,8 @@ export interface SessionState {
   current: HandState | null
   /** Seed of the hand in progress: replay needs nothing else. */
   currentSeed: number
+  /** Stacks as the hand in progress was dealt. */
+  currentStartingStacks: number[]
   history: HandRecord[]
   /** Chips added to each seat by rebuys, so net results stay honest. */
   rebuys: number[]
@@ -83,6 +89,7 @@ export function createSession(config: SessionConfig): SessionState {
     rng: new Rng(config.seed),
     current: null,
     currentSeed: 0,
+    currentStartingStacks: [],
     history: [],
     rebuys: config.seats.map(() => 0),
   }
@@ -108,6 +115,7 @@ export function startNextHand(session: SessionState): SessionState {
 
   const seed = session.rng.nextUint32()
   session.currentSeed = seed
+  session.currentStartingStacks = [...session.stacks]
   session.current = startHand(
     {
       seats: session.config.seats.map((seat, i) => ({
@@ -145,6 +153,9 @@ function finishIfComplete(session: SessionState): SessionState {
     handNumber: session.handNumber,
     seed: session.currentSeed,
     buttonSeat: session.buttonSeat,
+    startingStacks: session.currentStartingStacks,
+    smallBlind: session.config.smallBlind,
+    bigBlind: session.config.bigBlind,
     state,
     stats: deriveHandStats(state),
   })

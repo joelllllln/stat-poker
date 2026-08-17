@@ -21,7 +21,7 @@ npm run test:slow  # adds the exhaustive 133m-hand evaluator check (~80s)
 | 1 | Equity engine, archetype bots, playable table, live odds overlay | done |
 | 2 | Odds in a worker, predict-then-reveal metrics | overlay shipped, worker pending |
 | 3 | Hand-history persistence, stats dashboard, player profile | next |
-| 4 | EV coach, Perfect Line view | |
+| 4 | EV coach, Perfect Line view | done |
 | 5–7 | Preflop blueprint, postflop CFR solver, leak finder | |
 
 ## Layout
@@ -31,7 +31,7 @@ src/
   engine/     cards, hand evaluator, betting rules   — pure, deterministic
   equity/     Monte Carlo + exact enumeration, ranges, opponent modelling
   bots/       archetypes and the policy that drives them
-  coach/      pot odds and expected value
+  coach/      pot odds, expected value, and per-decision grading
   stats/      per-hand statistics and aggregation
   game/       session: the table across hands
   ui/         React front end
@@ -51,6 +51,26 @@ scripts/      preflop table generator, browser smoke test
   of error; AA over KK enumerates to 82% across all 1.7m runouts.
 - **Bots**: their statistical signatures are measured by simulation rather than
   asserted, and are required to stay separable.
+- **Coach**: folding a royal flush grades as a blunder, a correct call grades
+  correct whatever the runout did, verdicts are deterministic, and no decision
+  is ever offered a bet size that was not legal at the time.
+
+## What the coach can and cannot see
+
+The EV model prices **one street**: what folding, calling, checking or betting
+is worth right now. It is exact where the hand ends there — a river call is
+fully priced — and an approximation where it does not, so implied odds on a
+flop draw are not captured. Two consequences worth knowing:
+
+- All-in is only offered as a candidate when stacks are shallow (SPR ≤ 2).
+  Inside a one-street model a huge bet with a strong hand always scores best,
+  because there is no later street in which it could cost the value a smaller
+  bet would have collected. Offering it everywhere made the coach recommend
+  jamming the nuts on the flop.
+- Whether a villain folds is modelled by whether its hand clears the price,
+  after discounting for the equity it will not get to realise. That is a
+  defensible rule rather than a solved one, and Phase 6 replaces it for
+  heads-up postflop.
 
 ## Bot signatures
 

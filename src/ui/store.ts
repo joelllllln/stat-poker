@@ -23,11 +23,14 @@ interface Store {
   hudLevel: 'full' | 'predict' | 'off'
   /** The player's equity guess this decision, in predict-then-reveal mode. */
   guess: number | null
+  /** Whether the post-hand review is shown. */
+  showReview: boolean
 
   deal: () => void
   act: (action: Action) => void
   setHudLevel: (level: Store['hudLevel']) => void
   submitGuess: (guess: number) => void
+  toggleReview: () => void
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -35,6 +38,7 @@ export const useStore = create<Store>((set, get) => ({
   version: 0,
   hudLevel: 'full',
   guess: null,
+  showReview: true,
 
   deal: () => {
     const { session } = get()
@@ -53,4 +57,5 @@ export const useStore = create<Store>((set, get) => ({
 
   setHudLevel: (hudLevel) => set({ hudLevel }),
   submitGuess: (guess) => set({ guess }),
+  toggleReview: () => set((s) => ({ showReview: !s.showReview })),
 }))

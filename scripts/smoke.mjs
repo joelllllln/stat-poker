@@ -55,6 +55,23 @@ for (let i = 0; i < 40; i++) {
 const after = (await page.locator('body').innerText()).toLowerCase()
 check('the hand resolved', /you (won|lost|broke even)/.test(after))
 check('session stats appeared', after.includes('your session'))
+check('the post-hand review appeared', after.includes('review'))
+
+// Open the decision timeline.
+const showAll = page.getByRole('button', { name: /show all \d+ decisions/i })
+if (await showAll.count()) {
+  await showAll.first().click()
+  await page.waitForTimeout(200)
+  const expanded = (await page.locator('body').innerText()).toLowerCase()
+  check('decisions are graded', /(optimal|fine|mistake|blunder)/.test(expanded))
+  // Expand the first decision to reveal the priced alternatives.
+  await page.locator('button:has-text("PREFLOP")').first().click()
+  await page.waitForTimeout(200)
+  const detail = (await page.locator('body').innerText()).toLowerCase()
+  check('alternatives are priced', detail.includes('your equity') && /bb/.test(detail))
+} else {
+  check('decision timeline available', false)
+}
 
 await page.screenshot({ path: 'screenshot.png', fullPage: true })
 check('no console errors', errors.length === 0)
