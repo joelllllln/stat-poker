@@ -45,7 +45,7 @@ for styling, Dexie (IndexedDB) for hand history, Recharts for the dashboard,
 Vitest for tests. Solver core in Rust → WASM with SIMD; everything else TS.
 
 **No backend in v1.** All data is local. Add sync later behind an export/import
-boundary that exists from day one (§8).
+boundary that exists from day one (§9).
 
 ### Non-negotiable design rules
 
@@ -118,18 +118,79 @@ On screen during every decision:
 
 ---
 
-## 5. The reflection layer
+## 5. The reflection layer — "how I should have played, exactly"
 
-**After every hand:** a decision timeline. Each of your actions gets pot odds,
-required equity, your actual equity, EV of every alternative, the EV you gave up
-in bb, and a verdict (Optimal / Marginal / Mistake / Blunder, with thresholds in
-bb — e.g. blunder ≥ 2bb EV loss). The biggest single leak of the hand is called
-out at the top.
+### 5.1 Two rules that govern all grading
 
-**After the solver finishes** (heads-up postflop): your line diffed against the
-solver's strategy at each node — what it does at what frequency, and how far your
-action sits from that. Frequencies, not verdicts: "solver checks 78% here" is
-more instructive than "you were wrong".
+**Rule 1 — grade the decision, never the outcome.** If you call correctly and lose
+to a better hand, that is a *correct call*. The app says so, in those words. A
+trainer that grades on results teaches you to fold winners and chase losers; it
+is the single most common failure mode in poker software and this app must not
+have it.
+
+**Rule 2 — grade against the range, never the cards.** "You should have folded,
+he had aces" is worse than no feedback at all — you could not see his aces. Every
+prescribed action is computed from the information available *at that moment*:
+his range, the board, stacks, position. Villain's actual hand is revealed only
+after the verdict is shown, and never feeds into it.
+
+### 5.2 What "statistically perfect" resolves to at each node
+
+Each of your decisions produces a **prescribed strategy** — not a single action:
+
+| Node | Source | Output |
+|---|---|---|
+| Preflop | Blueprint lookup | Exact frequencies: `3-bet to 9bb 65% / call 35%` |
+| Postflop HU | CFR solve | Frequency + EV for every action and sizing at the node |
+| Postflop multiway | EV vs. modeled ranges | Highest-EV action, labeled heuristic |
+
+**Mixed strategies are shown honestly.** If the solution is "check 78% / bet 22%",
+the app shows both — because that is what the correct strategy *is*. Poker's
+correct play at many nodes is a dice roll, and pretending otherwise is a lie that
+produces worse players.
+
+### 5.3 The verdict comes from EV, not from frequency match
+
+This is the detail that makes mixed strategies usable. Betting a 22%-frequency
+action is **not a mistake** — at equilibrium, actions in a mix have nearly
+identical EV, which is *why* they're mixed. So:
+
+```
+EV loss = EV(prescribed best action) − EV(your action)
+```
+
+| EV loss | Verdict |
+|---|---|
+| ≤ 0.1bb | **Optimal** — inside the mix |
+| 0.1–0.5bb | **Fine** — small, defensible |
+| 0.5–2bb | **Mistake** |
+| > 2bb | **Blunder** |
+
+Frequency is displayed as context ("solver checks here 78% of the time"), never as
+the grade. Thresholds are configurable and get calibrated against real data.
+
+### 5.4 The Perfect Line view
+
+Every hand gets a replay with your actions swapped for the prescribed ones, side
+by side with what you actually did. Each node shows:
+
+- The exact prescribed action, sizing, and frequency.
+- The EV of the line you took vs. the line you should have taken, in bb.
+- **Why**, in words, generated from node features — range advantage, board
+  texture, SPR, blockers, and which of your hands need to bluff to balance the
+  value bets you're already making.
+- **"Perfect play still loses this pot 34% of the time."** Stated explicitly on
+  every hand you played correctly and lost. This is the whole point.
+
+### 5.5 Run It 1000 Times
+
+On any decision, replay the rest of the hand thousands of times from that node
+with the prescribed action, and show the outcome distribution — how often it wins,
+loses, the EV, and where this particular result fell in that spread. Turns "I got
+sucked out on" into a visible tail of a distribution you chose correctly.
+
+A tracked stat, **Correct-and-Lost**, counts decisions that were optimal and lost
+anyway. It should go *up* as you improve. It is the tilt-control metric.
 
 **After every session:** EV lost broken down by street, by position, by action
 type, and by pot type (single-raised / 3-bet / limped).
@@ -165,7 +226,56 @@ meaningful is lying to its user, and this app's entire premise is not doing that
 
 ---
 
-## 7. Bots
+## 7. Player classification — style vs. mastery
+
+Offsuit-style archetypes, but split along **two independent axes**, because a
+single animal label conflates two different questions.
+
+### Axis 1 — Style (descriptive, not a ranking)
+
+Your position on the VPIP/PFR plane plus postflop aggression. This is the classic
+tracker taxonomy: fish sit at VPIP 40%+, the balanced TAG benchmark sits around
+VPIP 22 / PFR 19 / Agg 55, nits sit bottom-left.
+
+|  | Low aggression | High aggression |
+|---|---|---|
+| **Tight** | Rock / Nit | **Eagle** (TAG) |
+| **Loose** | Fish / Calling Station | Maniac (LAG) |
+
+Rendered as a scatter plot: your point, your trail over the last N sessions, and
+the shaded zone winning players occupy. No style is "bad" — LAG and TAG both win.
+Being *unaware* of your style is what's bad.
+
+### Axis 2 — Mastery (a real ranking)
+
+Derived from **EV lost per 100 hands** and solver agreement — *not* from winrate.
+Winrate depends on which bots you sat with and needs tens of thousands of hands to
+mean anything; EV lost is measurable in hundreds and is purely about you.
+
+| Tier | EV lost / 100 hands |
+|---|---|
+| Elite | < 1.5bb |
+| Strong | 1.5–4bb |
+| Solid | 4–8bb |
+| Amateur | 8–15bb |
+| Fish | > 15bb |
+
+Thresholds are placeholders until calibrated against real play against the shipped
+bot pool — do not present them as authoritative before that.
+
+So a profile reads: **"Loose-Aggressive · Solid (−5.1bb/100 EV lost)"** — you play
+like a LAG, and you're mid-tier at it. Both facts are useful; the single-label
+version hides the second one.
+
+### Axis 3 — Per-street and per-spot archetypes
+
+The most actionable output, and where this beats a single badge: your style is
+rarely uniform. "**Nit preflop, maniac on turns**" is a diagnosis you can act on
+tomorrow. Compute the style classification independently per street, per position,
+and per pot type, and surface the biggest internal contradiction as the headline
+leak.
+
+## 8. Bots
 
 Three tiers, shipped in this order:
 
@@ -183,7 +293,7 @@ something real to learn from. A bot with no exploitable tendency teaches nothing
 
 ---
 
-## 8. Data model
+## 9. Data model
 
 Hands stored as `(seed, actions[], stacks, positions, timestamp, botConfig)` —
 replay reconstructs everything. Derived stats are computed on read and cached,
@@ -196,25 +306,33 @@ escape hatch that makes the local-first choice safe.
 
 ---
 
-## 9. Phases
+## 10. Phases
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
 | **0** | Scaffold, CI, cards, 7-card evaluator | Evaluator verified against reference; property tests green |
 | **1** | Playable 6-max table vs. archetype bots | Chips conserved across 100k random hands; side pots correct |
 | **2** | Equity worker + live HUD + predict-then-reveal | Equity matches published figures within MC error |
-| **3** | Hand history persistence + stats dashboard | Stats match a hand-computed reference set; export works |
-| **4** | EV coach + post-hand reflection | Every decision graded; verdicts reproducible |
+| **3** | Hand history persistence + stats dashboard + style/mastery profile (§7) | Stats match a hand-computed reference set; export works |
+| **4** | EV coach, Perfect Line view, Run It 1000 Times (§5) | Every decision graded; verdicts reproducible and outcome-independent |
 | **5** | Preflop blueprint + blueprint bots | Preflop grading against real solution; bot exploitability measurable |
-| **6** | WASM postflop CFR + solver diff view | Turn/river solves <10s; exploitability reported |
-| **7** | Leak finder, deeper analytics | Clusters validated against known leaks in seeded histories |
+| **6** | WASM postflop CFR + solver frequencies in Perfect Line | Turn/river solves <10s; exploitability reported |
+| **7** | Leak finder, per-street archetypes, deeper analytics | Clusters validated against known leaks in seeded histories |
 
 Phases 0–4 are the actual product. 5–7 are the depth that makes it worth using
 for a year. Ship 1–4 before touching Rust.
 
+Note the sequencing on "exactly how I should have played": Phase 4 already
+answers it with EV-vs-range math on every decision, and Phase 5 makes preflop
+exact. Phase 6 upgrades postflop heads-up from "highest EV against my model of
+his range" to true equilibrium frequencies. The verdict UI does not change
+between those phases — only the number feeding it gets better — so build the
+reflection screen once, in Phase 4, against a strategy-provider interface that
+the blueprint and solver later implement.
+
 ---
 
-## 10. Testing
+## 11. Testing
 
 - **Evaluator:** exhaustive or large-sample verification against a reference
   implementation across 7-card combinations.
@@ -228,7 +346,7 @@ for a year. Ship 1–4 before touching Rust.
 
 ---
 
-## 11. Risks
+## 12. Risks
 
 | Risk | Mitigation |
 |---|---|
@@ -241,7 +359,7 @@ for a year. Ship 1–4 before touching Rust.
 
 ---
 
-## 12. Immediate next steps
+## 13. Immediate next steps
 
 1. Scaffold Vite + React + TS + Tailwind + Vitest, CI on push.
 2. `engine/cards.ts` — card representation, seeded deck, 7-card evaluator.
