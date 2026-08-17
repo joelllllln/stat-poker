@@ -12,5 +12,9 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts'],
+    // Exhaustive and simulation-based tests run for minutes by design.
+    testTimeout: 300_000,
+    hookTimeout: 300_000,
+    teardownTimeout: 60_000,
   },
 })
