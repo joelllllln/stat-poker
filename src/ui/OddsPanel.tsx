@@ -126,10 +126,12 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
               label="Hand strength"
               value={
                 state.board.length === 0
-                  ? `top ${(100 - preflopStrength(hero.holeCards!).percentile * 100).toFixed(0)}%`
+                  ? pct(preflopStrength(hero.holeCards!).percentile)
                   : pct(equity.win)
               }
-              hint={state.board.length === 0 ? 'of starting hands' : 'win outright'}
+              hint={
+                state.board.length === 0 ? 'of starting hands beaten' : 'win outright'
+              }
             />
           </div>
 
