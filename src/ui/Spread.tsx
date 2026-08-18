@@ -22,7 +22,12 @@ export function Spread({
   heroSeat: number
   bigBlind: number
 }) {
-  const [from, setFrom] = useState(0)
+  // Where the betting ended, which is the only stretch of board over which
+  // holding the betting fixed is a statement about the hand rather than a
+  // hypothetical. Earlier streets are offered, and labelled as the different
+  // question they are.
+  const settled = state.result?.runoutFrom ?? state.board.length
+  const [from, setFrom] = useState(settled)
 
   const run = useMemo(
     () => runItAgain(state, heroSeat, from, TRIALS),
@@ -36,7 +41,13 @@ export function Spread({
     { label: 'Preflop', size: 0 },
     { label: 'Flop', size: 3 },
     { label: 'Turn', size: 4 },
-  ].filter((street) => street.size < state.board.length)
+    { label: 'the all-in', size: settled },
+  ]
+    .filter((street) => street.size < state.board.length)
+    .filter(
+      (street, index, all) => all.findIndex((other) => other.size === street.size) === index,
+    )
+    .sort((a, b) => b.size - a.size)
 
   return (
     <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
@@ -126,9 +137,17 @@ export function Spread({
         })}
       </div>
 
+      {from < settled && (
+        <p className="text-[11px] text-amber-300/80">
+          Dealt from before the betting ended, so the players are holding to
+          decisions they made after seeing a different board. That is a
+          what-if, not what this hand was worth.
+        </p>
+      )}
+
       <p className="text-[11px] text-slate-400">
         {run.counterfactual
-          ? `You folded, so this is what the hand would have been worth had you played on: it wins ${(run.winRate * 100).toFixed(0)}% of the time at showdown.`
+          ? `You folded. Had you called, the hand would have been worth ${(run.expected / bigBlind).toFixed(1)}bb — it wins ${(run.winRate * 100).toFixed(0)}% of the time at showdown, and the price of finding out is in that figure.`
           : run.actual < run.expected
             ? run.expected > 0
               ? `This line wins ${(run.winRate * 100).toFixed(0)}% of the time and was worth ${(run.expected / bigBlind).toFixed(1)}bb. This runout was one of the ${(100 - run.actualPercentile * 100).toFixed(0)}% that did not.`

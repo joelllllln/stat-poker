@@ -99,6 +99,52 @@ describe('running the hand again', () => {
     expect(run.winRate).toBeGreaterThan(0.7)
   })
 
+  it('charges the counterfactual what calling would have cost', () => {
+    // Hero folds aces to a raise to 20 with 6 already in. Calling would have
+    // meant 20 in the middle from each of them, so the hand is worth +20 when
+    // it holds and −20 when it does not. Handing the hero the pot for the 6
+    // they had already paid would price a fold as free.
+    const folded = playOut([200, 200], ['Ah As', 'Kh Ks'], '2c 7d 9h Jc 3s', [
+      { type: 'raise', to: 6 },
+      { type: 'raise', to: 20 },
+      { type: 'fold' },
+    ])
+    const run = runItAgain(folded, 0, 0, 1_000)
+
+    expect(run.counterfactual).toBe(true)
+    // Win 20, lose 20, or chop the 40 back to where it started.
+    expect([...new Set(run.nets)].sort((a, b) => a - b)).toEqual([-20, 0, 20])
+    expect(run.actual).toBe(-6) // what folding really cost
+    expect(run.expected).toBeGreaterThan(10) // aces are worth calling with
+    expect(run.expected).toBeLessThan(20)
+  })
+
+  it('re-deals from where the betting ended unless asked otherwise', () => {
+    // All-in preflop: everything from the flop on was the deck's decision, so
+    // that is what running it again re-runs. Nothing is held that a player
+    // could have acted on.
+    const allIn = playOut([200, 200], ['Ah As', 'Kh Ks'], '2c 7d 9h Jc 3s', [
+      { type: 'raise', to: 200 },
+      { type: 'call' },
+    ])
+    expect(allIn.result!.runoutFrom).toBe(0)
+    expect(runItAgain(allIn, 0, undefined, 200).fixedBoard).toBe(0)
+
+    // A hand that ran to the river with betting on it holds the whole board:
+    // there is nothing left that the players did not already see.
+    const played = playOut([200, 200], ['Ah As', 'Kh Ks'], '2c 7d 9h Jc 3s', [
+      { type: 'call' },
+      { type: 'check' },
+      { type: 'check' },
+      { type: 'check' },
+      { type: 'check' },
+      { type: 'check' },
+      { type: 'check' },
+      { type: 'check' },
+    ])
+    expect(runItAgain(played, 0, undefined, 200).fixedBoard).toBe(5)
+  })
+
   it('says nothing useful when there was never a contest', () => {
     // Everyone folded preflop: no runout could have changed anything.
     const walkover = playOut([200, 200], ['Ah As', 'Kh Ks'], '2c 7d 9h Jc 3s', [
