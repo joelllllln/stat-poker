@@ -9,7 +9,14 @@ import {
   startNextHand,
 } from '../game/session'
 import type { DecisionGrade } from './grade'
-import { MIN_SAMPLE, biggestLeak, describeLeak, findLeaks, tagDecisions } from './leaks'
+import {
+  MIN_SAMPLE,
+  biggestLeak,
+  describeLeak,
+  findLeaks,
+  tagDecisions,
+  type TaggedDecision,
+} from './leaks'
 import type { HandRecord } from '../game/session'
 
 /** A decision grade with only the fields the leak finder reads. */
@@ -201,4 +208,57 @@ describe('finding the leak', () => {
     expect(biggestLeak([])).toBeNull()
     expect(lopsided()).toEqual([])
   })
+})
+
+/**
+ * The test that makes a leak worth naming.
+ *
+ * A history is carved up a dozen ways, and the worst of a dozen groups looks
+ * bad in every history — including one from a player with nothing wrong with
+ * them. So the finder is pointed at players who have no leak at all, and
+ * required to say so.
+ */
+describe('what the finder says about a player with no leak', () => {
+  const STREETS = ['preflop', 'flop', 'turn', 'river'] as const
+  const POSITIONS = ['BTN', 'SB', 'BB', 'CO']
+
+  /** Decisions whose cost has nothing to do with the spot they happened in. */
+  const evenPlayer = (rng: Rng, count: number): TaggedDecision[] =>
+    Array.from({ length: count }, (_, i) => {
+      const street = STREETS[rng.nextInt(STREETS.length)]!
+      // Most decisions cost nothing and a few cost a lot, as they really do.
+      const roll = rng.nextFloat()
+      const loss = roll < 0.7 ? 0 : roll < 0.95 ? rng.nextFloat() : rng.nextFloat() * 8
+      return {
+        grade: decision(street, loss, rng.nextFloat() < 0.5 ? 4 : 0),
+        street,
+        position: POSITIONS[rng.nextInt(POSITIONS.length)]!,
+        facingBet: rng.nextFloat() < 0.5,
+        raisedPot: rng.nextFloat() < 0.5,
+        handNumber: i + 1,
+      }
+    })
+
+  it('names a leak no more than one time in twenty', () => {
+    const rng = new Rng(31337)
+    const TRIALS = 40
+    let named = 0
+    for (let trial = 0; trial < TRIALS; trial++) {
+      if (biggestLeak(findLeaks(evenPlayer(rng, 150))) !== null) named++
+    }
+    expect(named / TRIALS).toBeLessThanOrEqual(0.05)
+  }, 300_000)
+
+  it('still finds a leak that is really there', () => {
+    // The same player, except that every turn decision costs two blinds more.
+    const rng = new Rng(4242)
+    const tagged = evenPlayer(rng, 150).map((item) =>
+      item.street === 'turn'
+        ? { ...item, grade: { ...item.grade, evLossBB: item.grade.evLossBB + 2 } }
+        : item,
+    )
+    const worst = biggestLeak(findLeaks(tagged))
+    expect(worst).not.toBeNull()
+    expect(worst!.label).toContain('turn')
+  }, 300_000)
 })

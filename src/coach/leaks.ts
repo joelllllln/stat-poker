@@ -12,6 +12,7 @@
  */
 
 import { positionName, type Street } from '../engine/types'
+import { compareMeans, holm } from '../stats/inference'
 import type { HandRecord } from '../game/session'
 import { gradeHand, type GradedDecision } from './grade'
 
@@ -39,18 +40,36 @@ export interface Leak {
   /** Big blinds given up per decision. */
   lossPerDecisionBB: number
   /**
-   * Big blinds this group costs *beyond* the player's own average.
+   * Big blinds this group costs *beyond* the rest of the player's game.
    *
    * Ranking on total loss alone always crowns whichever group happens to be
    * biggest — a dimension that covers every decision tops the list by
    * definition, which tells the player nothing. What identifies a leak is a
    * spot handled worse than the player handles everything else.
+   *
+   * The comparison is against the decisions *outside* the group, not against
+   * an average that includes it. A group compared with a baseline it is part
+   * of is compared with itself, and the difference is pulled towards zero by
+   * exactly the share of the history the group occupies.
    */
   excessLossBB: number
+  /** That excess, per decision. */
+  excessPerDecisionBB: number
   /** Share of the group's decisions that were mistakes or blunders. */
   errorRate: number
   /** Enough decisions to mean something. */
   reliable: boolean
+  /**
+   * Whether the gap survives being one of several groups tested at once.
+   *
+   * A history is carved up a dozen ways here, and the worst of a dozen groups
+   * looks bad in any history, including one with nothing wrong with it. This is
+   * a permutation test against the rest of the player's decisions, corrected
+   * across every group tested — the same standard the trend view is held to.
+   */
+  significant: boolean
+  /** How likely a gap this large is from a player with no such leak. */
+  p: number
 }
 
 /**
@@ -119,42 +138,62 @@ const DIMENSIONS: Dimension[] = [
 export function findLeaks(decisions: readonly TaggedDecision[]): Leak[] {
   if (decisions.length === 0) return []
 
-  // The player's own average is the yardstick: a leak is a spot played worse
-  // than they play in general, not simply one where chips were lost.
-  const baseline =
-    decisions.reduce((sum, d) => sum + d.grade.evLossBB, 0) / decisions.length
-
-  const groups = new Map<string, TaggedDecision[]>()
-
-  for (const decision of decisions) {
+  const groups = new Map<string, Set<number>>()
+  decisions.forEach((decision, index) => {
     for (const dimension of DIMENSIONS) {
       const label = dimension.label(decision)
       const group = groups.get(label)
-      if (group) group.push(decision)
-      else groups.set(label, [decision])
+      if (group) group.add(index)
+      else groups.set(label, new Set([index]))
     }
-  }
+  })
 
-  const leaks: Leak[] = []
-  for (const [label, group] of groups) {
-    const totalLossBB = group.reduce((sum, d) => sum + d.grade.evLossBB, 0)
-    const errors = group.filter(
-      (d) => d.grade.verdict === 'mistake' || d.grade.verdict === 'blunder',
+  const losses = decisions.map((d) => d.grade.evLossBB)
+  const found: Leak[] = []
+
+  for (const [label, members] of groups) {
+    const inside: number[] = []
+    const outside: number[] = []
+    losses.forEach((loss, index) => (members.has(index) ? inside : outside).push(loss))
+
+    const totalLossBB = inside.reduce((sum, loss) => sum + loss, 0)
+    const lossPerDecisionBB = totalLossBB / inside.length
+    const errors = [...members].filter(
+      (index) =>
+        decisions[index]!.grade.verdict === 'mistake' ||
+        decisions[index]!.grade.verdict === 'blunder',
     ).length
 
-    const lossPerDecisionBB = totalLossBB / group.length
-    leaks.push({
+    // Against the rest of the player's game, with the interval left out: the
+    // ranking uses the gap itself and the reporting rule uses the p-value, and
+    // bootstrapping an interval for every group would cost more than both.
+    const against =
+      outside.length >= 2 && inside.length >= 2
+        ? compareMeans(outside, inside, { interval: false })
+        : null
+
+    found.push({
       label,
-      decisions: group.length,
+      decisions: inside.length,
       totalLossBB,
       lossPerDecisionBB,
-      excessLossBB: (lossPerDecisionBB - baseline) * group.length,
-      errorRate: errors / group.length,
-      reliable: group.length >= MIN_SAMPLE,
+      excessLossBB: (against?.change ?? 0) * inside.length,
+      excessPerDecisionBB: against?.change ?? 0,
+      errorRate: errors / inside.length,
+      reliable: inside.length >= MIN_SAMPLE,
+      significant: false,
+      p: against?.p ?? 1,
     })
   }
 
-  return leaks.sort((a, b) => b.excessLossBB - a.excessLossBB)
+  // Every group was tested against the same history, so the worst of them
+  // looking bad is much less surprising than one group looking bad would be.
+  const survives = holm(found.map((leak) => leak.p))
+  found.forEach((leak, index) => {
+    leak.significant = survives[index]! && leak.excessPerDecisionBB > 0
+  })
+
+  return found.sort((a, b) => b.excessLossBB - a.excessLossBB)
 }
 
 /**
@@ -165,7 +204,10 @@ export function findLeaks(decisions: readonly TaggedDecision[]): Leak[] {
  */
 export function biggestLeak(leaks: readonly Leak[]): Leak | null {
   const candidates = leaks.filter(
-    (leak) => leak.reliable && leak.excessLossBB > 0 && leak.lossPerDecisionBB > 0.1,
+    // Three bars, and they are different questions: enough decisions to be
+    // worth looking at, a gap the sample can actually support, and a cost big
+    // enough to be worth a player's attention.
+    (leak) => leak.reliable && leak.significant && leak.lossPerDecisionBB > 0.1,
   )
   return candidates[0] ?? null
 }

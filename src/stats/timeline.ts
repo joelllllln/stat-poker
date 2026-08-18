@@ -12,6 +12,7 @@
 
 import type { HandRecord } from '../game/session'
 import { aggregate, type SeatHandStats } from './hand-stats'
+import { compare, holm, type Comparison } from './inference'
 
 /** Hands per block. Small enough to show movement, large enough to mean something. */
 export const BLOCK_SIZE = 25
@@ -155,22 +156,15 @@ export function sittings(
   return out
 }
 
-export interface Movement {
-  /** Mean over the older half, and over the newer one. */
-  before: number
-  after: number
-  change: number
-  /** Hands behind each half, the smaller of which bounds what can be claimed. */
-  sample: number
-  /**
-   * Whether the difference is larger than the noise in it.
-   *
-   * A two-sample comparison at 95%: this is the difference between "you have
-   * tightened up" and "you have played differently for twenty hands", and
-   * saying the first when only the second is true is how trackers mislead.
-   */
-  real: boolean
-}
+/**
+ * A before-and-after on one reading.
+ *
+ * `real` is the difference between "you have tightened up" and "you have
+ * played differently for twenty hands", and saying the first when only the
+ * second is true is how trackers mislead. It is a 95% interval on the
+ * difference that excludes zero, from whichever test suits the reading.
+ */
+export type Movement = Comparison
 
 /**
  * Compare the first half of a history against the second.
@@ -189,30 +183,11 @@ export function movement(
   if (values.length < 4) return null
 
   const half = Math.floor(values.length / 2)
-  const before = values.slice(0, half)
-  const after = values.slice(values.length - half)
-
-  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
-  const variance = (xs: number[], m: number) =>
-    xs.length < 2 ? 0 : xs.reduce((sum, x) => sum + (x - m) ** 2, 0) / (xs.length - 1)
-
-  const meanBefore = mean(before)
-  const meanAfter = mean(after)
-  const standardError = Math.sqrt(
-    variance(before, meanBefore) / before.length + variance(after, meanAfter) / after.length,
-  )
-
-  const change = meanAfter - meanBefore
-  return {
-    before: meanBefore,
-    after: meanAfter,
-    change,
-    sample: half,
-    // Zero noise is the most certain case there is, not the least: two halves
-    // that never varied and still differ have differed for a reason. Guarding
-    // on the noise being positive would throw that away and call it nothing.
-    real: change !== 0 && Math.abs(change) > 1.96 * standardError,
-  }
+  // The test is chosen by what the reading is: a rate is a proportion, and a
+  // per-hand result in chips is not. See `inference.ts` — this used to apply
+  // the same normal approximation to both, which at ten hands could report
+  // "you play 100% more hands" from two of them.
+  return compare(values.slice(0, half), values.slice(values.length - half))
 }
 
 /** The per-hand readings the trend view compares. */
@@ -231,8 +206,20 @@ export const READINGS = {
  * session teaches people to read tea leaves.
  */
 export function describeMovement(history: readonly HandRecord[]): string | null {
-  const evLost = movement(history, READINGS.evLost)
-  if (evLost?.real) {
+  // Two questions asked of one history, so the answer to either looking
+  // surprising is less surprising than one of them would be alone. Holm keeps
+  // the chance of announcing any trend that is not there at one in twenty.
+  const candidates = [
+    { key: 'evLost' as const, movement: movement(history, READINGS.evLost) },
+    { key: 'vpip' as const, movement: movement(history, READINGS.vpip) },
+  ].filter((entry): entry is { key: 'evLost' | 'vpip'; movement: Movement } => entry.movement !== null)
+
+  const survives = holm(candidates.map((entry) => entry.movement.p))
+  const found = candidates.find((entry, i) => survives[i] && entry.movement.real)
+  if (!found) return null
+
+  if (found.key === 'evLost') {
+    const evLost = found.movement
     const better = evLost.change < 0
     return `Over your last ${evLost.sample} graded hands you are giving up ${Math.abs(
       evLost.change * 100,
@@ -241,13 +228,9 @@ export function describeMovement(history: readonly HandRecord[]): string | null 
     }.`
   }
 
-  const vpip = movement(history, READINGS.vpip)
-  if (vpip?.real) {
-    const tighter = vpip.change < 0
-    return `You are playing ${Math.abs(vpip.change * 100).toFixed(
-      0,
-    )}% ${tighter ? 'fewer' : 'more'} hands than you were over your first ${vpip.sample}.`
-  }
-
-  return null
+  const vpip = found.movement
+  const tighter = vpip.change < 0
+  return `You are playing ${Math.abs(vpip.change * 100).toFixed(
+    0,
+  )}% ${tighter ? 'fewer' : 'more'} hands than you were over your first ${vpip.sample}.`
 }
