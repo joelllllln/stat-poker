@@ -39,8 +39,14 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
         </span>
         <span className="text-xs uppercase tracking-wide text-slate-500">{decision.street}</span>
         <span className="text-sm">{decision.chosenLabel}</span>
+        {/* Sampled spots carry an error bar, and hiding it would present a
+            figure as sharper than the sample behind it. Enumerated spots —
+            every river — have none to show. */}
         <span className="ml-auto font-mono text-xs text-slate-400">
           {decision.evLossBB > 0.005 ? `−${decision.evLossBB.toFixed(2)}bb` : '—'}
+          {decision.evLossBB > 0.005 && decision.evLossErrorBB > 0.005 && (
+            <span className="text-slate-600"> ±{decision.evLossErrorBB.toFixed(2)}</span>
+          )}
         </span>
         <span className="text-slate-600">{open ? '▾' : '▸'}</span>
       </button>

@@ -13,7 +13,6 @@
  * even though the replay knows them.
  */
 
-import { Rng } from '../engine/cards'
 import { applyAction, legalActions, startHandWithDeck, winnablePot } from '../engine/hand'
 import { potSize, type Action, type HandState, type Street } from '../engine/types'
 import type { HandRecord } from '../game/session'
@@ -53,6 +52,31 @@ export function verdictFor(evLossInBB: number): Verdict {
 }
 
 /**
+ * How sure a verdict has to be before it is delivered.
+ *
+ * Most spots are priced by sampling, so the expected value given up carries an
+ * error bar. A verdict is a claim about a player, and a claim is only made when
+ * the sample supports it: the band comes from the *conservative* end of that
+ * bar, so noise can lose a blunder but can never invent one. That is the same
+ * standard the trend view is held to, applied to the coach.
+ */
+const VERDICT_CONFIDENCE = 1.96
+
+/**
+ * How much harder a decision is priced when its verdict is in the balance.
+ *
+ * Almost every decision is clear-cut and needs nothing; buying precision
+ * everywhere would slow a review of a whole history down for no change in what
+ * it says.
+ */
+const REFINE_EFFORT = 12
+
+/** The most a decision can be shown to have cost, and so the verdict it earns. */
+export function verdictWithin(evLossBB: number, errorBB: number): Verdict {
+  return verdictFor(Math.max(0, evLossBB - VERDICT_CONFIDENCE * errorBB))
+}
+
+/**
  * The part of a verdict worth keeping forever.
  *
  * A full grade carries every priced alternative and the sentences explaining
@@ -84,6 +108,15 @@ export interface DecisionGrade extends GradedDecision {
   /** Chips of expected value given up, never below zero. */
   evLoss: number
   evLossBB: number
+  /**
+   * Standard error on that figure, in big blinds.
+   *
+   * Zero where the answer was enumerated — every river call, and most turns.
+   * The verdict is taken from the conservative end of it, while the figure
+   * itself stays the best estimate, because a total that is shrunk towards
+   * zero every time it is added up would understate a real leak.
+   */
+  evLossErrorBB: number
   verdict: Verdict
   explanation: string
   /**
@@ -148,6 +181,9 @@ function explain(grade: Omit<DecisionGrade, 'explanation'>): string {
   }
 
   const loss = `${grade.evLossBB.toFixed(2)}bb`
+  if (grade.chosen.type === 'fold' && grade.toCall === 0) {
+    return `Folding gave up ${loss}: nobody had bet, so ${grade.bestLabel} was free and your ${equity} share of the pot went with the hand.`
+  }
   if (grade.chosen.type === 'fold') {
     return `Folding gave up ${loss}: ${equity} equity beats the ${(grade.requiredEquity * 100).toFixed(1)}% the price asked for, so ${grade.bestLabel} was worth more.`
   }
@@ -199,8 +235,6 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
   for (const { state, action } of replayHand(record)) {
     if (state.toAct !== heroSeat) continue
 
-    const rng = new Rng(seed + decisions.length)
-    const context = evContext(state, heroSeat, rng)
     const hero = state.seats[heroSeat]!
     const pot = potSize(state)
     // What continuing actually costs, and what it actually plays for: a stack
@@ -209,25 +243,53 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
     const toCall = Math.min(Math.max(0, state.currentBet - hero.committed), hero.stack)
     const winnable = winnablePot(state, heroSeat, toCall)
 
-    const priced = evaluateActions(context, sizingsFor(state, heroSeat))
-    const options = priced.options
-    if (options.length === 0) continue
+    /** Price the decision, at a given sampling effort and set of bet sizes. */
+    const price = (effort: number, sizings = sizingsFor(state, heroSeat)) => {
+      const context = evContext(state, heroSeat, seed + decisions.length, effort)
+      const priced = evaluateActions(context, sizings)
+      if (priced.options.length === 0) return null
 
-    const best = options.reduce((a, b) => (b.ev > a.ev ? b : a))
-    // The action actually taken may be a size the grader did not offer, so
-    // price it directly rather than looking it up.
-    const chosenExact = options.find((o) => sameAction(o.action, action))
-    const chosen =
-      chosenExact ??
-      evaluateActions(context, action.type === 'raise' ? [action.to] : []).options.find((o) =>
-        sameAction(o.action, action),
-      )
+      const best = priced.options.reduce((a, b) => (b.ev > a.ev ? b : a))
+      // The action actually taken may be a size the grader did not offer, so
+      // price it directly rather than looking it up.
+      const chosen =
+        priced.options.find((o) => sameAction(o.action, action)) ??
+        evaluateActions(context, action.type === 'raise' ? [action.to] : []).options.find((o) =>
+          sameAction(o.action, action),
+        )
+      if (!chosen) return null
 
-    if (!chosen) continue
+      const evLoss = Math.max(0, best.ev - chosen.ev)
+      // Two sampled numbers are being subtracted, so their errors compose. They
+      // are drawn from the same stream and so move together, which makes this
+      // an overstatement rather than an understatement — the safe direction for
+      // something about to be said to a player.
+      const error = Math.sqrt(best.error ** 2 + chosen.error ** 2)
+      return { priced, best, chosen, evLoss, error }
+    }
 
-    const evLoss = Math.max(0, best.ev - chosen.ev)
+    let graded = price(1)
+    if (graded === null) continue
+
+    // Where the error bar straddles a band, the verdict is being decided by
+    // the sample rather than by the play. That is the one place more rollouts
+    // are worth buying, and the only place they are bought.
+    // The verdict is read off the conservative end of the bar, so what matters
+    // is whether the figure moving by as much as the sample allows would move
+    // that end into another band.
+    const bandOf = (chips: number) => verdictFor(Math.max(0, chips) / record.bigBlind)
+    if (bandOf(graded.evLoss) !== bandOf(graded.evLoss - 2 * VERDICT_CONFIDENCE * graded.error)) {
+      // Only the two actions the verdict is the gap between need the extra
+      // rollouts. If some third size was really the best, it was within the
+      // noise of this one, so the loss is understated rather than invented.
+      const contested = [graded.best.action, graded.chosen.action]
+        .filter((a): a is Extract<Action, { type: 'raise' }> => a.type === 'raise')
+        .map((a) => a.to)
+      graded = price(REFINE_EFFORT, contested) ?? graded
+    }
+
+    const { priced, best, chosen, evLoss, error } = graded
     const evLossBB = evLoss / record.bigBlind
-
     const solved = state.street === 'preflop' ? lookupPreflop(state, heroSeat) : null
 
     const partial = {
@@ -236,13 +298,14 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
       toCall,
       equity: priced.equity,
       requiredEquity: requiredEquity(toCall, winnable),
-      options,
+      options: priced.options,
       chosen: action,
       chosenLabel: chosen.label,
       bestLabel: best.label,
       evLoss,
       evLossBB,
-      verdict: verdictFor(evLossBB),
+      evLossErrorBB: error / record.bigBlind,
+      verdict: verdictWithin(evLossBB, error / record.bigBlind),
       ...(solved ? { blueprint: solved } : {}),
     }
 

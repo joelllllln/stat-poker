@@ -27,6 +27,29 @@ const COMBO_ITERATIONS = 150
 const HERO_ITERATIONS = 4_000
 
 /**
+ * Ceiling on rollouts for one equity answer.
+ *
+ * The precision a verdict needs grows with the size of the pot, and on a big
+ * flop it would run to millions of rollouts — far past what a review of a
+ * whole history can pay. So the budget is capped, and where the cap binds the
+ * answer keeps its error bar and the verdict is only as confident as the
+ * sample allows. A caller with a verdict hanging in the balance raises the cap
+ * for that one decision through `effort`, which is where the rollouts are
+ * worth spending and nowhere else.
+ */
+const MAX_HERO_ITERATIONS = 12_000
+
+/**
+ * Expected value the sampler aims to pin down, in big blinds.
+ *
+ * Comfortably inside the band between a correct action and a mistake, so the
+ * noise does not decide which one a player is told they made. Where the pot is
+ * large enough that reaching it would cost more rollouts than the cap allows,
+ * the shortfall shows up in the error bar and the verdict softens to match.
+ */
+const TARGET_EV_ERROR_BB = 0.15
+
+/**
  * Enumeration budgets for grading.
  *
  * Left to its own defaults, `handEquity` enumerates whenever the work looks
@@ -125,7 +148,7 @@ function priceRange(
   range: Range,
   heroRange: Range,
   board: readonly Card[],
-  rng: Rng,
+  seed: number,
 ): { priced: PricedCombo[]; total: number } {
   const stride = Math.max(1, Math.ceil(range.length / COMBO_SAMPLE))
   const scale = stride // each sampled combo stands in for `stride` of them
@@ -138,7 +161,9 @@ function priceRange(
     let equity: number
     try {
       equity = handEquity(combo.cards, [heroRange], board, {
-        rng,
+        // Its own seed per combo, so a combo prices the same whatever else was
+        // asked first, and one unlucky stream cannot tilt the whole range.
+        rng: new Rng(seed * 977 + i),
         iterations: COMBO_ITERATIONS,
         exactBudget: COMBO_EXACT_BUDGET,
       }).equity
@@ -177,10 +202,26 @@ export interface EVContext {
   heroCards: readonly [Card, Card]
   /** Villain seats still live. */
   villains: number[]
-  rng: Rng
+  /**
+   * The seed every sampled answer in this decision is drawn from.
+   *
+   * A single generator threaded through the decision made each answer depend
+   * on what had been asked before it, so the same question gave different
+   * numbers depending on the order — and the sampling error in one action was
+   * independent of the sampling error in the next, which is the worst case
+   * when the only quantity that matters is the difference between them.
+   *
+   * Seeding every query from the same number instead makes each one
+   * reproducible on its own and prices the alternatives against the same draws,
+   * so most of the error cancels where they are compared. This is common random
+   * numbers, and it is free.
+   */
+  seed: number
+  /** Multiplier on the sampling budget, raised where a verdict is in doubt. */
+  effort: number
 }
 
-export function evContext(state: HandState, heroSeat: number, rng = new Rng(99)): EVContext {
+export function evContext(state: HandState, heroSeat: number, seed = 99, effort = 1): EVContext {
   const hero = state.seats[heroSeat]!
   if (!hero.holeCards) throw new Error('Hero has no cards')
   return {
@@ -190,7 +231,8 @@ export function evContext(state: HandState, heroSeat: number, rng = new Rng(99))
     villains: state.seats
       .filter((s) => s.index !== heroSeat && s.status !== 'folded')
       .map((s) => s.index),
-    rng,
+    seed,
+    effort,
   }
 }
 
@@ -200,16 +242,29 @@ export interface HeroEquity {
   error: number
 }
 
-/** Hero's equity against the field's modelled ranges. */
-export function heroEquity(context: EVContext, ranges?: Range[]): HeroEquity {
-  const { state, heroCards, villains, rng } = context
+/**
+ * Hero's equity against the field's modelled ranges.
+ *
+ * `targetError` is the precision the caller needs, in share of the pot. Where
+ * the answer is enumerated it is exact and the target costs nothing; where it
+ * is sampled, asking for more precision is what buys a verdict that does not
+ * depend on the seed.
+ */
+export function heroEquity(
+  context: EVContext,
+  ranges?: Range[],
+  targetError = 0,
+): HeroEquity {
+  const { state, heroCards, villains, seed, effort } = context
   const against = ranges ?? villains.map((seat) => modelOpponentRange(state, seat))
   if (against.length === 0) return { equity: 1, error: 0 }
   try {
     const result = handEquity(heroCards, against, state.board, {
-      rng,
+      rng: new Rng(seed),
       iterations: HERO_ITERATIONS,
       exactBudget: HERO_EXACT_BUDGET,
+      targetError,
+      maxIterations: MAX_HERO_ITERATIONS * effort,
     })
     // `errorMargin` is a 95% interval; everything downstream composes standard
     // errors, so it is halved once here rather than in every caller.
@@ -226,11 +281,31 @@ export function heroEquity(context: EVContext, ranges?: Range[]): HeroEquity {
  * reachable: it never tells you to make a bet you could not have made.
  */
 export function evaluateActions(context: EVContext, sizings: number[]): DecisionEV {
-  const { state, heroSeat, heroCards, villains, rng } = context
+  const { state, heroSeat, heroCards, villains, seed } = context
   const hero = state.seats[heroSeat]!
   const pot = potSize(state)
   const toCall = Math.max(0, state.currentBet - hero.committed)
-  const { equity, error: equityError } = heroEquity(context)
+
+  // How precisely this decision needs to be priced follows from what is at
+  // stake in it: an error of a hundredth of the pot is nothing in a three-blind
+  // pot and decides the verdict in a fifty-blind one. So the target is stated
+  // in big blinds of expected value and converted into equity here, rather than
+  // fixing an iteration count that means something different in every pot.
+  //
+  // The scale is the most chips any action being priced can swing — the pot,
+  // everything the field could put in behind the largest bet, and the bet
+  // itself — because that is what multiplies the error in the equity.
+  const largest = Math.max(hero.committed + toCall, ...sizings)
+  const swing =
+    pot +
+    largest +
+    villains.reduce(
+      (sum, i) => sum + Math.min(state.seats[i]!.stack, Math.max(0, largest - state.seats[i]!.committed)),
+      0,
+    )
+  const targetError =
+    swing > 0 ? (TARGET_EV_ERROR_BB * state.bigBlind) / (swing * Math.sqrt(context.effort)) : 0
+  const { equity, error: equityError } = heroEquity(context, undefined, targetError)
 
   const options: ActionEV[] = []
 
@@ -271,7 +346,7 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
       range: removeBlocked(modelOpponentRange(state, seat), blockers),
     }))
     .filter(({ range }) => rangeWeight(range) > 0)
-    .map(({ seat, range }) => ({ seat, ...priceRange(range, heroRange, state.board, rng) }))
+    .map(({ seat, range }) => ({ seat, ...priceRange(range, heroRange, state.board, seed) }))
 
   for (const to of sizings) {
     const amount = to - hero.committed
@@ -302,7 +377,7 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
     const called =
       continuingRanges.length === 0
         ? { equity: 1, error: 0 }
-        : heroEquity(context, continuingRanges)
+        : heroEquity(context, continuingRanges, targetError)
     const won = pot + calledContributions
     const risked = Math.min(amount, largestContribution)
 

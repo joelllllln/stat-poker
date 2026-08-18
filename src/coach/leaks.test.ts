@@ -30,6 +30,7 @@ const decision = (
     bestLabel: 'Check',
     evLoss: evLossBB * 2,
     evLossBB,
+    evLossErrorBB: 0,
     verdict: evLossBB > 2 ? 'blunder' : evLossBB > 0.5 ? 'mistake' : 'optimal',
     explanation: '',
   }) as DecisionGrade

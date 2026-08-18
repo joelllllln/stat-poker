@@ -276,7 +276,7 @@ describe('grading', () => {
 
     for (const { state, action } of replayHand(record)) {
       if (state.toAct !== 0) continue
-      const priced = evaluateActions(evContext(state, 0, new Rng(1)), sizingsFor(state, 0))
+      const priced = evaluateActions(evContext(state, 0, 1), sizingsFor(state, 0))
       const legal = new Set(legalActions(state).map((o) => o.type))
       const offered = new Set(priced.options.map((o) => o.action.type))
       // Anything the engine calls legal has a price, or a player can take it
@@ -314,6 +314,42 @@ describe('grading', () => {
       expect(implied).toBeCloseTo(decision.equity, 6)
     }
   })
+
+  it('gives the same verdict whatever the sampling seed', async () => {
+    // The acceptance test for the whole model: a verdict is a claim about the
+    // decision, so it cannot depend on which random numbers priced it. Where
+    // the sample cannot separate two bands, the honest answer is the gentler
+    // one — never a blunder invented by a seed.
+    const session = createSession(defaultSessionConfig(9))
+    const rng = new Rng(17)
+    for (let i = 0; i < 4; i++) {
+      startNextHand(session)
+      runBotsUntilHero(session)
+      let guard = 0
+      while (session.current!.result === null && guard++ < 40) {
+        if (session.current!.toAct !== session.config.heroSeat) break
+        const options = legalActions(session.current!)
+        const choice = options[rng.nextInt(options.length)]!
+        heroAct(
+          session,
+          choice.type === 'raise' ? { type: 'raise', to: choice.min! } : { type: choice.type },
+        )
+        if (session.current!.result === null) runBotsUntilHero(session)
+      }
+    }
+
+    for (const record of session.history) {
+      const verdicts: string[] = []
+      for (const seed of [4242, 1, 55, 900]) {
+        const grade = gradeHand(record, session.config.heroSeat, seed)
+        verdicts.push(grade.decisions.map((d) => d.verdict).join(','))
+        // Grading is synchronous and long; let the runner's worker answer its
+        // heartbeat between passes.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      expect(new Set(verdicts).size).toBe(1)
+    }
+  }, 300_000)
 
   it('grades a full session of real hands without failing', () => {
     const session = createSession(defaultSessionConfig(5))

@@ -184,6 +184,8 @@ function monteCarloEquity(
   board: readonly Card[],
   iterations: number,
   rng: Rng,
+  targetError = 0,
+  maxIterations = 0,
 ): EquityResult {
   const needed = BOARD_SIZE - board.length
   const fullBoard: Card[] = [...board, ...new Array<Card>(needed)]
@@ -212,7 +214,19 @@ function monteCarloEquity(
   for (const card of hero) blocked[card] = 1
   for (const card of board) blocked[card] = 1
 
-  for (let iteration = 0; iteration < iterations; iteration++) {
+  // Two-stage sampling: the first batch is a pilot, and how many more runs the
+  // asked-for precision needs is worked out from it. Sizing the run from the
+  // pilot alone — rather than stopping the moment the running error dips under
+  // the target — keeps the estimate unbiased.
+  let budget = iterations
+
+  for (let iteration = 0; iteration < budget; iteration++) {
+    if (iteration === iterations - 1 && targetError > 0 && trials > 0) {
+      const seen = (win + tie) / trials
+      const needed = Math.ceil((seen * (1 - seen)) / (targetError * targetError))
+      budget = Math.min(Math.max(maxIterations, iterations), Math.max(iterations, needed))
+    }
+
     for (const card of touched) blocked[card] = 0
     touched.length = 0
 
@@ -286,6 +300,16 @@ export interface EquityOptions {
   iterations?: number
   /** Enumerate exactly when the work fits in this many showdowns. */
   exactBudget?: number
+  /**
+   * Standard error to aim for, in share of the pot.
+   *
+   * Sampling more is only worth paying for where the answer is close enough
+   * that the noise decides it, so callers state the precision they need and
+   * the sampler works out the runs rather than guessing an iteration count.
+   */
+  targetError?: number
+  /** Ceiling on runs when chasing `targetError`. */
+  maxIterations?: number
 }
 
 /**
@@ -327,6 +351,8 @@ export function handEquity(
     board,
     options.iterations ?? DEFAULT_ITERATIONS,
     rng,
+    options.targetError ?? 0,
+    options.maxIterations ?? 0,
   )
   if (result.trials === 0) {
     throw new Error('A villain range has no combos left after removing blockers')
