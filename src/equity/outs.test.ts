@@ -63,6 +63,21 @@ describe('finding outs', () => {
     expect(result.byRiver).toBeGreaterThan(result.byNextCard)
   })
 
+  it('asks where the hand ends up, not how often a card arrives', () => {
+    // Every pair of cards still to come is tried and the hand re-priced, so a
+    // turn that puts the hero ahead and a river that takes it back is counted
+    // as what it is. The one-card figure cannot see that, and the "miss twice"
+    // shortcut assumes it never happens.
+    const board = parseCards('Ks 7s 3h')
+    const result = findOuts(hand('As 2s'), board, vs('KhKd'))
+
+    const missOnce = 1 - result.byNextCard
+    const unseen = 52 - 5
+    const shortcut = 1 - missOnce * ((unseen - 1 - result.outs.length) / (unseen - 1))
+    expect(result.byRiver).toBeLessThan(shortcut)
+    expect(result.byRiver).toBeGreaterThan(0)
+  })
+
   it('never counts a card anyone can see', () => {
     const board = parseCards('Ks 7s 3h')
     const hero = hand('As 2s')

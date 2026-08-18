@@ -100,8 +100,17 @@ function exactEquity(
   let equitySum = 0
   let weightTotal = 0
 
+  // The live deck is the same for every combo bar the two cards it holds, so
+  // it is built once and those two are skipped as it is walked. Rebuilding it
+  // per combo was most of the cost of an exact answer.
+  const live = availableCards([...hero, ...board])
+  const deck: Card[] = new Array(live.length)
+
   for (const combo of villainRange) {
-    const deck = availableCards([...hero, ...board, ...combo.cards])
+    let size = 0
+    for (const card of live) {
+      if (card !== combo.cards[0] && card !== combo.cards[1]) deck[size++] = card
+    }
     const villains = [combo.cards]
     const weight = combo.weight
 
@@ -116,7 +125,7 @@ function exactEquity(
         weightTotal += weight
         return
       }
-      for (let i = start; i < deck.length; i++) {
+      for (let i = start; i < size; i++) {
         fullBoard[board.length + depth] = deck[i]!
         walk(depth + 1, i + 1)
       }

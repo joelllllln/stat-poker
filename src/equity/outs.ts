@@ -23,16 +23,37 @@ export interface OutsResult {
   outs: Card[]
   /** Equity as things stand. */
   current: number
-  /** Chance of hitting one by the next card. */
+  /** Chance the next card is one of them. */
   byNextCard: number
-  /** Chance of hitting one by the river. */
+  /**
+   * Chance the hand is in front once the board is complete.
+   *
+   * Not the chance of hitting an out twice over: every pair of cards still to
+   * come is tried and the hand re-priced, so a runout that arrives in two
+   * pieces counts and one that arrives and is then undone does not.
+   */
   byRiver: number
   /** Cards still to come. */
   toCome: number
 }
 
-/** Iterations per candidate card. Enough to rank, cheap enough to sweep 47. */
-const ITERATIONS = 600
+/**
+ * Precision the sweep works to, in share of the pot.
+ *
+ * A card is an out or it is not, and the comparison is made at even money, so
+ * an answer that could be either side of it decides the count by coin flip.
+ * Every candidate is scanned at this precision and only the ones that land too
+ * close to call are then settled exactly — which is where the enumeration is
+ * worth paying for, and the only place it is paid.
+ */
+const SCAN_ERROR = 0.02
+
+/** Enumeration budget for settling a card that the scan could not separate. */
+const EXACT_BUDGET = 2_000_000
+
+/** Two-card runouts to try when enumerating all of them is too much work. */
+const RUNOUT_SAMPLE = 400
+
 /** Equity a hand needs after a card for that card to count as an out. */
 const FAVOURITE = 0.5
 
@@ -56,37 +77,70 @@ export function findOuts(
 
   const rng = new Rng(seed)
   const seen = new Set<Card>([...hero, ...board])
-  const priceWith = (extra: Card | null): number => {
-    const withCard = extra === null ? board : [...board, extra]
+
+  /** Price the hand with these cards added, to a stated precision. */
+  const priceWith = (extra: readonly Card[], exact: boolean): { equity: number; error: number } => {
     try {
-      return handEquity(hero, villains, withCard, { rng, iterations: ITERATIONS }).equity
+      const result = handEquity(hero, villains, [...board, ...extra], {
+        rng,
+        iterations: 400,
+        targetError: SCAN_ERROR,
+        maxIterations: 40_000,
+        // The scan never enumerates: it is asking a rough question and an
+        // exact answer to it costs twenty times what the rough one does.
+        exactBudget: exact ? EXACT_BUDGET : 0,
+      })
+      return { equity: result.equity, error: result.errorMargin / 2 }
     } catch {
-      return 0
+      return { equity: 0, error: 0 }
     }
   }
 
-  const current = priceWith(null)
-  const outs: Card[] = []
-  let unseen = 0
+  const current = priceWith([], false).equity
+  const remaining: Card[] = []
+  for (let card = 0; card < NUM_CARDS; card++) if (!seen.has(card)) remaining.push(card)
+  const unseen = remaining.length
 
-  for (let card = 0; card < NUM_CARDS; card++) {
-    if (seen.has(card)) continue
-    unseen++
-    // A card only counts if it changes the answer: a hand already ahead is not
-    // drawing to anything, and cards that keep it ahead are not outs.
-    if (current >= FAVOURITE) continue
-    if (priceWith(card) >= FAVOURITE) outs.push(card)
+  /** Is the hand in front once these cards land? Settled exactly if it is close. */
+  const aheadWith = (extra: readonly Card[]): boolean => {
+    const scan = priceWith(extra, false)
+    if (Math.abs(scan.equity - FAVOURITE) > 2 * scan.error) return scan.equity >= FAVOURITE
+    return priceWith(extra, true).equity >= FAVOURITE
   }
 
-  const missOnce = unseen === 0 ? 1 : (unseen - outs.length) / unseen
-  const byNextCard = 1 - missOnce
-  // Two cards to come: miss both, with one fewer card in the deck the second
-  // time. Adding the two chances together — the usual shortcut — overcounts
-  // the runouts that bring two.
-  const byRiver =
-    toCome >= 2 && unseen > 1
-      ? 1 - missOnce * ((unseen - 1 - outs.length) / (unseen - 1))
-      : byNextCard
+  const outs: Card[] = []
+  // A hand already ahead is not drawing to anything, and cards that keep it
+  // ahead are not outs.
+  if (current < FAVOURITE) {
+    for (const card of remaining) if (aheadWith([card])) outs.push(card)
+  }
+
+  const byNextCard = unseen === 0 ? 0 : outs.length / unseen
+
+  // With two cards to come, the honest question is not how often an out
+  // arrives but how often the hand ends up in front — which is answered by
+  // trying pairs of cards rather than by assuming that what an out is stays
+  // the same after the first one lands. That assumption is what the usual
+  // "miss twice" shortcut is really making, and it counts a runout that
+  // arrives and is then undone.
+  let byRiver = byNextCard
+  if (toCome >= 2 && unseen > 1 && current < FAVOURITE) {
+    const pairs: [Card, Card][] = []
+    for (let i = 0; i < unseen; i++) {
+      for (let j = i + 1; j < unseen; j++) pairs.push([remaining[i]!, remaining[j]!])
+    }
+
+    // Every pair where that is affordable, and an unbiased sample of them
+    // where it is not.
+    const tried =
+      pairs.length <= RUNOUT_SAMPLE
+        ? pairs
+        : Array.from({ length: RUNOUT_SAMPLE }, () => pairs[rng.nextInt(pairs.length)]!)
+
+    let ahead = 0
+    for (const pair of tried) if (aheadWith(pair)) ahead++
+    byRiver = tried.length === 0 ? byNextCard : ahead / tried.length
+  }
 
   return { outs, current, byNextCard, byRiver, toCome }
 }
