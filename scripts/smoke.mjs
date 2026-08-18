@@ -42,6 +42,7 @@ check('the odds overlay is showing equity', body.includes('your equity'))
 check('pot odds are on screen', body.includes('need to call'))
 check('modelled ranges are shown', body.includes('modelled ranges'))
 check('the range grid is drawn', body.includes('tightest range'))
+check('outs have a place in the overlay', body.includes('outs'))
 
 // Play the hand out by checking or calling until it ends.
 for (let i = 0; i < 40; i++) {

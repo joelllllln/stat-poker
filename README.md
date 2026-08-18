@@ -65,6 +65,9 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   comparison of every holding against every holding — they agree to 1e-9 on
   narrow ranges, wide ranges, the whole deck, and boards where every hand
   chops. The solve converges to 0.0016 chips per hand in a ten-chip pot.
+- **Outs**: a flush draw's spades are found without any rule about flushes,
+  overcards against a made flush are correctly counted as nothing, and two
+  cards to come are not scored by adding the one-card chance to itself.
 - **Estimate tracking**: error is the mean *absolute* miss, so being twenty
   points out in both directions is not scored as accurate; bias is reported
   separately, because running consistently high is a different and more
@@ -82,6 +85,18 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
 - **Coach**: folding a royal flush grades as a blunder, a correct call grades
   correct whatever the runout did, verdicts are deterministic, and no decision
   is ever offered a bet size that was not legal at the time.
+
+## Counting outs
+
+Outs are normally taught as rules — nine for a flush draw, eight for an
+open-ender — and those rules quietly assume the opponent holds one specific
+thing. The definition here needs no rules: **an out is a card that turns you
+from an underdog into a favourite** against the range you are actually facing.
+Every unseen card is tried and the hand re-priced with it in place.
+
+That finds the flush cards without knowing what a flush is, declines to count a
+card that improves them more than it improves you, and handles any board texture
+identically because it never had a texture rule to begin with.
 
 ## What the coach can and cannot see
 

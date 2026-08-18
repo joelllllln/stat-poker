@@ -14,6 +14,7 @@
 import type { Card } from '../engine/cards'
 import { Rng } from '../engine/cards'
 import { handEquity } from '../equity/equity'
+import { findOuts } from '../equity/outs'
 import { parseRange, type Range } from '../equity/range'
 import {
   DEFAULT_POSTFLOP,
@@ -31,6 +32,8 @@ export interface EquityRequest {
   villains: string[]
   board: Card[]
   iterations?: number
+  /** Also work out which cards would put the hand ahead. */
+  withOuts?: boolean
 }
 
 export interface SolveRequest {
@@ -54,6 +57,13 @@ export interface EquityReply {
   tie: number
   exact: boolean
   errorMargin: number
+  /** Present when outs were asked for and there are cards still to come. */
+  outs: {
+    cards: Card[]
+    byNextCard: number
+    byRiver: number
+    toCome: number
+  } | null
 }
 
 export interface SolveAction {
@@ -97,6 +107,19 @@ function runEquity(request: EquityRequest): EquityReply {
     request.board,
     { rng: new Rng(request.id * 7919 + 13), iterations: request.iterations ?? 8_000 },
   )
+  // Outs come from the same call rather than a second round trip: the caller
+  // wants them at the same moment and they cost a few milliseconds.
+  let outs: EquityReply['outs'] = null
+  if (request.withOuts && request.board.length >= 3 && request.board.length < 5) {
+    const found = findOuts(request.hero, request.board, request.villains.map(rangeFor))
+    outs = {
+      cards: found.outs,
+      byNextCard: found.byNextCard,
+      byRiver: found.byRiver,
+      toCome: found.toCome,
+    }
+  }
+
   return {
     kind: 'equity',
     id: request.id,
@@ -105,6 +128,7 @@ function runEquity(request: EquityRequest): EquityReply {
     tie: result.tie,
     exact: result.exact,
     errorMargin: result.errorMargin,
+    outs,
   }
 }
 

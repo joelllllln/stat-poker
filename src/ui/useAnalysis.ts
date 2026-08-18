@@ -59,6 +59,7 @@ export interface EquityQuery {
   villains: string[]
   board: readonly Card[]
   iterations?: number
+  withOuts?: boolean
 }
 
 /**
@@ -80,7 +81,13 @@ export function useEquity(query: EquityQuery | null): {
   const key = useMemo(
     () =>
       query
-        ? JSON.stringify([query.hero, query.villains, query.board, query.iterations])
+        ? JSON.stringify([
+            query.hero,
+            query.villains,
+            query.board,
+            query.iterations,
+            query.withOuts,
+          ])
         : null,
     [query],
   )
@@ -99,6 +106,7 @@ export function useEquity(query: EquityQuery | null): {
       villains: query.villains,
       board: [...query.board],
       ...(query.iterations === undefined ? {} : { iterations: query.iterations }),
+      ...(query.withOuts === undefined ? {} : { withOuts: query.withOuts }),
     })
       .then((reply) => {
         // A reply for a decision the player has already moved past is stale.

@@ -64,6 +64,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
       hero: hero.holeCards,
       villains: widths.map((w) => topPercentRange(w.width)),
       board: state.board,
+      withOuts: true,
     }
   }, [hero.holeCards, hero.status, widths, state.board])
 
@@ -115,7 +116,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
       {!hidden && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <Stat
               label="Your equity"
               value={pct(equity.equity)}
@@ -132,6 +133,23 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
               value={toCall > 0 ? pct(needed) : '—'}
               hint={toCall > 0 ? `${potOddsRatio(toCall, pot)} · ${toCall} to call` : 'no bet to face'}
               tone={toCall > 0 ? (callIsCorrect ? 'good' : 'bad') : 'default'}
+            />
+            <Stat
+              label="Outs"
+              value={
+                equity.outs
+                  ? String(equity.outs.cards.length)
+                  : state.board.length >= 5
+                    ? '—'
+                    : '…'
+              }
+              hint={
+                equity.outs
+                  ? equity.outs.cards.length === 0
+                    ? 'nothing gets you there'
+                    : `${pct(equity.outs.byRiver)} by the river`
+                  : 'cards that put you ahead'
+              }
             />
             <Stat
               label="SPR"
