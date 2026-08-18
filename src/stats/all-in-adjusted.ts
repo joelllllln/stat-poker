@@ -141,8 +141,27 @@ export interface LuckSummary {
  * Hands that never got all-in contribute the same value to both lines, so the
  * two only diverge where luck actually had a say.
  */
+/**
+ * The same answer, remembered.
+ *
+ * Pricing a hand re-deals every runout it could have had, which is a few
+ * milliseconds — nothing once, and a visible stall when a growing history is
+ * redrawn on every action. The hand state is immutable, so its identity is a
+ * sound key and a hand is priced once however often it is drawn.
+ */
+const priced = new WeakMap<HandState, AdjustedResult>()
+
+export function pricedHand(state: HandState): AdjustedResult {
+  let result = priced.get(state)
+  if (result === undefined) {
+    result = allInAdjusted(state)
+    priced.set(state, result)
+  }
+  return result
+}
+
 export function luckCurve(
-  hands: { state: HandState; bigBlind: number }[],
+  hands: { state: HandState; bigBlind: number; seat?: number }[],
   seat: number,
 ): LuckSummary {
   const actual: number[] = []
@@ -152,10 +171,13 @@ export function luckCurve(
   let allInHands = 0
 
   for (const hand of hands) {
-    const { actual: real, adjusted: expected, wasAllIn } = allInAdjusted(hand.state)
+    const { actual: real, adjusted: expected, wasAllIn } = pricedHand(hand.state)
     if (wasAllIn) allInHands++
-    runningActual += (real[seat] ?? 0) / hand.bigBlind
-    runningAdjusted += (expected[seat] ?? 0) / hand.bigBlind
+    // A history can span tables, so each hand may name the seat it was played
+    // from; the argument is the fallback for a caller that knows it is one.
+    const heroSeat = hand.seat ?? seat
+    runningActual += (real[heroSeat] ?? 0) / hand.bigBlind
+    runningAdjusted += (expected[heroSeat] ?? 0) / hand.bigBlind
     actual.push(runningActual)
     adjusted.push(runningAdjusted)
   }

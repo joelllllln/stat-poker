@@ -21,6 +21,16 @@ import { requiredEquity } from './odds'
 import { evaluateActions, evContext, heroEquity, type ActionEV } from './ev'
 import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
 
+/**
+ * What the coach's verdicts are worth remembering as.
+ *
+ * A graded hand is cached rather than regraded on every load, which would
+ * otherwise freeze today's coach into a player's record forever. Raise this
+ * whenever a change here would give a hand a different verdict: every cached
+ * verdict below it is discarded and worked out again.
+ */
+export const GRADER_VERSION = 1
+
 export type Verdict = 'optimal' | 'fine' | 'mistake' | 'blunder'
 
 /**

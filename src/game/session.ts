@@ -35,6 +35,8 @@ export interface HandRecord {
   /** The seed this hand's deck came from: replay needs nothing else. */
   seed: number
   buttonSeat: number
+  /** The seat the person played from, so their statistics survive replay. */
+  heroSeat: number
   /** Stacks as the hand was dealt, which replay needs to reconstruct it. */
   startingStacks: number[]
   smallBlind: number
@@ -45,6 +47,13 @@ export interface HandRecord {
   evLostBB?: number
   /** The hero's graded decisions, kept so analysis need not regrade. */
   grades?: DecisionGrade[]
+  /**
+   * When the hand was played, filled in when it is saved.
+   *
+   * The engine and the session are deterministic and know nothing about the
+   * clock; the time comes from whoever writes the hand down.
+   */
+  playedAt?: number
 }
 
 export interface SessionState {
@@ -162,6 +171,7 @@ function finishIfComplete(session: SessionState): SessionState {
     handNumber: session.handNumber,
     seed: session.currentSeed,
     buttonSeat: session.buttonSeat,
+    heroSeat: session.config.heroSeat,
     startingStacks: session.currentStartingStacks,
     smallBlind: session.config.smallBlind,
     bigBlind: session.config.bigBlind,

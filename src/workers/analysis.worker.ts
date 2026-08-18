@@ -13,6 +13,10 @@
 
 import type { Card } from '../engine/cards'
 import { Rng } from '../engine/cards'
+import { gradeHand, type DecisionGrade } from '../coach/grade'
+import { luckCurve } from '../stats/all-in-adjusted'
+import { hydrate } from '../stats/archive'
+import type { StoredHand } from '../stats/serialize'
 import { handEquity } from '../equity/equity'
 import { findOuts } from '../equity/outs'
 import { parseRange, type Range } from '../equity/range'
@@ -47,7 +51,33 @@ export interface SolveRequest {
   iterations?: number
 }
 
-export type AnalysisRequest = EquityRequest | SolveRequest
+/**
+ * Grade stored hands.
+ *
+ * Grading costs roughly a third of a second a hand — far too much for the
+ * thread that draws the table, and the reason a session's history is graded
+ * here, a few hands at a time, rather than all at once when the page loads.
+ */
+export interface GradeRequest {
+  kind: 'grade'
+  id: number
+  hands: StoredHand[]
+}
+
+/**
+ * The luck curve over a history.
+ *
+ * Each hand is re-dealt to price what it was worth when the chips went in,
+ * which is milliseconds a hand: cheap once, expensive across a few thousand.
+ */
+export interface LuckRequest {
+  kind: 'luck'
+  id: number
+  hands: StoredHand[]
+  bigBlind: number
+}
+
+export type AnalysisRequest = EquityRequest | SolveRequest | GradeRequest | LuckRequest
 
 export interface EquityReply {
   kind: 'equity'
@@ -83,13 +113,42 @@ export interface SolveReply {
   milliseconds: number
 }
 
+export interface GradedHand {
+  /** The hand's storage identity, so the caller can file the result. */
+  key: string
+  evLostBB: number
+  decisions: DecisionGrade[]
+}
+
+export interface GradeReply {
+  kind: 'grade'
+  id: number
+  graded: GradedHand[]
+  /** Hands that would not replay or grade, counted rather than dropped silently. */
+  failed: number
+}
+
+export interface LuckReply {
+  kind: 'luck'
+  id: number
+  actual: number[]
+  adjusted: number[]
+  luckBB: number
+  allInHands: number
+}
+
 export interface AnalysisError {
   kind: 'error'
   id: number
   message: string
 }
 
-export type AnalysisReply = EquityReply | SolveReply | AnalysisError
+export type AnalysisReply =
+  | EquityReply
+  | SolveReply
+  | GradeReply
+  | LuckReply
+  | AnalysisError
 
 const ranges = new Map<string, Range>()
 const rangeFor = (text: string): Range => {
@@ -177,11 +236,62 @@ function runSolve(request: SolveRequest): SolveReply {
   }
 }
 
+function runGrade(request: GradeRequest): GradeReply {
+  const { hands } = hydrate(request.hands)
+  const graded: GradedHand[] = []
+  let failed = request.hands.length - hands.length
+
+  for (const hand of hands) {
+    try {
+      const grade = gradeHand(hand.record, hand.record.heroSeat)
+      graded.push({ key: hand.key, evLostBB: grade.totalEvLossBB, decisions: grade.decisions })
+    } catch {
+      // One hand that will not grade costs that hand's verdict and nothing
+      // else: the rest of the batch is still worth having.
+      failed += 1
+    }
+  }
+
+  return { kind: 'grade', id: request.id, graded, failed }
+}
+
+function runLuck(request: LuckRequest): LuckReply {
+  const { hands } = hydrate(request.hands)
+  const curve = luckCurve(
+    hands.map((hand) => ({
+      state: hand.record.state,
+      bigBlind: hand.record.bigBlind || request.bigBlind,
+      seat: hand.record.heroSeat,
+    })),
+    0,
+  )
+  return {
+    kind: 'luck',
+    id: request.id,
+    actual: curve.actual,
+    adjusted: curve.adjusted,
+    luckBB: curve.luckBB,
+    allInHands: curve.allInHands,
+  }
+}
+
+function run(request: AnalysisRequest): AnalysisReply {
+  switch (request.kind) {
+    case 'equity':
+      return runEquity(request)
+    case 'solve':
+      return runSolve(request)
+    case 'grade':
+      return runGrade(request)
+    case 'luck':
+      return runLuck(request)
+  }
+}
+
 self.onmessage = (event: MessageEvent<AnalysisRequest>) => {
   const request = event.data
   try {
-    const reply = request.kind === 'equity' ? runEquity(request) : runSolve(request)
-    self.postMessage(reply)
+    self.postMessage(run(request))
   } catch (error) {
     const reply: AnalysisError = {
       kind: 'error',

@@ -209,6 +209,7 @@ describe('hand history storage', () => {
         'buttonSeat',
         'deck',
         'handNumber',
+        'heroSeat',
         'playedAt',
         'seatNames',
         'seed',
@@ -321,7 +322,7 @@ describe('the store', () => {
     const destination = new MemoryHandStore()
     const imported = await importIntoStore(destination, await exportStore(source))
 
-    expect(imported.hands).toBe(3)
+    expect(imported.hands).toHaveLength(3)
     expect(imported.estimates).toHaveLength(1)
     expect(await destination.count()).toBe(3)
     expect(await destination.allEstimates()).toHaveLength(1)

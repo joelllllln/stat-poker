@@ -1,58 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card } from '../engine/cards'
-import type {
-  AnalysisReply,
-  AnalysisRequest,
-  EquityReply,
-  EquityRequest,
-  SolveReply,
-  SolveRequest,
-} from '../workers/analysis.worker'
-
-/**
- * A request with its id left for the transport to fill in.
- *
- * Written as a union of each request type rather than `Omit` over the union,
- * which flattens the discriminant and loses the per-kind fields.
- */
-type PendingRequest = Omit<EquityRequest, 'id'> | Omit<SolveRequest, 'id'>
-
-/**
- * A single worker, shared by everything that needs it.
- *
- * One worker keeps requests in order and means a solve and an equity query
- * never compete for two cores when the machine may only have one to spare.
- */
-let shared: Worker | null = null
-let nextId = 1
-
-function worker(): Worker {
-  shared ??= new Worker(new URL('../workers/analysis.worker.ts', import.meta.url), {
-    type: 'module',
-  })
-  return shared
-}
-
-/**
- * Send a request and resolve with its reply.
- *
- * Replies are matched by id rather than by arrival, so an answer to a question
- * nobody is asking any more is discarded instead of being shown.
- */
-function ask<T extends AnalysisReply>(request: PendingRequest): Promise<T> {
-  const id = nextId++
-  return new Promise((resolve, reject) => {
-    const instance = worker()
-    const listener = (event: MessageEvent<AnalysisReply>) => {
-      if (event.data.id !== id) return
-      instance.removeEventListener('message', listener)
-      if (event.data.kind === 'error') reject(new Error(event.data.message))
-      else resolve(event.data as T)
-    }
-    instance.addEventListener('message', listener)
-    instance.postMessage({ ...request, id } as AnalysisRequest)
-  })
-}
+import type { EquityReply, SolveReply } from '../workers/analysis.worker'
+import { ask } from './analysis-client'
 
 export interface EquityQuery {
   hero: readonly [Card, Card]

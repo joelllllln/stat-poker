@@ -17,7 +17,7 @@ import type { HandRecord } from '../game/session'
 import type { Estimate } from './estimates'
 import { deriveHandStats } from './hand-stats'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export interface StoredHand {
   version: number
@@ -27,6 +27,8 @@ export interface StoredHand {
   buttonSeat: number
   smallBlind: number
   bigBlind: number
+  /** Which seat the person was sitting in: whose statistics these are. */
+  heroSeat: number
   seatNames: string[]
   startingStacks: number[]
   /** The shuffled deck, which is all replay needs to reproduce every card. */
@@ -42,6 +44,7 @@ export function toStored(record: HandRecord, playedAt: number): StoredHand {
     handNumber: record.handNumber,
     playedAt,
     buttonSeat: record.buttonSeat,
+    heroSeat: record.heroSeat,
     smallBlind: record.smallBlind,
     bigBlind: record.bigBlind,
     seatNames: record.state.seats.map((s) => s.name),
@@ -103,6 +106,7 @@ export function fromStored(stored: StoredHand): HandRecord {
     handNumber: migrated.handNumber,
     seed: migrated.seed,
     buttonSeat: migrated.buttonSeat,
+    heroSeat: migrated.heroSeat,
     startingStacks: migrated.startingStacks,
     smallBlind: migrated.smallBlind,
     bigBlind: migrated.bigBlind,
@@ -114,8 +118,10 @@ export function fromStored(stored: StoredHand): HandRecord {
 /**
  * Bring an older stored hand up to the current schema.
  *
- * There is only one version so far; the seam exists from the start so that
- * adding a second never means asking people to throw away their history.
+ * Version one did not record which seat the person sat in, because at the time
+ * there was only ever one table and they always sat in the first seat. Filling
+ * that in is what lets a history recorded then still be read as somebody's
+ * statistics rather than as six anonymous players.
  */
 export function migrate(stored: StoredHand): StoredHand {
   if (stored.version > SCHEMA_VERSION) {
@@ -123,7 +129,8 @@ export function migrate(stored: StoredHand): StoredHand {
       `Hand was written by a newer version (${stored.version} > ${SCHEMA_VERSION})`,
     )
   }
-  return stored
+  if (stored.version === SCHEMA_VERSION) return stored
+  return { ...stored, heroSeat: stored.heroSeat ?? 0, version: SCHEMA_VERSION }
 }
 
 /** The whole record as a portable JSON document. */

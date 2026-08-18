@@ -10,6 +10,20 @@
 import type { Estimate } from './estimates'
 import { exportHands, importHands, type StoredHand } from './serialize'
 
+/**
+ * A hand's verdict, kept so it is worked out once rather than once a session.
+ *
+ * Grading costs about a third of a second a hand, so a history of any size
+ * cannot be regraded on every load. The version is what keeps that from
+ * freezing the verdicts in place: improving the coach raises it, and every
+ * cached verdict is ignored and worked out again.
+ */
+export interface CachedGrade {
+  key: string
+  version: number
+  evLostBB: number
+}
+
 export interface HandStore {
   put(hand: StoredHand): Promise<void>
   putMany(hands: StoredHand[]): Promise<void>
@@ -25,12 +39,16 @@ export interface HandStore {
    */
   putEstimates(estimates: Estimate[]): Promise<void>
   allEstimates(): Promise<Estimate[]>
+  /** Verdicts already worked out, keyed by hand. */
+  putGrades(grades: CachedGrade[]): Promise<void>
+  allGrades(): Promise<CachedGrade[]>
 }
 
 /** In-memory store, for tests and for environments without IndexedDB. */
 export class MemoryHandStore implements HandStore {
   private hands: StoredHand[] = []
   private estimates: Estimate[] = []
+  private grades = new Map<string, CachedGrade>()
 
   async put(hand: StoredHand): Promise<void> {
     this.hands.push(hand)
@@ -51,6 +69,7 @@ export class MemoryHandStore implements HandStore {
   async clear(): Promise<void> {
     this.hands = []
     this.estimates = []
+    this.grades.clear()
   }
 
   async putEstimates(estimates: Estimate[]): Promise<void> {
@@ -60,12 +79,21 @@ export class MemoryHandStore implements HandStore {
   async allEstimates(): Promise<Estimate[]> {
     return [...this.estimates]
   }
+
+  async putGrades(grades: CachedGrade[]): Promise<void> {
+    for (const grade of grades) this.grades.set(grade.key, grade)
+  }
+
+  async allGrades(): Promise<CachedGrade[]> {
+    return [...this.grades.values()]
+  }
 }
 
 const DB_NAME = 'stat-poker'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const STORE = 'hands'
 const ESTIMATES = 'estimates'
+const GRADES = 'grades'
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -89,6 +117,11 @@ function openDatabase(): Promise<IDBDatabase> {
       // the hands already in it.
       if (!db.objectStoreNames.contains(ESTIMATES)) {
         db.createObjectStore(ESTIMATES, { autoIncrement: true })
+      }
+      // Version three. Keyed by the hand rather than auto-numbered, so
+      // regrading a hand replaces its verdict instead of filing a second one.
+      if (!db.objectStoreNames.contains(GRADES)) {
+        db.createObjectStore(GRADES, { keyPath: 'key' })
       }
     }
     request.onsuccess = () => {
@@ -154,8 +187,9 @@ export class IndexedDbHandStore implements HandStore {
     await this.withStore('readwrite', (store) => store.clear())
     const db = await this.connect()
     await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(ESTIMATES, 'readwrite')
+      const transaction = db.transaction([ESTIMATES, GRADES], 'readwrite')
       transaction.objectStore(ESTIMATES).clear()
+      transaction.objectStore(GRADES).clear()
       transaction.oncomplete = () => resolve()
       transaction.onerror = () => reject(transaction.error)
     })
@@ -180,6 +214,24 @@ export class IndexedDbHandStore implements HandStore {
       transaction.objectStore(ESTIMATES).getAll() as IDBRequest<Estimate[]>,
     )
   }
+
+  async putGrades(grades: CachedGrade[]): Promise<void> {
+    if (grades.length === 0) return
+    const db = await this.connect()
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(GRADES, 'readwrite')
+      const store = transaction.objectStore(GRADES)
+      for (const grade of grades) store.put(grade)
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+    })
+  }
+
+  async allGrades(): Promise<CachedGrade[]> {
+    const db = await this.connect()
+    const transaction = db.transaction(GRADES, 'readonly')
+    return asPromise(transaction.objectStore(GRADES).getAll() as IDBRequest<CachedGrade[]>)
+  }
 }
 
 /** The real store where one is available, an in-memory one otherwise. */
@@ -203,16 +255,17 @@ export async function exportStore(store: HandStore): Promise<string> {
 /**
  * Read a file into a store.
  *
- * Hands come back as a count and guesses come back whole, because that is what
- * each caller needs: nothing displays an individual hand on import, while the
- * running accuracy has to fold the guesses straight in.
+ * What went in comes back whole rather than as a count, because the caller has
+ * to fold it into what is already on screen: hands into the statistics, guesses
+ * into the running accuracy. An import that appears to have done nothing is
+ * indistinguishable from one that failed.
  */
 export async function importIntoStore(
   store: HandStore,
   json: string,
-): Promise<{ hands: number; estimates: Estimate[] }> {
+): Promise<{ hands: StoredHand[]; estimates: Estimate[] }> {
   const { hands, estimates } = importHands(json)
   await store.putMany(hands)
   await store.putEstimates(estimates)
-  return { hands: hands.length, estimates }
+  return { hands, estimates }
 }

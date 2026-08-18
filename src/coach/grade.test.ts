@@ -78,6 +78,7 @@ function recordFrom(
     handNumber: 1,
     seed: 0,
     buttonSeat: 0,
+    heroSeat: 0,
     startingStacks: stacks,
     smallBlind: 1,
     bigBlind: 2,

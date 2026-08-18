@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
-import { recordsForSeat, type SessionState } from '../game/session'
+import type { SessionState } from '../game/session'
 import { aggregate } from '../stats/hand-stats'
 import { luckCurve } from '../stats/all-in-adjusted'
+import { BLOCK_SIZE, blocks, describeMovement, sittings } from '../stats/timeline'
+import { TrendChart, type Series } from './TrendChart'
 import {
   MASTERY_SAMPLE,
   STYLE_SAMPLE,
@@ -14,7 +16,7 @@ import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '
 import { describeAccuracy, summarise } from '../stats/estimates'
 import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
 import { LuckChart } from './LuckChart'
-import { useStore } from './store'
+import { ARCHIVE_LIMIT, historyOf, useStore } from './store'
 
 /**
  * A stat with its confidence interval.
@@ -51,25 +53,79 @@ export function Dashboard({ session }: { session: SessionState }) {
   // what tells React anything changed — including grades arriving after the
   // hand they belong to has already been recorded.
   const version = useStore((s) => s.version)
+  // Statistics span every hand on this machine, not just this sitting: a
+  // dashboard that resets when the tab closes cannot describe how somebody
+  // plays, only how they have played since lunch.
+  const history = useStore(historyOf)
+  const archiveLuck = useStore((s) => s.archiveLuck)
+  const storedHands = useStore((s) => s.storedHands)
+  const gradingLeft = useStore((s) => s.gradingLeft)
   const heroSeat = session.config.heroSeat
   const bigBlind = session.config.bigBlind
 
   const data = useMemo(() => {
-    const records = recordsForSeat(session, heroSeat)
+    const records = history.map((hand) => hand.stats[hand.heroSeat]!)
     const stats = aggregate(records, bigBlind)
-    const curve = luckCurve(
-      session.history.map((hand) => ({ state: hand.state, bigBlind })),
+    // The archive's curve is priced in the worker and arrives as a whole; this
+    // sitting's hands are added on the end, and each hand is priced once
+    // however many times the dashboard is redrawn.
+    const liveFrom = archiveLuck ? history.length - session.history.length : 0
+    const live = luckCurve(
+      history.slice(liveFrom).map((hand) => ({
+        state: hand.state,
+        bigBlind: hand.bigBlind,
+        seat: hand.heroSeat,
+      })),
       heroSeat,
     )
+    const offsetActual = archiveLuck?.actual.at(-1) ?? 0
+    const offsetAdjusted = archiveLuck?.adjusted.at(-1) ?? 0
+    const curve = {
+      actual: [...(archiveLuck?.actual ?? []), ...live.actual.map((v) => v + offsetActual)],
+      adjusted: [
+        ...(archiveLuck?.adjusted ?? []),
+        ...live.adjusted.map((v) => v + offsetAdjusted),
+      ],
+      luckBB: (archiveLuck?.luckBB ?? 0) + live.luckBB,
+      allInHands: (archiveLuck?.allInHands ?? 0) + live.allInHands,
+    }
     const winrate = winrateInterval(records, bigBlind)
     return { records, stats, curve, winrate }
-  }, [session, version, heroSeat, bigBlind])
+  }, [history, archiveLuck, session, version, heroSeat, bigBlind])
+
+  const overTime = useMemo(() => {
+    const cut = blocks(history)
+    const series: Series[] = [
+      {
+        label: 'Hands played',
+        values: cut.map((block) => block.vpip),
+        format: (v) => `${v.toFixed(0)}%`,
+      },
+      {
+        label: 'Raised first in',
+        values: cut.map((block) => block.pfr),
+        format: (v) => `${v.toFixed(0)}%`,
+      },
+      {
+        label: 'Given up',
+        values: cut.map((block) => block.evLostPer100),
+        format: (v) => `${v.toFixed(1)}bb/100`,
+        better: 'lower',
+      },
+      {
+        label: 'Result',
+        values: cut.map((block) => block.bbPer100),
+        format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}bb/100`,
+      },
+    ]
+    return { blocks: cut, series, sittings: sittings(history), movement: describeMovement(history) }
+  }, [history, version])
 
   // Hooks must all run before any early return, so this sits with the rest.
   // Grading already happened off the critical path; this reuses those results
   // rather than paying for them a second time.
   const leak = useMemo(() => {
-    const graded = session.history.filter((hand) => hand.grades !== undefined)
+    const graded = history.filter((hand) => hand.grades !== undefined)
     if (graded.length === 0) return null
     const tagged = tagDecisions(graded, heroSeat, (record) => record.grades ?? [])
     return {
@@ -81,7 +137,7 @@ export function Dashboard({ session }: { session: SessionState }) {
         tagged.map((item) => ({ street: item.street, action: item.grade.chosen.type })),
       ),
     }
-  }, [session, version, heroSeat])
+  }, [history, version, heroSeat])
 
   const estimates = useMemo(
     () => summarise(session.estimates),
@@ -93,7 +149,7 @@ export function Dashboard({ session }: { session: SessionState }) {
 
   // EV given up is filled in by the review panel as hands are graded; until a
   // hand has been graded it contributes nothing rather than a guess.
-  const graded = session.history.filter((h) => h.evLostBB !== undefined)
+  const graded = history.filter((h) => h.evLostBB !== undefined)
   const evLostPer100 =
     graded.length === 0
       ? 0
@@ -109,7 +165,12 @@ export function Dashboard({ session }: { session: SessionState }) {
     <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-[11px] uppercase tracking-wide text-slate-500">Your game</span>
-        <span className="text-[11px] text-slate-500">{stats.hands} hands</span>
+        <span className="text-[11px] text-slate-500">
+          {stats.hands.toLocaleString('en-US')} hands
+          {session.history.length < stats.hands &&
+            ` · ${session.history.length} this sitting`}
+          {storedHands > ARCHIVE_LIMIT && ` · showing your last ${ARCHIVE_LIMIT.toLocaleString('en-US')}`}
+        </span>
       </div>
 
       {/* Style and mastery are separate questions: how you play, and how well. */}
@@ -135,6 +196,38 @@ export function Dashboard({ session }: { session: SessionState }) {
           )}
         </div>
       </div>
+
+      {/* The same numbers over time. One figure describes a player as though
+          they have always been the same one, which is the opposite of what a
+          trainer is for. */}
+      {overTime.blocks.length >= 2 && (
+        <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-slate-500">
+              Over time · blocks of {BLOCK_SIZE} hands
+            </span>
+            {overTime.sittings.length > 1 && (
+              <span className="text-[11px] text-slate-500">
+                across {overTime.sittings.length} sittings
+              </span>
+            )}
+          </div>
+
+          <TrendChart series={overTime.series} blockSize={BLOCK_SIZE} />
+
+          <div className="text-[11px] text-slate-400">
+            {overTime.movement ??
+              'Nothing has moved further than the noise yet — which is the usual and correct answer over a few hundred hands.'}
+          </div>
+        </div>
+      )}
+
+      {gradingLeft > 0 && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400">
+          Grading {gradingLeft} hand{gradingLeft === 1 ? '' : 's'} in the background. Each hand
+          is graded once and remembered, so this only happens for hands the coach has not seen.
+        </div>
+      )}
 
       {leak && (
         <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
