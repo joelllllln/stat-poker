@@ -1,6 +1,12 @@
 import { useMemo, useState } from 'react'
 import { describe as describeHand } from '../engine/evaluator'
-import { gradeHand, type DecisionGrade, type HandGrade, type Verdict } from '../coach/grade'
+import {
+  gradeHand,
+  summariseGrades,
+  type DecisionGrade,
+  type HandGrade,
+  type Verdict,
+} from '../coach/grade'
 import type { HandRecord } from '../game/session'
 import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
@@ -173,7 +179,16 @@ function Summary({ grade, record, heroSeat }: { grade: HandGrade; record: HandRe
 /** Post-hand review: what you did, what it cost, and what was better. */
 export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat: number }) {
   const [expanded, setExpanded] = useState(false)
-  const grade = useMemo(() => gradeHand(record, heroSeat), [record, heroSeat])
+  // Reuse the grade the worker already produced where there is one: regrading
+  // costs a third of a second, and paying it again on the interface thread the
+  // moment a hand ends is exactly when it is most visible.
+  const grade = useMemo(
+    () =>
+      record.grades
+        ? summariseGrades(record.grades, record, heroSeat)
+        : gradeHand(record, heroSeat),
+    [record, record.grades, heroSeat],
+  )
   const showReview = useStore((s) => s.showReview)
 
   if (!showReview || grade.decisions.length === 0) return null

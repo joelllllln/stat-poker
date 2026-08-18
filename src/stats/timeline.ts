@@ -16,6 +16,25 @@ import { aggregate, type SeatHandStats } from './hand-stats'
 /** Hands per block. Small enough to show movement, large enough to mean something. */
 export const BLOCK_SIZE = 25
 
+/** The narrowest and widest a block is allowed to be, and how many to aim for. */
+export const MIN_BLOCK = 10
+export const MAX_BLOCK = 50
+export const TARGET_BLOCKS = 8
+
+/**
+ * How wide a block should be for a history of this length.
+ *
+ * Fixed blocks fail at both ends: at twenty-five hands a new player sees one
+ * point and no trend at all, and at ten thousand they get four hundred points
+ * of noise. The width is chosen to keep roughly eight blocks on screen, in
+ * round numbers, and the chart says which width it settled on — a trend whose
+ * unit is unstated is not readable.
+ */
+export function blockSizeFor(hands: number): number {
+  const ideal = Math.round(hands / TARGET_BLOCKS / 5) * 5
+  return Math.min(MAX_BLOCK, Math.max(MIN_BLOCK, ideal))
+}
+
 /**
  * A gap this long ends a sitting.
  *

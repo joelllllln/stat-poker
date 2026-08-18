@@ -1,13 +1,23 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { describe } from '../engine/evaluator'
 import { ActionBar } from './ActionBar'
 import { Dashboard } from './Dashboard'
 import { OddsPanel } from './OddsPanel'
 import { Reflection } from './Reflection'
+import { SessionCard } from './SessionCard'
 import { Table } from './Table'
-import { useStore } from './store'
+import { useStore, type Speed } from './store'
 
-function HandResult() {
+/**
+ * The shell.
+ *
+ * Two screens rather than one long column: the table, which is what somebody
+ * is doing, and their progress, which is why they are doing it. Putting the
+ * dashboard under the table meant every hand ended with a wall of statistics
+ * between the player and the next hand.
+ */
+
+function ResultBanner() {
   const session = useStore((s) => s.session)
   useStore((s) => s.version)
   const state = session.current
@@ -19,20 +29,49 @@ function HandResult() {
 
   return (
     <div
-      className={`rounded-xl border px-4 py-3 ${
+      className={`flex flex-wrap items-baseline gap-x-3 rounded-xl border px-4 py-2.5 ${
         net > 0
-          ? 'border-emerald-800 bg-emerald-950/40'
+          ? 'border-emerald-700/70 bg-emerald-950/50'
           : net < 0
-            ? 'border-rose-900 bg-rose-950/30'
-            : 'border-slate-800 bg-slate-900/40'
+            ? 'border-rose-900/70 bg-rose-950/40'
+            : 'border-slate-800 bg-slate-900/50'
       }`}
+      role="status"
     >
-      <div className="font-medium">
+      <span className="font-semibold">
         {net > 0 ? `You won ${net}` : net < 0 ? `You lost ${-net}` : 'You broke even'}
-      </div>
+      </span>
       {heroValue !== null && heroValue !== undefined && (
-        <div className="text-sm text-slate-400">You held {describe(heroValue)}.</div>
+        <span className="text-sm text-slate-400">You held {describe(heroValue)}.</span>
       )}
+    </div>
+  )
+}
+
+function Toggle<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: readonly { value: T; label: string }[]
+  value: T
+  onChange: (value: T) => void
+  label: string
+}) {
+  return (
+    <div className="flex rounded-lg border border-slate-800 p-0.5 text-xs" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          onClick={() => onChange(option.value)}
+          className={`rounded px-2.5 py-1 transition ${
+            value === option.value ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -40,12 +79,13 @@ function HandResult() {
 export function App() {
   const session = useStore((s) => s.session)
   useStore((s) => s.version)
-  const deal = useStore((s) => s.deal)
   const hudLevel = useStore((s) => s.hudLevel)
   const setHudLevel = useStore((s) => s.setHudLevel)
-  const showReview = useStore((s) => s.showReview)
-  const toggleReview = useStore((s) => s.toggleReview)
+  const speed = useStore((s) => s.speed)
+  const setSpeed = useStore((s) => s.setSpeed)
   const loadHistory = useStore((s) => s.loadHistory)
+  const storedHands = useStore((s) => s.storedHands)
+  const [screen, setScreen] = useState<'table' | 'progress'>('table')
 
   useEffect(() => {
     void loadHistory()
@@ -56,59 +96,82 @@ export function App() {
   const heroSeat = session.config.heroSeat
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-4">
+    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-3 sm:p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-semibold tracking-tight">stat-poker</h1>
           <p className="text-xs text-slate-500">
-            Hand {session.handNumber} · stack {session.stacks[heroSeat]} · blinds{' '}
-            {session.config.smallBlind}/{session.config.bigBlind}
+            Hand {session.handNumber} · {session.config.smallBlind}/{session.config.bigBlind}{' '}
+            · stack {session.stacks[heroSeat]}
+            {storedHands > 0 && ` · ${storedHands.toLocaleString('en-US')} hands recorded`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-slate-800 p-0.5 text-xs">
-            {(['full', 'predict', 'off'] as const).map((level) => (
-              <button
-                key={level}
-                onClick={() => setHudLevel(level)}
-                className={`rounded px-2 py-1 capitalize ${
-                  hudLevel === level ? 'bg-slate-700 text-white' : 'text-slate-400'
-                }`}
-              >
-                {level}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={toggleReview}
-            className={`rounded-lg border px-3 py-2 text-xs ${
-              showReview ? 'border-slate-700 text-slate-200' : 'border-slate-800 text-slate-500'
-            }`}
-          >
-            Review
-          </button>
-          <button
-            onClick={deal}
-            disabled={!handOver}
-            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium hover:bg-emerald-600 disabled:opacity-30"
-          >
-            Deal
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Toggle
+            label="Screen"
+            value={screen}
+            onChange={setScreen}
+            options={[
+              { value: 'table', label: 'Table' },
+              { value: 'progress', label: 'Progress' },
+            ]}
+          />
+          <Toggle
+            label="Odds overlay"
+            value={hudLevel}
+            onChange={setHudLevel}
+            options={[
+              { value: 'full', label: 'Odds' },
+              { value: 'predict', label: 'Guess' },
+              { value: 'off', label: 'Off' },
+            ]}
+          />
+          <Toggle
+            label="Speed"
+            value={speed}
+            onChange={(value: Speed) => setSpeed(value)}
+            options={[
+              { value: 'normal', label: 'Normal' },
+              { value: 'fast', label: 'Fast' },
+            ]}
+          />
         </div>
       </header>
 
-      <Table session={session} />
+      {screen === 'table' ? (
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="space-y-3">
+            <Table session={session} />
+            <ActionBar state={state} heroSeat={heroSeat} />
+            <ResultBanner />
+            {handOver && session.history.length > 0 && (
+              <Reflection
+                record={session.history[session.history.length - 1]!}
+                heroSeat={heroSeat}
+              />
+            )}
+          </div>
 
-      {state && !handOver && hudLevel !== 'off' && (
-        <OddsPanel state={state} heroSeat={heroSeat} />
+          {/* The coaching sits beside the table rather than under it, so the
+              numbers are visible at the moment they are about to be used. */}
+          <aside className="space-y-3">
+            {state && !handOver && hudLevel !== 'off' ? (
+              <OddsPanel state={state} heroSeat={heroSeat} />
+            ) : (
+              hudLevel === 'off' && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-500">
+                  The odds overlay is off. Turn it back on above when you want the numbers
+                  while you decide.
+                </div>
+              )
+            )}
+            <SessionCard session={session} />
+          </aside>
+        </div>
+      ) : (
+        <Dashboard session={session} />
       )}
-      {state && <ActionBar state={state} heroSeat={heroSeat} />}
-      <HandResult />
-      {handOver && session.history.length > 0 && (
-        <Reflection record={session.history[session.history.length - 1]!} heroSeat={heroSeat} />
-      )}
-      <Dashboard session={session} />
     </div>
   )
 }

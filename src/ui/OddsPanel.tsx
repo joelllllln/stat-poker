@@ -116,7 +116,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
       {!hidden && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2">
             <Stat
               label="Your equity"
               value={pct(equity.equity)}
@@ -183,7 +183,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
             </div>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <div className="grid gap-2">
             <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
             <div className="text-[11px] uppercase tracking-wide text-slate-500">
               Modelled ranges
@@ -208,7 +208,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
             {/* The shape of the tightest range still in the hand, with your own
                 holding marked in it. */}
-            <div className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 sm:w-52">
+            <div className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
               <RangeGrid
                 width={Math.min(...widths.map((w) => w.width))}
                 title="Tightest range"

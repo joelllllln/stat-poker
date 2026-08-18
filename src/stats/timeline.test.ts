@@ -14,6 +14,9 @@ import { toStored } from './serialize'
 import { hydrate, handKey, allHands } from './archive'
 import {
   BLOCK_SIZE,
+  MAX_BLOCK,
+  MIN_BLOCK,
+  blockSizeFor,
   blocks,
   describeMovement,
   movement,
@@ -146,6 +149,29 @@ describe('blocks of hands', () => {
     expect(blocks([])).toEqual([])
     expect(sittings([])).toEqual([])
     expect(describeMovement([])).toBeNull()
+  })
+})
+
+describe('block width', () => {
+  it('never cuts a short history so fine that every block is noise', () => {
+    expect(blockSizeFor(0)).toBe(MIN_BLOCK)
+    expect(blockSizeFor(30)).toBe(MIN_BLOCK)
+  })
+
+  it('grows the blocks rather than the number of them', () => {
+    expect(blockSizeFor(400)).toBe(MAX_BLOCK)
+    expect(blockSizeFor(100_000)).toBe(MAX_BLOCK)
+  })
+
+  it('keeps a readable number of blocks in between', () => {
+    for (const hands of [60, 120, 250, 399]) {
+      const size = blockSizeFor(hands)
+      const count = Math.ceil(hands / size)
+      expect(count).toBeGreaterThanOrEqual(3)
+      expect(count).toBeLessThanOrEqual(16)
+      // Round numbers: nobody reads "blocks of 13 hands".
+      expect(size % 5).toBe(0)
+    }
   })
 })
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Action } from '../engine/types'
-import { GRADER_VERSION } from '../coach/grade'
+import { GRADER_VERSION, type DecisionGrade, type GradedDecision } from '../coach/grade'
 import { allHands, handKey, hydrate, type ArchivedHand } from '../stats/archive'
 import { toStored, type StoredHand } from '../stats/serialize'
 import {
@@ -14,9 +14,8 @@ import {
   createSession,
   defaultSessionConfig,
   heroAct,
-  runBotsUntilHero,
+  stepBot,
   startNextHand,
-  type HandRecord,
   type SessionState,
 } from '../game/session'
 import { ask } from './analysis-client'
@@ -34,6 +33,17 @@ export const ARCHIVE_LIMIT = 5_000
 const GRADE_BATCH = 4
 
 /**
+ * How long a bot takes to act.
+ *
+ * Bots decide in microseconds, and a table where five opponents act between
+ * two of your own decisions is unreadable: you see the result and never the
+ * hand. The pause is what turns a computation into a game you can follow.
+ */
+const PACE_MS = { normal: 520, fast: 0 } as const
+
+export type Speed = keyof typeof PACE_MS
+
+/**
  * How many ungraded hands to work through on one load.
  *
  * Grading is a third of a second a hand. The cache means each hand is only
@@ -42,6 +52,15 @@ const GRADE_BATCH = 4
  * ones somebody is asking about.
  */
 const GRADE_BUDGET = 300
+
+/** Keep the part of a verdict a history needs and drop the rest. */
+const compact = (grade: DecisionGrade): GradedDecision => ({
+  street: grade.street,
+  toCall: grade.toCall,
+  evLossBB: grade.evLossBB,
+  verdict: grade.verdict,
+  chosen: grade.chosen,
+})
 
 interface Store {
   session: SessionState
@@ -63,6 +82,9 @@ interface Store {
   archiveLuck: Omit<LuckReply, 'kind' | 'id'> | null
   /** Hands still waiting for a verdict, for the progress the dashboard shows. */
   gradingLeft: number
+  /** How fast the bots act. */
+  speed: Speed
+  setSpeed: (speed: Speed) => void
 
   deal: () => void
   act: (action: Action) => void
@@ -76,15 +98,61 @@ interface Store {
   toggleReview: () => void
 }
 
+/**
+ * Preferences, kept across reloads.
+ *
+ * Somebody who has turned the odds off or sped the bots up has said something
+ * about how they want to play; asking again every time the page loads is a way
+ * of not listening. Written to local storage rather than the hand database
+ * because losing them costs nothing and they must be readable synchronously.
+ */
+const PREFERENCES = 'stat-poker:preferences'
+
+interface Preferences {
+  hudLevel: Store['hudLevel']
+  speed: Speed
+}
+
+function loadPreferences(): Preferences {
+  const fallback: Preferences = { hudLevel: 'full', speed: 'normal' }
+  try {
+    const raw = localStorage.getItem(PREFERENCES)
+    if (raw === null) return fallback
+    const parsed = JSON.parse(raw) as Partial<Preferences>
+    return {
+      hudLevel:
+        parsed.hudLevel === 'predict' || parsed.hudLevel === 'off' || parsed.hudLevel === 'full'
+          ? parsed.hudLevel
+          : fallback.hudLevel,
+      speed: parsed.speed === 'fast' ? 'fast' : 'normal',
+    }
+  } catch {
+    // A browser with storage switched off is not a reason to fail to start.
+    return fallback
+  }
+}
+
+function savePreferences(preferences: Preferences): void {
+  try {
+    localStorage.setItem(PREFERENCES, JSON.stringify(preferences))
+  } catch {
+    /* nothing worth reporting: the session simply will not be remembered */
+  }
+}
+
 const handStore = createHandStore()
 
 /** Stored history is read once per page load. */
 let loadedHistory = false
 /** Only one grading pass runs at a time, however often hands finish. */
 let grading = false
+/** The pending bot action, so a new hand never races the last one's tail. */
+let botTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<Store>((set, get) => {
+  const preferences = loadPreferences()
   const bump = () => set((s) => ({ version: s.version + 1 }))
+  const remember = () => savePreferences({ hudLevel: get().hudLevel, speed: get().speed })
 
   /**
    * Write any hands finished since `before` to storage.
@@ -108,6 +176,37 @@ export const useStore = create<Store>((set, get) => {
       .putMany(stored)
       .catch((error: unknown) => console.warn('Could not save hand history', error))
     void fillGrades()
+  }
+
+  /**
+   * Let the bots act, one at a time, with a pause between them.
+   *
+   * Scheduled rather than looped: the table is redrawn between actions, so a
+   * player can see who bet and who folded rather than being handed the
+   * aftermath. It stops as soon as it is the person's turn again.
+   */
+  function pace(): void {
+    if (botTimer !== null) {
+      clearTimeout(botTimer)
+      botTimer = null
+    }
+
+    const { session, speed } = get()
+    const state = session.current
+    if (state === null || state.result !== null) return
+    if (state.toAct === session.config.heroSeat) return
+
+    const step = () => {
+      botTimer = null
+      const before = session.history.length
+      if (!stepBot(session)) return
+      persist(session, before)
+      bump()
+      pace()
+    }
+
+    if (PACE_MS[speed] === 0) step()
+    else botTimer = setTimeout(step, PACE_MS[speed])
   }
 
   /**
@@ -145,6 +244,7 @@ export const useStore = create<Store>((set, get) => {
           if (!record) continue
           record.evLostBB = graded.evLostBB
           record.grades = graded.decisions
+          record.decisions = graded.decisions.map(compact)
         }
         // A hand that will not grade is marked as costing nothing rather than
         // being offered to the grader again on every pass forever.
@@ -159,6 +259,7 @@ export const useStore = create<Store>((set, get) => {
                 key: graded.key,
                 version: GRADER_VERSION,
                 evLostBB: graded.evLostBB,
+                decisions: graded.decisions.map(compact),
               }),
             ),
           )
@@ -176,7 +277,7 @@ export const useStore = create<Store>((set, get) => {
   return {
     session: createSession(defaultSessionConfig(Date.now() >>> 0)),
     version: 0,
-    hudLevel: 'full',
+    hudLevel: preferences.hudLevel,
     guess: null,
     showReview: true,
     archive: [],
@@ -185,23 +286,32 @@ export const useStore = create<Store>((set, get) => {
     archiveLuck: null,
     gradingLeft: 0,
 
+    speed: preferences.speed,
+    setSpeed: (speed) => {
+      set({ speed })
+      remember()
+      pace()
+    },
+
     deal: () => {
       const { session } = get()
       if (session.current !== null && session.current.result === null) return
       const before = session.history.length
       startNextHand(session)
-      runBotsUntilHero(session)
       persist(session, before)
       set((s) => ({ version: s.version + 1, guess: null }))
+      pace()
     },
 
     act: (action) => {
       const { session } = get()
+      if (session.current === null || session.current.result !== null) return
+      if (session.current.toAct !== session.config.heroSeat) return
       const before = session.history.length
       heroAct(session, action)
-      runBotsUntilHero(session)
       persist(session, before)
       set((s) => ({ version: s.version + 1, guess: null }))
+      pace()
     },
 
     loadHistory: async () => {
@@ -229,11 +339,13 @@ export const useStore = create<Store>((set, get) => {
       const grades = new Map(
         cached
           .filter((grade) => grade.version === GRADER_VERSION)
-          .map((grade) => [grade.key, grade.evLostBB]),
+          .map((grade) => [grade.key, grade]),
       )
       for (const hand of hands) {
-        const evLostBB = grades.get(hand.key)
-        if (evLostBB !== undefined) hand.record.evLostBB = evLostBB
+        const grade = grades.get(hand.key)
+        if (grade === undefined) continue
+        hand.record.evLostBB = grade.evLostBB
+        hand.record.decisions = grade.decisions ?? []
       }
 
       // Guesses from earlier sessions count towards the same running accuracy;
@@ -289,7 +401,10 @@ export const useStore = create<Store>((set, get) => {
       return { hands: added.hands.length, estimates: added.estimates.length }
     },
 
-    setHudLevel: (hudLevel) => set({ hudLevel }),
+    setHudLevel: (hudLevel) => {
+      set({ hudLevel })
+      remember()
+    },
 
     submitGuess: (guess, actual, street, boardSize) => {
       const { session } = get()
@@ -313,7 +428,3 @@ export const useStore = create<Store>((set, get) => {
     toggleReview: () => set((s) => ({ showReview: !s.showReview })),
   }
 })
-
-/** Every hand behind the statistics: the archive, then this sitting. */
-export const historyOf = (state: Store): HandRecord[] =>
-  allHands(state.archive, state.session.history)

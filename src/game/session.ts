@@ -12,7 +12,7 @@ import type { Action, HandState } from '../engine/types'
 import { archetype, type Archetype } from '../bots/archetypes'
 import { decide } from '../bots/policy'
 import { deriveHandStats, type SeatHandStats } from '../stats/hand-stats'
-import type { DecisionGrade } from '../coach/grade'
+import type { DecisionGrade, GradedDecision } from '../coach/grade'
 import type { Estimate } from '../stats/estimates'
 
 export interface SeatConfig {
@@ -45,8 +45,20 @@ export interface HandRecord {
   stats: SeatHandStats[]
   /** Big blinds of expected value the hero gave up, once the hand is graded. */
   evLostBB?: number
-  /** The hero's graded decisions, kept so analysis need not regrade. */
+  /**
+   * The hero's graded decisions in full, for hands graded this session.
+   *
+   * Not kept beyond the session: it is everything the review panel draws,
+   * which is far more than a history needs to remember.
+   */
   grades?: DecisionGrade[]
+  /**
+   * The compact record of the same decisions, which is what is stored.
+   *
+   * This is what the leak finder and the street-by-street reading work from,
+   * so those survive a reload while the full text of a verdict does not.
+   */
+  decisions?: GradedDecision[]
   /**
    * When the hand was played, filled in when it is saved.
    *

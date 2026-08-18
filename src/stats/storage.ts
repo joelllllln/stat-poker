@@ -7,6 +7,7 @@
  * data can leave, so export is part of the store rather than an extra.
  */
 
+import type { GradedDecision } from '../coach/grade'
 import type { Estimate } from './estimates'
 import { exportHands, importHands, type StoredHand } from './serialize'
 
@@ -22,6 +23,13 @@ export interface CachedGrade {
   key: string
   version: number
   evLostBB: number
+  /**
+   * The decisions behind that number, compactly.
+   *
+   * Without these a reloaded history knows what it cost and not where it went,
+   * which is the half of the answer that is actually actionable.
+   */
+  decisions: GradedDecision[]
 }
 
 export interface HandStore {

@@ -13,13 +13,13 @@
 
 import { positionName, type Street } from '../engine/types'
 import type { HandRecord } from '../game/session'
-import { gradeHand, type DecisionGrade } from './grade'
+import { gradeHand, type GradedDecision } from './grade'
 
 /** Decisions a group needs before it is worth naming. */
 export const MIN_SAMPLE = 20
 
 export interface TaggedDecision {
-  grade: DecisionGrade
+  grade: GradedDecision
   street: Street
   /** Position label, e.g. `BTN`. */
   position: string
@@ -62,7 +62,7 @@ export interface Leak {
 export function tagDecisions(
   records: readonly HandRecord[],
   heroSeat: number,
-  gradeOf: (record: HandRecord) => DecisionGrade[] = (record) =>
+  gradeOf: (record: HandRecord) => GradedDecision[] = (record) =>
     gradeHand(record, heroSeat).decisions,
 ): TaggedDecision[] {
   const tagged: TaggedDecision[] = []

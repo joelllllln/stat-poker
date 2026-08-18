@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { SessionState } from '../game/session'
 import { aggregate } from '../stats/hand-stats'
 import { luckCurve } from '../stats/all-in-adjusted'
-import { BLOCK_SIZE, blocks, describeMovement, sittings } from '../stats/timeline'
+import { blockSizeFor, blocks, describeMovement, sittings } from '../stats/timeline'
 import { TrendChart, type Series } from './TrendChart'
 import {
   MASTERY_SAMPLE,
@@ -16,7 +16,8 @@ import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '
 import { describeAccuracy, summarise } from '../stats/estimates'
 import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
 import { LuckChart } from './LuckChart'
-import { ARCHIVE_LIMIT, historyOf, useStore } from './store'
+import { allHands } from '../stats/archive'
+import { ARCHIVE_LIMIT, useStore } from './store'
 
 /**
  * A stat with its confidence interval.
@@ -53,15 +54,24 @@ export function Dashboard({ session }: { session: SessionState }) {
   // what tells React anything changed — including grades arriving after the
   // hand they belong to has already been recorded.
   const version = useStore((s) => s.version)
-  // Statistics span every hand on this machine, not just this sitting: a
-  // dashboard that resets when the tab closes cannot describe how somebody
-  // plays, only how they have played since lunch.
-  const history = useStore(historyOf)
+  const archive = useStore((s) => s.archive)
   const archiveLuck = useStore((s) => s.archiveLuck)
   const storedHands = useStore((s) => s.storedHands)
   const gradingLeft = useStore((s) => s.gradingLeft)
   const heroSeat = session.config.heroSeat
   const bigBlind = session.config.bigBlind
+
+  // Statistics span every hand on this machine, not just this sitting: a
+  // dashboard that resets when the tab closes cannot describe how somebody
+  // plays, only how they have played since lunch.
+  //
+  // Built here rather than read straight from the store, because a selector
+  // that builds a fresh array every time it is called hands React a snapshot
+  // that never compares equal, and it redraws until it gives up.
+  const history = useMemo(
+    () => allHands(archive, session.history),
+    [archive, session, version],
+  )
 
   const data = useMemo(() => {
     const records = history.map((hand) => hand.stats[hand.heroSeat]!)
@@ -94,7 +104,8 @@ export function Dashboard({ session }: { session: SessionState }) {
   }, [history, archiveLuck, session, version, heroSeat, bigBlind])
 
   const overTime = useMemo(() => {
-    const cut = blocks(history)
+    const blockSize = blockSizeFor(history.length)
+    const cut = blocks(history, blockSize)
     const series: Series[] = [
       {
         label: 'Hands played',
@@ -118,16 +129,22 @@ export function Dashboard({ session }: { session: SessionState }) {
         format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}bb/100`,
       },
     ]
-    return { blocks: cut, series, sittings: sittings(history), movement: describeMovement(history) }
+    return {
+      blocks: cut,
+      blockSize,
+      series,
+      sittings: sittings(history),
+      movement: describeMovement(history),
+    }
   }, [history, version])
 
   // Hooks must all run before any early return, so this sits with the rest.
   // Grading already happened off the critical path; this reuses those results
   // rather than paying for them a second time.
   const leak = useMemo(() => {
-    const graded = history.filter((hand) => hand.grades !== undefined)
+    const graded = history.filter((hand) => hand.decisions !== undefined)
     if (graded.length === 0) return null
-    const tagged = tagDecisions(graded, heroSeat, (record) => record.grades ?? [])
+    const tagged = tagDecisions(graded, heroSeat, (record) => record.decisions ?? [])
     return {
       leak: biggestLeak(findLeaks(tagged)),
       decisions: tagged.length,
@@ -166,7 +183,7 @@ export function Dashboard({ session }: { session: SessionState }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-[11px] uppercase tracking-wide text-slate-500">Your game</span>
         <span className="text-[11px] text-slate-500">
-          {stats.hands.toLocaleString('en-US')} hands
+          {stats.hands.toLocaleString('en-US')} hand{stats.hands === 1 ? '' : 's'}
           {session.history.length < stats.hands &&
             ` · ${session.history.length} this sitting`}
           {storedHands > ARCHIVE_LIMIT && ` · showing your last ${ARCHIVE_LIMIT.toLocaleString('en-US')}`}
@@ -200,11 +217,11 @@ export function Dashboard({ session }: { session: SessionState }) {
       {/* The same numbers over time. One figure describes a player as though
           they have always been the same one, which is the opposite of what a
           trainer is for. */}
-      {overTime.blocks.length >= 2 && (
+      {overTime.blocks.length >= 3 && (
         <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="text-[11px] uppercase tracking-wide text-slate-500">
-              Over time · blocks of {BLOCK_SIZE} hands
+              Over time · blocks of {overTime.blockSize} hands
             </span>
             {overTime.sittings.length > 1 && (
               <span className="text-[11px] text-slate-500">
@@ -213,7 +230,7 @@ export function Dashboard({ session }: { session: SessionState }) {
             )}
           </div>
 
-          <TrendChart series={overTime.series} blockSize={BLOCK_SIZE} />
+          <TrendChart series={overTime.series} blockSize={overTime.blockSize} />
 
           <div className="text-[11px] text-slate-400">
             {overTime.movement ??

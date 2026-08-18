@@ -52,7 +52,24 @@ export function verdictFor(evLossInBB: number): Verdict {
   return VERDICT_BANDS.find((band) => evLossInBB <= band.upTo)!.verdict
 }
 
-export interface DecisionGrade {
+/**
+ * The part of a verdict worth keeping forever.
+ *
+ * A full grade carries every priced alternative and the sentences explaining
+ * them, which is what the review panel shows and far more than a history needs
+ * to remember. This is the part the leak finder and the dashboard read, small
+ * enough to store for every hand a player has ever played.
+ */
+export interface GradedDecision {
+  street: Street
+  /** What it cost to continue, which is what makes a spot "facing a bet". */
+  toCall: number
+  evLossBB: number
+  verdict: Verdict
+  chosen: Action
+}
+
+export interface DecisionGrade extends GradedDecision {
   street: Street
   potBefore: number
   toCall: number
@@ -225,6 +242,21 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
     decisions.push({ ...partial, explanation: explain(partial) })
   }
 
+  return summariseGrades(decisions, record, heroSeat)
+}
+
+/**
+ * Roll graded decisions up into a verdict on the hand.
+ *
+ * Separate from grading so a caller holding grades already — the review panel,
+ * looking at a hand the worker graded a moment ago — can have the summary
+ * without paying to grade the hand a second time.
+ */
+export function summariseGrades(
+  decisions: DecisionGrade[],
+  record: HandRecord,
+  heroSeat: number,
+): HandGrade {
   const net = record.state.result?.net[heroSeat] ?? 0
   const worst = decisions
     .filter((d) => d.verdict === 'mistake' || d.verdict === 'blunder')
