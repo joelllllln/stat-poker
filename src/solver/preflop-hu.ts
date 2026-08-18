@@ -48,6 +48,31 @@ const BUTTON_SEAT = 0
 const IN_POSITION = 1.08
 const OUT_OF_POSITION = 0.92
 
+/**
+ * Raw showdown equity, discounted for the position the hand will be played
+ * from — but only where there is a hand left to play.
+ *
+ * Without the discount the model hands every pot straight to a showdown at
+ * full equity, which makes seeing a cheap flop far too attractive and produces
+ * the tell-tale artefact of a solution that limps aces. The button acts last
+ * on every later street and keeps more of its share; the big blind acts first
+ * and keeps less.
+ *
+ * `behind` is what the shallower stack still has when the betting ends, and at
+ * zero the discount must vanish: realisation is a claim about converting
+ * equity through later streets, and an all-in pot has no later streets to
+ * convert it through. The board runs out and the equity is the answer.
+ * Discounting anyway priced a coin flip as 54/46 to the button — four points
+ * of nothing, applied at exactly the decisions most sensitive to it.
+ */
+export function realisedEquity(equity: number, player: number, behind: number): number {
+  if (behind <= 0) return equity
+  const mine = player === BUTTON_SEAT ? IN_POSITION : OUT_OF_POSITION
+  const theirs = player === BUTTON_SEAT ? OUT_OF_POSITION : IN_POSITION
+  const weighted = equity * mine
+  return weighted / (weighted + (1 - equity) * theirs)
+}
+
 /** Combinations of each starting-hand class: 6 for a pair, 4 suited, 12 offsuit. */
 export const COMBOS: readonly number[] = CLASSES.map((hand) =>
   hand.length === 2 ? 6 : hand.endsWith('s') ? 4 : 12,
@@ -95,6 +120,14 @@ interface TerminalInfo {
   winner: number
   pot: number
   committed: [number, number]
+  /**
+   * Chips still behind when the betting ended, at the shallower stack.
+   *
+   * Zero means the hand is all-in and there is no poker left to play: the
+   * board simply runs out. That is the difference between a showdown whose
+   * value position can influence and one where it cannot.
+   */
+  behind: number
 }
 
 export interface PublicNode {
@@ -187,6 +220,10 @@ export function buildPublicTree(config: PreflopConfig): PublicNode {
           winner: folded < 0 ? -1 : 1 - folded,
           pot,
           committed: [state.committed[0]!, state.committed[1]!],
+          behind: Math.min(
+            config.stack - state.committed[0]!,
+            config.stack - state.committed[1]!,
+          ),
         },
         regret: new Float64Array(0),
         strategySum: new Float64Array(0),
@@ -267,7 +304,7 @@ export class HeadsUpPreflopSolver {
    * can be dealt, which is where card removal enters the solve.
    */
   private terminalValues(node: PublicNode, player: number, rOpp: Float64Array): Float64Array {
-    const { winner, pot, committed } = node.terminal!
+    const { winner, pot, committed, behind } = node.terminal!
     const values = new Float64Array(HAND_COUNT)
     const mine = committed[player]!
 
@@ -285,7 +322,7 @@ export class HeadsUpPreflopSolver {
         for (let other = 0; other < HAND_COUNT; other++) {
           const weight = rOpp[other]! * this.compatibility[row + other]!
           if (weight === 0) continue
-          total += weight * (this.realised(equities[other]!, player) * pot - mine)
+          total += weight * (this.realised(equities[other]!, player, behind) * pot - mine)
         }
       }
       values[hand] = total
@@ -293,21 +330,8 @@ export class HeadsUpPreflopSolver {
     return values
   }
 
-  /**
-   * Raw showdown equity, discounted for the position the hand will be played
-   * from.
-   *
-   * Without this the model hands every pot straight to a showdown at full
-   * equity, which makes seeing a cheap flop far too attractive and produces
-   * the tell-tale artefact of a solution that limps aces. The button acts last
-   * on every later street and keeps more of its share; the big blind acts
-   * first and keeps less.
-   */
-  private realised(equity: number, player: number): number {
-    const mine = player === BUTTON_SEAT ? IN_POSITION : OUT_OF_POSITION
-    const theirs = player === BUTTON_SEAT ? OUT_OF_POSITION : IN_POSITION
-    const weighted = equity * mine
-    return weighted / (weighted + (1 - equity) * theirs)
+  private realised(equity: number, player: number, behind: number): number {
+    return realisedEquity(equity, player, behind)
   }
 
   private walk(

@@ -63,9 +63,11 @@ const file = `/**
  * heads-up, the button — and the action digits are fold(0), call(1),
  * raise(2), all-in(3). Values are the frequency of each, in the same order.
  *
- * Limping is not modelled; the opening decision is raise or fold. Everything
- * after preflop is priced by all-in equity adjusted for position rather than
- * played out. Do not edit by hand — rerun the script.
+ * Limping is not modelled; the opening decision is raise or fold. A pot that
+ * sees a flop is priced by all-in equity adjusted for the position it will be
+ * played from; a pot that is already all-in is priced by the equity itself,
+ * because it has no later streets for position to act on. Do not edit by hand
+ * — rerun the script.
  */
 
 export const BLUEPRINT_ITERATIONS = ${ITERATIONS}

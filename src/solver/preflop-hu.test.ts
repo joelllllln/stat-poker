@@ -7,6 +7,7 @@ import {
   HeadsUpPreflopSolver,
   buildCompatibility,
   buildPublicTree,
+  realisedEquity,
   type PublicNode,
 } from './preflop-hu'
 
@@ -97,6 +98,43 @@ describe('the public tree', () => {
       for (const child of node.children) walk(child)
     }
     walk(root)
+  })
+
+  it('knows which showdowns still have a hand left to play', () => {
+    // A terminal reached with chips behind is a flop the players will play;
+    // one reached all-in is a board that simply runs out. Everything the model
+    // says about position depends on telling those apart.
+    const walk = (node: PublicNode) => {
+      const terminal = node.terminal
+      if (terminal) {
+        if (terminal.winner < 0) {
+          const allIn = terminal.committed.every((c) => c >= CONFIG.stack - 1e-9)
+          expect(terminal.behind === 0).toBe(allIn)
+        }
+        expect(terminal.behind).toBeGreaterThanOrEqual(0)
+        return
+      }
+      for (const child of node.children) walk(child)
+    }
+    walk(root)
+  })
+
+  it('prices an all-in showdown at the equity and nothing else', () => {
+    // Position cannot be worth anything in a pot with no streets left, so the
+    // discount has to vanish exactly, not merely shrink.
+    for (const equity of [0.2, 0.5, 0.82]) {
+      for (const player of [0, 1]) {
+        expect(realisedEquity(equity, player, 0)).toBe(equity)
+      }
+    }
+
+    // With a flop to come it still leans the button's way, and the two shares
+    // of the same pot still add up to the pot.
+    expect(realisedEquity(0.5, 0, 100)).toBeGreaterThan(0.5)
+    expect(realisedEquity(0.5, 1, 100)).toBeLessThan(0.5)
+    for (const equity of [0.2, 0.5, 0.82]) {
+      expect(realisedEquity(equity, 0, 100) + realisedEquity(1 - equity, 1, 100)).toBeCloseTo(1, 12)
+    }
   })
 
   it('gives a folded hand the blinds', () => {

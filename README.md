@@ -184,7 +184,7 @@ with a solver's authority is worse than no solution.
 is traversed once per iteration and all 169 hands are updated at every node,
 with card removal counted exactly. It converges to an exploitability of
 0.000001 big blinds per hand — two-player and zero-sum, so that number means
-what it says. The resulting button range opens 82% of hands, which is where
+what it says. The resulting button range opens 80% of hands, which is where
 published solutions sit.
 
 This is not a lesser target than six-handed. **Every hand folded to the small
@@ -195,8 +195,12 @@ from anyone who folded, stacks at the solved depth — and returns nothing
 otherwise. A strategy borrowed from a different spot is not an approximation.
 
 Two abstractions remain, both stated in the code: limping is not modelled (the
-opening decision is raise or fold), and everything after preflop is priced by
-position-adjusted all-in equity rather than played out.
+opening decision is raise or fold), and a pot that sees a flop is priced by
+all-in equity adjusted for the position it will be played from rather than
+played out. A pot that is already all-in gets no such adjustment: there are no
+later streets for position to act on, so the equity is the answer. Discounting
+those too priced a coin flip as 54/46 to the button, at exactly the decisions
+most sensitive to it.
 
 **The river is solved exactly.** With the board complete there is nothing left
 to draw, so a river solve is a statement about poker rather than about a model
