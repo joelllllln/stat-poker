@@ -295,6 +295,142 @@ function monteCarloEquity(
   }
 }
 
+/**
+ * Hero's equity against every subset of the villains at once.
+ *
+ * Which opponents actually call a bet is not known when it is made, so pricing
+ * it means pricing every way the field can split. Doing that with one equity
+ * query per subset would cost a query per combination; doing it in one pass
+ * costs barely more than a single query, because a rollout that deals the whole
+ * field and the board answers *every* subset of it — the cards are the same,
+ * only who is compared against changes.
+ *
+ * Returns one equity per subset, indexed by bitmask over `villainRanges`, with
+ * the empty subset worth the whole pot. Villains outside a subset still hold
+ * their cards, which is the right treatment: a hand that folded is still not in
+ * the deck.
+ */
+export function subsetEquity(
+  hero: readonly [Card, Card],
+  villainRanges: readonly Range[],
+  board: readonly Card[],
+  options: EquityOptions = {},
+): { equity: number[]; error: number[] } {
+  const count = villainRanges.length
+  const masks = 1 << count
+  if (count === 0 || count > 8) throw new Error('subsetEquity needs 1 to 8 villains')
+
+  const rng = options.rng ?? new Rng(0x5eed)
+  const iterations = options.iterations ?? DEFAULT_ITERATIONS
+  const needed = BOARD_SIZE - board.length
+  const fullBoard: Card[] = [...board, ...new Array<Card>(needed)]
+  const cumulatives = villainRanges.map(cumulativeWeights)
+
+  const sums = new Float64Array(masks)
+  const squares = new Float64Array(masks)
+  let trials = 0
+
+  const villains: Combo2[] = new Array(count)
+  const values = new Int32Array(count)
+  const deck = availableCards([...hero, ...board])
+  const blocked = new Uint8Array(NUM_CARDS)
+  const touched: Card[] = []
+  for (const card of hero) blocked[card] = 1
+  for (const card of board) blocked[card] = 1
+
+  const hand: Card[] = new Array(7)
+
+  // Sized from a pilot batch on the full field, which is the subset carrying
+  // the most variance and the one a bet is most often called by.
+  const targetError = options.targetError ?? 0
+  const maxIterations = options.maxIterations ?? 0
+  let budget = iterations
+
+  for (let iteration = 0; iteration < budget; iteration++) {
+    if (iteration === iterations - 1 && targetError > 0 && trials > 0) {
+      const mean = sums[masks - 1]! / trials
+      const variance = Math.max(0, squares[masks - 1]! / trials - mean * mean)
+      const needed = Math.ceil(variance / (targetError * targetError))
+      budget = Math.min(Math.max(maxIterations, iterations), Math.max(iterations, needed))
+    }
+
+    for (const card of touched) blocked[card] = 0
+    touched.length = 0
+
+    let ok = true
+    for (let v = 0; v < count; v++) {
+      let attempts = 0
+      let combo: Combo2 | null = null
+      while (attempts++ < 100) {
+        const candidate = sampleCombo(villainRanges[v]!, cumulatives[v]!, rng)
+        if (!candidate) break
+        if (!blocked[candidate[0]] && !blocked[candidate[1]]) {
+          combo = candidate
+          break
+        }
+      }
+      if (!combo) {
+        ok = false
+        break
+      }
+      villains[v] = combo
+      blocked[combo[0]] = 1
+      blocked[combo[1]] = 1
+      touched.push(combo[0], combo[1])
+    }
+    if (!ok) continue
+
+    for (let i = 0; i < needed; i++) {
+      let card: Card
+      do {
+        card = deck[rng.nextInt(deck.length)]!
+      } while (blocked[card])
+      blocked[card] = 1
+      touched.push(card)
+      fullBoard[board.length + i] = card
+    }
+
+    // Score everyone once, then every subset is a comparison of numbers.
+    for (let i = 0; i < BOARD_SIZE; i++) hand[i + 2] = fullBoard[i]!
+    hand[0] = hero[0]
+    hand[1] = hero[1]
+    const heroValue = evaluate(hand)
+    for (let v = 0; v < count; v++) {
+      hand[0] = villains[v]![0]
+      hand[1] = villains[v]![1]
+      values[v] = evaluate(hand)
+    }
+
+    for (let mask = 0; mask < masks; mask++) {
+      let beaten = false
+      let tied = 1
+      for (let v = 0; v < count && !beaten; v++) {
+        if ((mask & (1 << v)) === 0) continue
+        if (values[v]! > heroValue) beaten = true
+        else if (values[v]! === heroValue) tied++
+      }
+      const share = beaten ? 0 : 1 / tied
+      sums[mask]! += share
+      squares[mask]! += share * share
+    }
+    trials++
+  }
+
+  if (trials === 0) throw new Error('A villain range has no combos left after removing blockers')
+
+  const equity: number[] = []
+  const error: number[] = []
+  for (let mask = 0; mask < masks; mask++) {
+    const mean = sums[mask]! / trials
+    equity.push(mean)
+    // Sampled spread rather than an assumed one: a subset that always chops
+    // has no variance and must not be reported as though it had.
+    const variance = Math.max(0, squares[mask]! / trials - mean * mean)
+    error.push(trials > 1 ? Math.sqrt(variance / trials) : 1)
+  }
+  return { equity, error }
+}
+
 export interface EquityOptions {
   rng?: Rng
   iterations?: number

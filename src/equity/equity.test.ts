@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseCards, Rng } from '../engine/cards'
-import { handEquity } from './equity'
+import { handEquity, subsetEquity } from './equity'
 import { comboClass, parseRange, rangePercent, rangeWeight } from './range'
 
 const hero = (text: string) => parseCards(text) as [number, number]
@@ -170,5 +170,62 @@ describe('card removal', () => {
 
   it('refuses a range fully blocked by visible cards', () => {
     expect(() => handEquity(hero('As Ah'), vs('AcAd'), parseCards('Ac 7c 2d'))).toThrow()
+  })
+})
+
+/**
+ * Pricing a bet means pricing every way the field can split, because who calls
+ * is not known when the chips go in. One sweep answers all of them.
+ */
+describe('equity against every subset of the field', () => {
+  const board = parseCards('Qs 8d 2h')
+  const ranges = [parseRange('JJ+, AQs+'), parseRange('55+, A2s+, KQo')]
+
+  it('agrees with pricing the whole field the usual way', () => {
+    const { equity } = subsetEquity(hero('As Ks'), ranges, board, {
+      rng: new Rng(3),
+      iterations: 60_000,
+    })
+
+    expect(equity[0]).toBe(1) // nobody called: the pot is uncontested
+
+    const both = handEquity(hero('As Ks'), ranges, board, {
+      rng: new Rng(13),
+      iterations: 60_000,
+    }).equity
+    expect(equity[3]).toBeCloseTo(both, 2)
+  })
+
+  it('keeps a folded hand out of the deck', () => {
+    // A subset priced here differs slightly from the same villain priced
+    // alone, and the difference is the point: the opponent who folded still
+    // holds two cards, so they are not available to the board or to anyone
+    // else. Pricing each subset in its own run would quietly put them back.
+    const { equity } = subsetEquity(hero('As Ks'), ranges, board, {
+      rng: new Rng(3),
+      iterations: 60_000,
+    })
+    const alone = handEquity(hero('As Ks'), [ranges[0]!], board).equity
+    expect(alone).toBeGreaterThan(0)
+    expect(Math.abs(equity[1]! - alone)).toBeLessThan(0.02)
+  })
+
+  it('is worth less against more opponents', () => {
+    const { equity } = subsetEquity(hero('As Ks'), ranges, board, {
+      rng: new Rng(7),
+      iterations: 20_000,
+    })
+    expect(equity[3]!).toBeLessThan(equity[1]!)
+    expect(equity[3]!).toBeLessThan(equity[2]!)
+  })
+
+  it('carries an error bar measured from the spread, not assumed', () => {
+    const { error } = subsetEquity(hero('As Ks'), ranges, board, {
+      rng: new Rng(9),
+      iterations: 20_000,
+    })
+    expect(error[0]).toBe(0) // an uncontested pot never varies
+    expect(error[3]!).toBeGreaterThan(0)
+    expect(error[3]!).toBeLessThan(0.01)
   })
 })

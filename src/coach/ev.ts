@@ -17,7 +17,7 @@
 import { Rng, type Card } from '../engine/cards'
 import { winnablePot } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
-import { handEquity } from '../equity/equity'
+import { handEquity, subsetEquity } from '../equity/equity'
 import { modelOpponentRange, perceivedRangeAfterAggression } from '../equity/opponent'
 import { removeBlocked, rangeWeight, type Combo, type Range } from '../equity/range'
 import { requiredEquity } from './odds'
@@ -130,11 +130,34 @@ export interface RangeSplit {
   continuing: number
   /** The continuing combos, for equity when called. */
   continuingRange: Range
+  /** Standard error on the folding share, from the sampling behind it. */
+  foldError: number
 }
 
 interface PricedCombo {
   combo: Combo
   equity: number
+  /** Standard error on that equity; zero where it was enumerated. */
+  error: number
+}
+
+/**
+ * Normal cumulative distribution, to a few decimal places.
+ *
+ * Used to ask how likely a combo is to be on the calling side of a price when
+ * its equity is only known to within a sampling error — Abramowitz and Stegun
+ * 7.1.26, which is accurate to about 1e-7 and costs a handful of multiplies.
+ */
+function normalCdf(z: number): number {
+  const sign = z < 0 ? -1 : 1
+  const x = Math.abs(z) / Math.SQRT2
+  const t = 1 / (1 + 0.3275911 * x)
+  const y =
+    1 -
+    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+      t *
+      Math.exp(-x * x)
+  return 0.5 * (1 + sign * y)
 }
 
 /**
@@ -158,42 +181,67 @@ function priceRange(
   for (let i = 0; i < range.length; i += stride) {
     const source = range[i]!
     const combo: Combo = { cards: source.cards, weight: source.weight * scale }
-    let equity: number
+    let equity = 0.5
+    let error = 0
     try {
-      equity = handEquity(combo.cards, [heroRange], board, {
+      const result = handEquity(combo.cards, [heroRange], board, {
         // Its own seed per combo, so a combo prices the same whatever else was
         // asked first, and one unlucky stream cannot tilt the whole range.
         rng: new Rng(seed * 977 + i),
         iterations: COMBO_ITERATIONS,
         exactBudget: COMBO_EXACT_BUDGET,
-      }).equity
+      })
+      equity = result.equity
+      error = result.errorMargin / 2
     } catch {
       // Hero's modelled range can be entirely blocked by this combo; treat the
       // spot as a coin flip rather than dropping the combo.
       equity = 0.5
     }
-    priced.push({ combo, equity })
+    priced.push({ combo, equity, error })
     total += combo.weight
   }
 
   return { priced, total }
 }
 
+/**
+ * Split a priced range at a price.
+ *
+ * A combo continues when its equity clears the price. Those equities are
+ * mostly sampled, though, so for a combo sitting near the price the honest
+ * answer is not which side it falls but how likely it is to fall on each —
+ * which is what its own error bar says. That expectation is the split, it
+ * converges to the plain comparison as the error goes to zero, and the
+ * leftover uncertainty comes back as `foldError` rather than being dropped and
+ * later mistaken for a difference in the play.
+ */
 function splitAtPrice(priced: PricedCombo[], price: number): RangeSplit {
   let folding = 0
   let continuing = 0
+  let variance = 0
   const continuingRange: Combo[] = []
 
   for (const entry of priced) {
-    if (entry.equity * EQUITY_REALIZATION >= price) {
-      continuing += entry.combo.weight
-      continuingRange.push(entry.combo)
-    } else {
-      folding += entry.combo.weight
+    const margin = entry.equity * EQUITY_REALIZATION - price
+    const spread = entry.error * EQUITY_REALIZATION
+    const continues = spread > 0 ? normalCdf(margin / spread) : margin >= 0 ? 1 : 0
+
+    continuing += entry.combo.weight * continues
+    folding += entry.combo.weight * (1 - continues)
+    variance += entry.combo.weight ** 2 * continues * (1 - continues)
+    if (continues > 0) {
+      continuingRange.push({ cards: entry.combo.cards, weight: entry.combo.weight * continues })
     }
   }
 
-  return { folding, continuing, continuingRange }
+  const total = folding + continuing
+  return {
+    folding,
+    continuing,
+    continuingRange,
+    foldError: total > 0 ? Math.sqrt(variance) / total : 0,
+  }
 }
 
 export interface EVContext {
@@ -281,7 +329,7 @@ export function heroEquity(
  * reachable: it never tells you to make a bet you could not have made.
  */
 export function evaluateActions(context: EVContext, sizings: number[]): DecisionEV {
-  const { state, heroSeat, heroCards, villains, seed } = context
+  const { state, heroSeat, heroCards, villains, seed, effort } = context
   const hero = state.seats[heroSeat]!
   const pot = potSize(state)
   const toCall = Math.max(0, state.currentBet - hero.committed)
@@ -352,42 +400,112 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
     const amount = to - hero.committed
     if (amount <= 0 || amount > hero.stack) continue
 
-    // Each villain independently decides whether the price is worth paying.
-    const villainToCall = to - state.currentBet
-    const price = requiredEquity(villainToCall, pot + amount)
-    let foldEquity = 1
-    const continuingRanges: Range[] = []
-    let calledContributions = 0
-    let largestContribution = 0
-
-    for (const { seat, priced, total } of pricedVillains) {
-      const split = splitAtPrice(priced, price)
-      foldEquity *= split.folding / total
-      if (split.continuingRange.length === 0) continue
-      continuingRanges.push(split.continuingRange)
-
-      // A caller adds only what it still owes, and only as much as it has —
-      // shoving into a short stack risks the short stack, not the whole bet.
+    // Every villain faces its own price. What it owes is measured from what it
+    // has already put in — the small blind owes more than the big blind to see
+    // the same raise — and capped by what it has left.
+    const facing = pricedVillains.map(({ seat, priced, total }) => {
       const villain = state.seats[seat]!
-      const contribution = Math.min(villain.stack, to - villain.committed)
-      calledContributions += contribution
-      largestContribution = Math.max(largestContribution, contribution)
-    }
+      const contribution = Math.min(villain.stack, Math.max(0, to - villain.committed))
+      if (contribution === 0) {
+        // Nothing left to put in is nothing left to fold: a seat already all-in
+        // is in the pot whatever the hero does now.
+        return { fold: 0, foldError: 0, range: priced.map((entry) => entry.combo), contribution }
+      }
+      const split = splitAtPrice(priced, requiredEquity(contribution, pot + amount))
+      return {
+        fold: total > 0 ? split.folding / total : 1,
+        foldError: split.foldError,
+        range: split.continuingRange,
+        contribution,
+      }
+    })
 
-    const called =
-      continuingRanges.length === 0
-        ? { equity: 1, error: 0 }
-        : heroEquity(context, continuingRanges, targetError)
-    const won = pot + calledContributions
-    const risked = Math.min(amount, largestContribution)
+    // A villain with nothing left in its range folds every time and drops out
+    // of the enumeration; everyone else is one bit of it.
+    const callers = facing.filter((villain) => villain.range.length > 0)
+    let foldEquity = facing.reduce(
+      (product, villain) => product * (villain.range.length > 0 ? villain.fold : 1),
+      1,
+    )
+
+    let ev = pot
+    let error = 0
+
+    if (callers.length > 0) {
+      // Which of them calls is not knowable in advance, so every way the field
+      // can split is priced and weighted by how likely it is. The old model
+      // said the villains decide independently and then priced them as though
+      // they decided together, which overstated both the pot won and the field
+      // faced.
+      const priced = subsetEquity(
+        heroCards,
+        callers.map((villain) => villain.range),
+        state.board,
+        {
+          rng: new Rng(seed),
+          iterations: HERO_ITERATIONS,
+          targetError,
+          maxIterations: MAX_HERO_ITERATIONS * effort,
+        },
+      )
+
+      /** Expected value of the bet, for a given set of folding frequencies. */
+      const valueAt = (folds: number[]): { ev: number; error: number; noCall: number } => {
+        let total = 0
+        let sampling = 0
+        let noCall = 1
+        for (let mask = 0; mask < 1 << callers.length; mask++) {
+          let probability = 1
+          let contributions = 0
+          let largest = 0
+          for (let i = 0; i < callers.length; i++) {
+            const calls = (mask >> i) & 1
+            probability *= calls ? 1 - folds[i]! : folds[i]!
+            if (calls) {
+              // A caller adds only what it still owes, and only as much as it
+              // has — shoving into a short stack risks the short stack, not
+              // the whole bet.
+              contributions += callers[i]!.contribution
+              largest = Math.max(largest, callers[i]!.contribution)
+            }
+          }
+          if (probability <= 0) continue
+          if (mask === 0) noCall = probability
+
+          const share = priced.equity[mask]!
+          const won = pot + contributions
+          const risked = Math.min(amount, largest)
+          total += probability * (share * won - (1 - share) * risked)
+          // The subsets are drawn from the same rollouts and move together, so
+          // adding their errors is an overstatement rather than an understatement.
+          sampling += probability * priced.error[mask]! * (won + risked)
+        }
+        return { ev: total, error: sampling, noCall }
+      }
+
+      const folds = callers.map((villain) => villain.fold)
+      const centre = valueAt(folds)
+      ev = centre.ev
+      foldEquity = centre.noCall
+
+      // How much of a villain's range calls is itself an estimate, and moving
+      // one of them by its own error moves the answer by this much. Held apart
+      // from the sampling error above and added in quadrature, because they are
+      // independent and neither one alone accounts for what a reseeded run does.
+      let fromFolds = 0
+      for (let i = 0; i < callers.length; i++) {
+        const shifted = [...folds]
+        shifted[i] = Math.min(1, Math.max(0, folds[i]! + callers[i]!.foldError))
+        fromFolds += (valueAt(shifted).ev - centre.ev) ** 2
+      }
+      error = Math.sqrt(centre.error ** 2 + fromFolds)
+    }
 
     options.push({
       action: { type: 'raise', to },
       label: state.currentBet > 0 ? `Raise to ${to}` : `Bet ${to}`,
-      ev:
-        foldEquity * pot +
-        (1 - foldEquity) * (called.equity * won - (1 - called.equity) * risked),
-      error: (1 - foldEquity) * called.error * (won + risked),
+      ev,
+      error,
       foldEquity,
     })
   }
