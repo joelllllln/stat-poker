@@ -13,6 +13,10 @@ import type { AdviseReply } from '../workers/analysis.worker'
  * It says what the best action is worth **against the alternatives**, because
  * "raise" on its own teaches nothing: what makes a spot click is seeing that
  * raising beats calling by two big blinds and folding by six.
+ *
+ * And where the two best actions are inside the noise of the pricing, it says
+ * that instead of quoting a gap it cannot stand behind — the same standard the
+ * verdict is held to after the hand.
  */
 
 const bb = (chips: number, bigBlind: number) => `${(chips / bigBlind).toFixed(1)}bb`
@@ -42,6 +46,12 @@ export function Advice({
   const runnerUp = advice.options[1]
   const fold = advice.options.find((option) => option.action.type === 'fold')
 
+  // Most of these numbers are sampled, and two actions can be closer together
+  // than the sampling can separate. Claiming a gap there would be inventing one.
+  const separation = runnerUp ? best.ev - runnerUp.ev : 0
+  const noise = runnerUp ? 1.96 * Math.hypot(best.error, runnerUp.error) : 0
+  const tooClose = runnerUp !== undefined && separation < noise
+
   return (
     <div className="space-y-2 rounded-xl border border-emerald-900/70 bg-emerald-950/30 p-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -51,22 +61,29 @@ export function Advice({
         {pending && <span className="text-[11px] text-slate-500">updating…</span>}
       </div>
 
-      <div className="text-lg font-semibold text-emerald-200">{best.label}</div>
+      <div className="text-lg font-semibold text-emerald-200">
+        {best.label}
+        {tooClose && runnerUp && (
+          <span className="text-sm font-normal text-emerald-200/60"> or {runnerUp.label.toLowerCase()}</span>
+        )}
+      </div>
 
       <p className="text-xs text-emerald-100/70">
         {!runnerUp
           ? 'The only action available here.'
-          : best.action.type === 'fold'
+          : tooClose
+            ? `Too close to separate: ${best.label.toLowerCase()} and ${runnerUp.label.toLowerCase()} are within the noise of each other here, so either is fine.`
+            : best.action.type === 'fold'
             ? // Folding is the zero point, so everything else is a loss, and
               // saying "worth 0bb more than folding" would be nonsense.
               `Everything else here loses money: ${runnerUp.label.toLowerCase()} costs ${bb(
                 -runnerUp.ev,
                 bigBlind,
               )}.`
-            : `Worth ${bb(best.ev - runnerUp.ev, bigBlind)} more than ${runnerUp.label.toLowerCase()}` +
-              (fold && fold !== runnerUp
-                ? `, and ${bb(best.ev - fold.ev, bigBlind)} more than folding.`
-                : '.')}
+              : `Worth ${bb(best.ev - runnerUp.ev, bigBlind)} more than ${runnerUp.label.toLowerCase()}` +
+                (fold && fold !== runnerUp
+                  ? `, and ${bb(best.ev - fold.ev, bigBlind)} more than folding.`
+                  : '.')}
       </p>
 
       {/* Every option priced, so the recommendation is an argument rather than

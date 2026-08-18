@@ -224,12 +224,21 @@ export function replayHand(record: HandRecord): { state: HandState; action: Acti
 }
 
 /**
+ * The seed every decision is priced from.
+ *
+ * Fixing it is what makes a hand grade to the same numbers however often it is
+ * opened. It is shared with the live advice, which prices the same decision the
+ * same way and so cannot disagree with the verdict that follows it.
+ */
+export const GRADE_SEED = 4242
+
+/**
  * Grade every decision the hero made in a hand.
  *
  * `seed` fixes the sampling so a hand always grades to the same numbers — a
  * verdict that changed each time you opened it would be worthless.
  */
-export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): HandGrade {
+export function gradeHand(record: HandRecord, heroSeat: number, seed = GRADE_SEED): HandGrade {
   const decisions: DecisionGrade[] = []
 
   for (const { state, action } of replayHand(record)) {

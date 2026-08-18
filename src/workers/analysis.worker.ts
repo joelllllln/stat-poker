@@ -13,10 +13,10 @@
 
 import type { Card } from '../engine/cards'
 import { Rng } from '../engine/cards'
-import { gradeHand, sizingsFor, type DecisionGrade } from '../coach/grade'
-import { evContext, evaluateActions, heroEquity, type ActionEV } from '../coach/ev'
+import { GRADE_SEED, gradeHand, sizingsFor, type DecisionGrade } from '../coach/grade'
+import { evContext, evaluateActions, type ActionEV } from '../coach/ev'
 import { requiredEquity } from '../coach/odds'
-import { applyAction, startHandWithDeck } from '../engine/hand'
+import { applyAction, startHandWithDeck, winnablePot } from '../engine/hand'
 import { potSize, type Action } from '../engine/types'
 import { luckCurve } from '../stats/all-in-adjusted'
 import { hydrate } from '../stats/archive'
@@ -345,19 +345,25 @@ function runAdvise(request: AdviseRequest): AdviseReply {
     throw new Error('That decision has already been made')
   }
 
-  const context = evContext(state, request.heroSeat, new Rng(request.id * 7919 + 5))
-  const options = evaluateActions(context, sizingsFor(state, request.heroSeat))
-  const equity = heroEquity(context)
+  // Seeded by which decision this is rather than by which request asked, so
+  // asking twice gives one answer — and so it is the *same* answer the coach
+  // reaches when it grades the hand afterwards. Live advice and the verdict
+  // that follows it are then the same number, not merely the same method.
+  const decisions = request.actions.filter((entry) => entry.seat === request.heroSeat).length
+  const context = evContext(state, request.heroSeat, GRADE_SEED + decisions)
+  const priced = evaluateActions(context, sizingsFor(state, request.heroSeat))
+
   const hero = state.seats[request.heroSeat]!
   const pot = potSize(state)
-  const toCall = Math.max(0, state.currentBet - hero.committed)
+  // What continuing costs this stack, and what it can win by paying it.
+  const toCall = Math.min(Math.max(0, state.currentBet - hero.committed), hero.stack)
 
   return {
     kind: 'advise',
     id: request.id,
-    options: [...options].sort((a, b) => b.ev - a.ev),
-    equity,
-    requiredEquity: requiredEquity(toCall, pot),
+    options: [...priced.options].sort((a, b) => b.ev - a.ev),
+    equity: priced.equity,
+    requiredEquity: requiredEquity(toCall, winnablePot(state, request.heroSeat, toCall)),
     pot,
     toCall,
   }

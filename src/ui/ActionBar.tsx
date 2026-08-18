@@ -43,7 +43,13 @@ export function ActionBar({
   const options = yourTurn ? legalActions(state) : []
   const hero = state?.seats[heroSeat]
   const pot = state === null ? 0 : potSize(state)
-  const toCall = state === null || hero === undefined ? 0 : Math.max(0, state.currentBet - hero.committed)
+  // What continuing costs *this* stack. A stack too short to cover the bet
+  // pays what it has, so quoting the bet would name a price it cannot pay —
+  // and the call button already says the real one.
+  const toCall =
+    state === null || hero === undefined
+      ? 0
+      : Math.min(Math.max(0, state.currentBet - hero.committed), hero.stack)
   const raise = options.find((o) => o.type === 'raise')
   const canCheck = options.some((o) => o.type === 'check')
   const canCall = options.some((o) => o.type === 'call')
@@ -242,7 +248,7 @@ export function ActionBar({
             onClick={() => act({ type: 'call' })}
           >
             {bestBadge('call')}
-            Call {Math.min(toCall, hero.stack)} <span aria-hidden className="text-[10px] opacity-60">c</span>
+            Call {toCall} <span aria-hidden className="text-[10px] opacity-60">c</span>
           </button>
         )}
 

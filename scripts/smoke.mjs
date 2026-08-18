@@ -173,7 +173,9 @@ await page.waitForTimeout(300)
 check('the coach says what to do while you decide', body.includes('what to do'))
 check(
   'the recommendation is argued rather than asserted',
-  /worth [\d.]+bb more than|everything else here loses money|the only action available/.test(body),
+  /worth [\d.]+bb more than|everything else here loses money|the only action available|too close to separate/.test(
+    body,
+  ),
 )
 // The advice is worked out off the interface thread, so it lands a moment
 // after the decision does.
