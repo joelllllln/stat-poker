@@ -246,8 +246,31 @@ describe('hand history storage', () => {
     const stored = session.history.map((record) => toStored(record, 0))
     const restored = importHands(exportHands(stored))
 
-    expect(restored).toHaveLength(stored.length)
-    expect(restored.map((h) => h.deck)).toEqual(stored.map((h) => h.deck))
+    expect(restored.hands).toHaveLength(stored.length)
+    expect(restored.hands.map((h) => h.deck)).toEqual(stored.map((h) => h.deck))
+  })
+
+  it('carries equity guesses out and back with the hands', () => {
+    // An export that quietly drops half of what the app knows is a partial
+    // backup pretending to be a complete one.
+    const session = playSession(2)
+    const stored = session.history.map((record) => toStored(record, 0))
+    const guesses = [
+      { handNumber: 1, street: 'flop', guess: 40, actual: 52, boardSize: 3 },
+      { handNumber: 2, street: 'turn', guess: 70, actual: 68, boardSize: 4 },
+    ]
+
+    const restored = importHands(exportHands(stored, guesses))
+    expect(restored.estimates).toEqual(guesses)
+  })
+
+  it('reads a file written before guesses were recorded', () => {
+    const session = playSession(1)
+    const stored = session.history.map((record) => toStored(record, 0))
+    const older = JSON.stringify({ version: 1, hands: stored })
+
+    expect(importHands(older).estimates).toEqual([])
+    expect(importHands(older).hands).toHaveLength(1)
   })
 
   it('rejects a file that is not a history', () => {
@@ -269,16 +292,39 @@ describe('the store', () => {
     expect(await store.count()).toBe(0)
   })
 
+  it('keeps equity guesses alongside the hands', async () => {
+    const store = new MemoryHandStore()
+    await store.putEstimates([
+      { handNumber: 1, street: 'flop', guess: 40, actual: 52, boardSize: 3 },
+      { handNumber: 2, street: 'turn', guess: 70, actual: 68, boardSize: 4 },
+    ])
+
+    const back = await store.allEstimates()
+    expect(back).toHaveLength(2)
+    expect(back[0]!.guess).toBe(40)
+
+    // Clearing the history clears the guesses with it: they describe the same
+    // hands and half a record is worse than none.
+    await store.clear()
+    expect(await store.allEstimates()).toEqual([])
+  })
+
   it('moves a history between stores through an export', async () => {
     const source = new MemoryHandStore()
     const session = playSession(3)
     await source.putMany(session.history.map((record) => toStored(record, 0)))
 
+    await source.putEstimates([
+      { handNumber: 1, street: 'flop', guess: 35, actual: 41, boardSize: 3 },
+    ])
+
     const destination = new MemoryHandStore()
     const imported = await importIntoStore(destination, await exportStore(source))
 
-    expect(imported).toBe(3)
+    expect(imported.hands).toBe(3)
+    expect(imported.estimates).toHaveLength(1)
     expect(await destination.count()).toBe(3)
+    expect(await destination.allEstimates()).toHaveLength(1)
 
     // Everything that came back must still replay.
     for (const hand of await destination.all()) {

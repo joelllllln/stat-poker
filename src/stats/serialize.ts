@@ -14,6 +14,7 @@ import { NUM_CARDS, type Card } from '../engine/cards'
 import { applyAction, startHandWithDeck } from '../engine/hand'
 import type { Action, HandState } from '../engine/types'
 import type { HandRecord } from '../game/session'
+import type { Estimate } from './estimates'
 import { deriveHandStats } from './hand-stats'
 
 export const SCHEMA_VERSION = 1
@@ -125,12 +126,12 @@ export function migrate(stored: StoredHand): StoredHand {
   return stored
 }
 
-/** The whole history as a portable JSON document. */
-export function exportHands(hands: StoredHand[]): string {
-  return JSON.stringify({ version: SCHEMA_VERSION, exportedAt: null, hands }, null, 0)
+/** The whole record as a portable JSON document. */
+export function exportHands(hands: StoredHand[], estimates: Estimate[] = []): string {
+  return JSON.stringify({ version: SCHEMA_VERSION, hands, estimates }, null, 0)
 }
 
-export function importHands(json: string): StoredHand[] {
+export function importHands(json: string): { hands: StoredHand[]; estimates: Estimate[] } {
   const parsed: unknown = JSON.parse(json)
   if (
     typeof parsed !== 'object' ||
@@ -139,5 +140,10 @@ export function importHands(json: string): StoredHand[] {
   ) {
     throw new Error('Not a stat-poker history file')
   }
-  return (parsed as { hands: StoredHand[] }).hands.map(migrate)
+  const document = parsed as { hands: StoredHand[]; estimates?: Estimate[] }
+  return {
+    hands: document.hands.map(migrate),
+    // Files written before guesses were recorded simply have none.
+    estimates: Array.isArray(document.estimates) ? document.estimates : [],
+  }
 }

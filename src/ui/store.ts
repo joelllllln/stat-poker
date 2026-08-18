@@ -36,7 +36,8 @@ interface Store {
   act: (action: Action) => void
   loadHistory: () => Promise<void>
   exportHistory: () => Promise<string>
-  importHistory: (json: string) => Promise<number>
+  /** Returns how many hands and guesses arrived. */
+  importHistory: (json: string) => Promise<{ hands: number; estimates: number }>
   setHudLevel: (level: Store['hudLevel']) => void
   /** Record a guess against the equity it was guessing at. */
   submitGuess: (guess: number, actual: number, street: string, boardSize: number) => void
@@ -44,6 +45,9 @@ interface Store {
 }
 
 const handStore = createHandStore()
+
+/** Stored history is read once per page load. */
+let loadedHistory = false
 
 /**
  * Write any hands finished since `before` to storage.
@@ -121,16 +125,35 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   loadHistory: async () => {
-    const count = await handStore.count()
-    set({ storedHands: count })
+    // Loading twice would double every stored guess. There is no content to
+    // deduplicate against either — hand numbers restart each session and the
+    // guesses come from a palette of nine — so this is guarded by having
+    // happened rather than by comparing what came back.
+    if (loadedHistory) return
+    loadedHistory = true
+
+    const [count, estimates] = await Promise.all([
+      handStore.count(),
+      handStore.allEstimates(),
+    ])
+
+    // Guesses from earlier sessions count towards the same running accuracy;
+    // the point of the metric is that it spans more than one sitting. They go
+    // in front as one batch, because inserting them one at a time would
+    // reverse them and turn an improving player's trend upside down.
+    const { session } = get()
+    session.estimates.unshift(...estimates)
+    set((s) => ({ storedHands: count, version: s.version + 1 }))
   },
 
   exportHistory: () => exportStore(handStore),
 
   importHistory: async (json) => {
     const added = await importIntoStore(handStore, json)
-    set((s) => ({ storedHands: s.storedHands + added, version: s.version + 1 }))
-    return added
+    const { session } = get()
+    session.estimates.unshift(...added.estimates)
+    set((s) => ({ storedHands: s.storedHands + added.hands, version: s.version + 1 }))
+    return { hands: added.hands, estimates: added.estimates.length }
   },
 
   setHudLevel: (hudLevel) => set({ hudLevel }),
@@ -138,13 +161,18 @@ export const useStore = create<Store>((set, get) => ({
     const { session } = get()
     // Kept on the session so the estimate survives alongside the hand it was
     // made in — a guess nobody records teaches nothing.
-    session.estimates.push({
+    const estimate = {
       handNumber: session.handNumber,
       street,
       guess,
       actual: actual * 100,
       boardSize,
-    })
+    }
+    session.estimates.push(estimate)
+    // Saved alongside the hands, and like them never allowed to block play.
+    void handStore
+      .putEstimates([estimate])
+      .catch((error: unknown) => console.warn('Could not save estimate', error))
     set((s) => ({ guess, version: s.version + 1 }))
   },
   toggleReview: () => set((s) => ({ showReview: !s.showReview })),
