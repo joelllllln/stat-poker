@@ -113,8 +113,8 @@ export function App() {
   return (
     <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-3 sm:p-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-lg font-semibold tracking-tight">stat-poker</h1>
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+          <h1 className="whitespace-nowrap text-lg font-semibold tracking-tight">stat-poker</h1>
           <p className="text-xs text-slate-500">
             Hand {session.handNumber} · blinds {session.config.smallBlind}/
             {session.config.bigBlind} · your stack {session.stacks[heroSeat]}
