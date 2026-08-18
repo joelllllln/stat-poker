@@ -24,12 +24,22 @@ import {
   sittings,
 } from './timeline'
 
+/**
+ * Let the worker answer its heartbeat.
+ *
+ * A test that plays hundreds of hands without yielding holds the event loop
+ * for long enough that the worker cannot reply to the runner, which fails the
+ * run with a timeout even though every assertion passed.
+ */
+const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 /** Play a session with a random hero so there is a history to cut up. */
-function playSession(hands: number, seed = 5): SessionState {
+async function playSession(hands: number, seed = 5): Promise<SessionState> {
   const session = createSession(defaultSessionConfig(seed))
   const rng = new Rng(seed + 1)
 
   for (let i = 0; i < hands; i++) {
+    if (i % 20 === 0) await breathe()
     startNextHand(session)
     runBotsUntilHero(session)
     let guard = 0
@@ -53,8 +63,8 @@ function timestamped(history: HandRecord[], startedAt = 1_700_000_000_000): Hand
 }
 
 describe('the archive', () => {
-  it('replays stored hands into records that still carry their statistics', () => {
-    const session = playSession(6)
+  it('replays stored hands into records that still carry their statistics', async () => {
+    const session = await playSession(6)
     const stored = session.history.map((record, i) => toStored(record, 1_000 + i))
     const { hands, unreadable } = hydrate(stored)
 
@@ -68,8 +78,8 @@ describe('the archive', () => {
     }
   })
 
-  it('loses one unreadable hand rather than the history around it', () => {
-    const session = playSession(4)
+  it('loses one unreadable hand rather than the history around it', async () => {
+    const session = await playSession(4)
     const stored = session.history.map((record, i) => toStored(record, 1_000 + i))
     stored[1] = { ...stored[1]!, deck: stored[1]!.deck.slice(0, 20) }
 
@@ -78,8 +88,8 @@ describe('the archive', () => {
     expect(hands).toHaveLength(3)
   })
 
-  it('reads a hand recorded before the seat was written down', () => {
-    const session = playSession(1)
+  it('reads a hand recorded before the seat was written down', async () => {
+    const session = await playSession(1)
     const stored = toStored(session.history[0]!, 1_000)
     // Version one had no heroSeat: it was always the first seat.
     const old = { ...stored, version: 1 } as Record<string, unknown>
@@ -90,8 +100,8 @@ describe('the archive', () => {
     expect(hands[0]!.record.heroSeat).toBe(0)
   })
 
-  it('gives every hand an identity that survives a reload', () => {
-    const session = playSession(3)
+  it('gives every hand an identity that survives a reload', async () => {
+    const session = await playSession(3)
     const stored = session.history.map((record, i) => toStored(record, 1_000 + i))
     const keys = stored.map(handKey)
 
@@ -102,10 +112,10 @@ describe('the archive', () => {
     expect(hands.map((hand) => handKey(hand.record))).toEqual(keys)
   })
 
-  it('puts the archive before the hands being played now', () => {
-    const older = playSession(2)
+  it('puts the archive before the hands being played now', async () => {
+    const older = await playSession(2)
     const stored = older.history.map((record, i) => toStored(record, 1_000 + i))
-    const live = playSession(2, 11)
+    const live = await playSession(2, 11)
 
     const all = allHands(hydrate(stored).hands, live.history)
     expect(all).toHaveLength(4)
@@ -113,8 +123,8 @@ describe('the archive', () => {
     expect(all[3]!.playedAt).toBeUndefined()
   })
 
-  it('sorts hands by when they were played, not by how they came out of storage', () => {
-    const session = playSession(3)
+  it('sorts hands by when they were played, not by how they came out of storage', async () => {
+    const session = await playSession(3)
     const stored = session.history.map((record, i) => toStored(record, 3_000 - i * 1_000))
     const { hands } = hydrate(stored)
     expect(hands.map((hand) => hand.playedAt)).toEqual([1_000, 2_000, 3_000])
@@ -122,8 +132,8 @@ describe('the archive', () => {
 })
 
 describe('blocks of hands', () => {
-  it('cuts a history into blocks and keeps the part-block on the end', () => {
-    const session = playSession(BLOCK_SIZE + 4)
+  it('cuts a history into blocks and keeps the part-block on the end', async () => {
+    const session = await playSession(BLOCK_SIZE + 4)
     const cut = blocks(session.history)
 
     expect(cut).toHaveLength(2)
@@ -133,8 +143,8 @@ describe('blocks of hands', () => {
     expect(cut[1]!.to).toBe(BLOCK_SIZE + 4)
   })
 
-  it('reports no expected value given up until hands have been graded', () => {
-    const session = playSession(8)
+  it('reports no expected value given up until hands have been graded', async () => {
+    const session = await playSession(8)
     expect(blocks(session.history, 4)[0]!.evLostPer100).toBeNull()
 
     const graded = session.history.map((record, i) => ({ ...record, evLostBB: i < 4 ? 1 : 0 }))
@@ -145,7 +155,7 @@ describe('blocks of hands', () => {
     expect(cut[0]!.gradedHands).toBe(4)
   })
 
-  it('has nothing to say about an empty history', () => {
+  it('has nothing to say about an empty history', async () => {
     expect(blocks([])).toEqual([])
     expect(sittings([])).toEqual([])
     expect(describeMovement([])).toBeNull()
@@ -153,17 +163,17 @@ describe('blocks of hands', () => {
 })
 
 describe('block width', () => {
-  it('never cuts a short history so fine that every block is noise', () => {
+  it('never cuts a short history so fine that every block is noise', async () => {
     expect(blockSizeFor(0)).toBe(MIN_BLOCK)
     expect(blockSizeFor(30)).toBe(MIN_BLOCK)
   })
 
-  it('grows the blocks rather than the number of them', () => {
+  it('grows the blocks rather than the number of them', async () => {
     expect(blockSizeFor(400)).toBe(MAX_BLOCK)
     expect(blockSizeFor(100_000)).toBe(MAX_BLOCK)
   })
 
-  it('keeps a readable number of blocks in between', () => {
+  it('keeps a readable number of blocks in between', async () => {
     for (const hands of [60, 120, 250, 399]) {
       const size = blockSizeFor(hands)
       const count = Math.ceil(hands / size)
@@ -176,8 +186,8 @@ describe('block width', () => {
 })
 
 describe('sittings', () => {
-  it('splits where play stopped for a while', () => {
-    const session = playSession(6)
+  it('splits where play stopped for a while', async () => {
+    const session = await playSession(6)
     const history = timestamped(session.history)
     // Push the last two hands out to the next evening.
     history[4] = { ...history[4]!, playedAt: history[3]!.playedAt! + 6 * 60 * 60 * 1000 }
@@ -189,13 +199,13 @@ describe('sittings', () => {
     expect(split[1]!.hands).toBe(2)
   })
 
-  it('keeps a steady run of hands together', () => {
-    const session = playSession(10)
+  it('keeps a steady run of hands together', async () => {
+    const session = await playSession(10)
     expect(sittings(timestamped(session.history))).toHaveLength(1)
   })
 
-  it('counts hands not yet written down as part of the sitting happening now', () => {
-    const session = playSession(6)
+  it('counts hands not yet written down as part of the sitting happening now', async () => {
+    const session = await playSession(6)
     const history = [...timestamped(session.history.slice(0, 3)), ...session.history.slice(3)]
     const split = sittings(history)
 
@@ -205,8 +215,8 @@ describe('sittings', () => {
 })
 
 describe('movement', () => {
-  it('finds a real change when the two halves genuinely differ', () => {
-    const session = playSession(60)
+  it('finds a real change when the two halves genuinely differ', async () => {
+    const session = await playSession(60)
     // Second half gives up two big blinds a hand, first half none at all.
     const history = session.history.map((record, i) => ({
       ...record,
@@ -220,8 +230,8 @@ describe('movement', () => {
     expect(describeMovement(history)).toContain('worse')
   })
 
-  it('calls an improvement an improvement', () => {
-    const session = playSession(60)
+  it('calls an improvement an improvement', async () => {
+    const session = await playSession(60)
     const history = session.history.map((record, i) => ({
       ...record,
       evLostBB: i < 30 ? 2 : 0,
@@ -229,8 +239,8 @@ describe('movement', () => {
     expect(describeMovement(history)).toContain('better')
   })
 
-  it('will not call noise a trend', () => {
-    const session = playSession(60)
+  it('will not call noise a trend', async () => {
+    const session = await playSession(60)
     // Alternating hands: the halves are identical, so there is nothing to say.
     const history = session.history.map((record, i) => ({
       ...record,
@@ -241,13 +251,13 @@ describe('movement', () => {
     expect(describeMovement(history)).toBeNull()
   })
 
-  it('refuses to compare halves of a handful of hands', () => {
-    const session = playSession(3)
+  it('refuses to compare halves of a handful of hands', async () => {
+    const session = await playSession(3)
     expect(movement(session.history, READINGS.net)).toBeNull()
   })
 
-  it('reads a rate as the share of hands it happened in', () => {
-    const session = playSession(40)
+  it('reads a rate as the share of hands it happened in', async () => {
+    const session = await playSession(40)
     const change = movement(session.history, READINGS.vpip)!
     expect(change.before).toBeGreaterThanOrEqual(0)
     expect(change.before).toBeLessThanOrEqual(1)

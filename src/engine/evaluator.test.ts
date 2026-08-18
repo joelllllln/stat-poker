@@ -5,6 +5,9 @@ import { categoryOf, describe as describeHand, evaluate, HandCategory } from './
 const value = (text: string) => evaluate(parseCards(text))
 const category = (text: string) => categoryOf(value(text))
 
+/** Give the event loop a turn, so the test worker can answer its heartbeat. */
+const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 describe('hand categories', () => {
   it('identifies each category', () => {
     expect(category('As Ks Qs Js Ts')).toBe(HandCategory.StraightFlush)
@@ -156,11 +159,16 @@ describe('exhaustive distribution', () => {
 
   // All 133,784,560 seven-card hands. Minutes, not seconds — run with
   // `npm run test:slow`.
-  it.runIf(process.env.SLOW_TESTS)('reproduces the known seven-card frequencies', () => {
+  it.runIf(process.env.SLOW_TESTS)('reproduces the known seven-card frequencies', async () => {
     const counts = new Array(9).fill(0)
     const hand = [0, 0, 0, 0, 0, 0, 0]
 
     for (let a = 0; a < NUM_CARDS; a++) {
+      // A minute of unbroken synchronous work leaves the test worker unable to
+      // answer the runner, which fails the run on a timeout with every
+      // assertion passing. Yielding once per outer card costs nothing and
+      // keeps the two talking.
+      await breathe()
       hand[0] = a
       for (let b = a + 1; b < NUM_CARDS; b++) {
         hand[1] = b
