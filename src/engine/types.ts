@@ -30,10 +30,17 @@ export interface Seat {
   totalCommitted: number
   holeCards: readonly [Card, Card] | null
   status: SeatStatus
-  /** Has acted since the last full raise on this street. */
-  hasActed: boolean
-  /** False once a short all-in has denied this seat the right to re-raise. */
-  mayRaise: boolean
+  /**
+   * What this seat had committed when it last acted on this street, or null
+   * if it has not acted yet.
+   *
+   * Two rules read it. A seat that has not acted still owes the street an
+   * action even when the price is already matched — that is the big blind's
+   * option. And a seat may raise again only when the price has climbed by at
+   * least a full raise since it last acted, which is the rule that decides
+   * whether a short all-in reopens the betting.
+   */
+  committedWhenLastActed: number | null
 }
 
 export interface ActionRecord {

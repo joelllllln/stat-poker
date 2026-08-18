@@ -99,7 +99,7 @@ export function toHeadsUpState(state: HandState, seat: number): PreflopState | n
     const index = toSolverSeat(s.index)
     committed[index] = s.committed / bigBlind
     allIn[index] = s.status === 'allin'
-    acted[index] = s.hasActed
+    acted[index] = s.committedWhenLastActed !== null
   }
 
   const raiseCount = state.actions.filter(

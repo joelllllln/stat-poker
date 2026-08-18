@@ -91,8 +91,7 @@ export function startHandWithDeck(config: HandConfig, deck: readonly Card[]): Ha
     totalCommitted: 0,
     holeCards: null,
     status: 'active',
-    hasActed: false,
-    mayRaise: true,
+    committedWhenLastActed: null,
   }))
 
   let deckIndex = 0
@@ -132,6 +131,20 @@ export function startHandWithDeck(config: HandConfig, deck: readonly Card[]): Ha
   return advance(state)
 }
 
+/**
+ * Whether a seat is entitled to raise.
+ *
+ * One rule, stated as the rule book states it: a seat may raise when it has
+ * not yet acted, or when the price has climbed by at least a full raise since
+ * it last did. A single all-in for less than a full raise therefore does not
+ * reopen the betting — and two of them that add up to one do, which is what
+ * the room would rule and what a flag set once and never cleared could not say.
+ */
+export function mayRaise(state: HandState, seat: Seat): boolean {
+  const last = seat.committedWhenLastActed
+  return last === null || state.currentBet - last >= state.lastRaiseSize
+}
+
 export function legalActions(state: HandState): LegalAction[] {
   if (state.toAct === null) return []
   const seat = state.seats[state.toAct]!
@@ -142,7 +155,7 @@ export function legalActions(state: HandState): LegalAction[] {
   else options.push({ type: 'call', min: Math.min(toCall, seat.stack) })
 
   const maxTo = seat.committed + seat.stack
-  if (seat.mayRaise && maxTo > state.currentBet) {
+  if (mayRaise(state, seat) && maxTo > state.currentBet) {
     // A raise must add at least the last full raise, except that a seat may
     // always move all-in for less.
     const minTo = Math.min(state.currentBet + state.lastRaiseSize, maxTo)
@@ -189,32 +202,15 @@ export function applyAction(state: HandState, action: Action): HandState {
     case 'raise': {
       const raiseSize = action.to - next.currentBet
       cost = commit(seat, action.to - seat.committed)
-      const isFullRaise = raiseSize >= next.lastRaiseSize
       next.currentBet = seat.committed
-
-      if (isFullRaise) {
-        next.lastRaiseSize = raiseSize
-        // A full raise reopens the betting for everyone still able to act.
-        for (const other of next.seats) {
-          if (other.index !== seat.index && other.status === 'active') {
-            other.hasActed = false
-            other.mayRaise = true
-          }
-        }
-      } else {
-        // A short all-in does not reopen betting: seats that already acted may
-        // now only call or fold.
-        for (const other of next.seats) {
-          if (other.index !== seat.index && other.status === 'active' && other.hasActed) {
-            other.mayRaise = false
-          }
-        }
-      }
+      // Only a full raise moves the bar the next one has to clear; an all-in
+      // for less leaves the minimum where the last real raise put it.
+      if (raiseSize >= next.lastRaiseSize) next.lastRaiseSize = raiseSize
       break
     }
   }
 
-  seat.hasActed = true
+  seat.committedWhenLastActed = seat.committed
   next.actions.push({
     seat: seat.index,
     street: next.street,
@@ -236,7 +232,7 @@ function bettingRoundComplete(state: HandState): boolean {
   // One player left to act has nobody to bet into once everyone else is
   // all-in or folded, so a matched bet ends the round.
   if (canAct.length === 1) return true
-  return canAct.every((s) => s.hasActed)
+  return canAct.every((s) => s.committedWhenLastActed !== null)
 }
 
 function beginStreet(state: HandState, street: Street): void {
@@ -246,8 +242,7 @@ function beginStreet(state: HandState, street: Street): void {
   }
   for (const seat of state.seats) {
     seat.committed = 0
-    seat.hasActed = false
-    seat.mayRaise = true
+    seat.committedWhenLastActed = null
   }
   state.currentBet = 0
   state.lastRaiseSize = state.bigBlind

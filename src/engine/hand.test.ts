@@ -125,6 +125,47 @@ describe('betting rules', () => {
     expect(legalActions(state).map((a) => a.type)).toEqual(['fold', 'call'])
   })
 
+  it('reopens betting when short all-ins add up to a full raise', () => {
+    // UTG opens to 6, the button makes it 14 — a full raise of 8. Two short
+    // stacks then jam 18 and 22, neither a full raise on its own. The button
+    // last acted at 14 and now faces 22: a full 8 more, so it may raise again.
+    const state = play(startHand(table([200, 18, 22, 200], 0), new Rng(21)), [
+      raiseTo(6), // UTG
+      raiseTo(14), // button
+      raiseTo(18), // small blind, all-in for +4
+      raiseTo(22), // big blind, all-in for +4
+      call, // UTG, which faces 16 more and could also raise
+    ])
+    expect(state.toAct).toBe(0)
+    expect(legalActions(state).map((a) => a.type)).toContain('raise')
+  })
+
+  it('does not reopen betting for a single short all-in', () => {
+    // The same table, with only one of the short jams: the button faces 4 more
+    // against a full raise of 8, so it may only call or fold.
+    const state = play(startHand(table([200, 18, 400, 200], 0), new Rng(22)), [
+      raiseTo(6),
+      raiseTo(14),
+      raiseTo(18), // small blind, all-in for +4
+      fold, // big blind
+      call, // UTG
+    ])
+    expect(state.toAct).toBe(0)
+    expect(legalActions(state).map((a) => a.type)).toEqual(['fold', 'call'])
+  })
+
+  it('lets a seat that has not acted since the last full raise raise again', () => {
+    // The big blind has posted but never acted, so a short all-in in front of
+    // it takes nothing away: the option is still a full one.
+    const state = play(startHand(table([200, 14, 200, 200], 0), new Rng(23)), [
+      fold, // UTG
+      raiseTo(10), // button, a full raise of 8
+      raiseTo(14), // small blind, all-in for +4
+    ])
+    expect(state.toAct).toBe(2) // the big blind, yet to act
+    expect(legalActions(state).map((a) => a.type)).toContain('raise')
+  })
+
   it('reopens betting after a full raise', () => {
     const state = play(startHand(table([200, 200, 200], 0), new Rng(10)), [
       raiseTo(6),
