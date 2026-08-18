@@ -143,6 +143,35 @@ const POLICIES: Policy[] = [
   },
 ]
 
+/**
+ * Does the field fold as often as the coach says it will?
+ *
+ * The coach prices a bet by assuming each opponent continues when its hand
+ * clears the price, discounted for the equity it will not realise. The bots at
+ * this table decide by something else entirely — their archetype's widths and
+ * their own heuristics — so the model's opponents are not the opponents. This
+ * counts the difference: what the model predicted, against what happened.
+ */
+interface Calibration {
+  bets: number
+  predicted: number
+  observed: number
+}
+
+/** Did every villain still to act fold to the hero's bet? */
+function everyoneFolded(state: HandState, from: number, heroSeat: number): boolean {
+  const street = state.actions[from]?.street
+  let folded = 0
+  for (let i = from + 1; i < state.actions.length; i++) {
+    const entry = state.actions[i]!
+    if (entry.street !== street) break
+    if (entry.seat === heroSeat) break
+    if (entry.action.type !== 'fold') return false
+    folded += 1
+  }
+  return folded > 0
+}
+
 interface Outcome {
   policy: Policy
   hands: number
@@ -151,6 +180,7 @@ interface Outcome {
   decisions: number
   /** Milliseconds spent choosing, which is what a player would wait. */
   decisionMs: number
+  calibration: Calibration
 }
 
 function play(policy: Policy, hands: number, seed: number): Outcome {
@@ -159,6 +189,7 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
   const started = Date.now()
   let decisions = 0
   let decisionMs = 0
+  const calibration: Calibration = { bets: 0, predicted: 0, observed: 0 }
 
   for (let hand = 0; hand < hands; hand++) {
     startNextHand(session)
@@ -168,11 +199,29 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
     while (session.current!.result === null && guard++ < 60) {
       if (session.current!.toAct !== session.config.heroSeat) break
       const at = Date.now()
-      const action = policy.act(session.current!, session.config.heroSeat, rng)
+      const state = session.current!
+      const action = policy.act(state, session.config.heroSeat, rng)
       decisionMs += Date.now() - at
       decisions += 1
+
+      // Only the coach knows what it predicted, so only the coach is scored on
+      // it — and only for bets, which is where the prediction does the work.
+      let predicted: number | null = null
+      if (policy.name === 'Coach' && action.type === 'raise') {
+        const advice = adviseOn(state, session.config.heroSeat, decisionsTaken(state, session.config.heroSeat))
+        predicted = advice.options.find((option) => option.action.type === 'raise')?.foldEquity ?? null
+      }
+      const before = state.actions.length
+
       heroAct(session, action)
       if (session.current!.result === null) runBotsUntilHero(session)
+
+      if (predicted !== null) {
+        const after = session.current ?? session.history[session.history.length - 1]!.state
+        calibration.bets += 1
+        calibration.predicted += predicted
+        calibration.observed += everyoneFolded(after, before, session.config.heroSeat) ? 1 : 0
+      }
     }
   }
 
@@ -183,6 +232,7 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
     seconds: (Date.now() - started) / 1000,
     decisions,
     decisionMs,
+    calibration,
   }
 }
 
@@ -323,6 +373,27 @@ for (const result of results) {
     `| ${outcome.policy.name} | ${(outcome.hands / outcome.seconds).toFixed(0)} | ` +
       `${(outcome.decisionMs / Math.max(1, outcome.decisions)).toFixed(1)} | ` +
       `${gradingMsPerHand.toFixed(0)} |`,
+  )
+}
+
+const coachCalibration = outcomes.find((outcome) => outcome.policy.name === 'Coach')!.calibration
+if (coachCalibration.bets > 0) {
+  say()
+  say('## Are the coach\'s opponents the opponents?')
+  say()
+  const predicted = (coachCalibration.predicted / coachCalibration.bets) * 100
+  const observed = (coachCalibration.observed / coachCalibration.bets) * 100
+  say(
+    `Across ${coachCalibration.bets} bets the coach expected the field to fold ` +
+      `**${predicted.toFixed(1)}%** of the time. It actually folded **${observed.toFixed(1)}%**.`,
+  )
+  say()
+  say(
+    predicted > observed * 1.25
+      ? 'The model credits its bets with fold equity the table does not give them.'
+      : predicted * 1.25 < observed
+        ? 'The model expects to be called more than it is.'
+        : 'The prediction and the table agree within a quarter.',
   )
 }
 
