@@ -41,6 +41,7 @@ check('a hand is in progress', /pot \d+/.test(body))
 check('the odds overlay is showing equity', body.includes('your equity'))
 check('pot odds are on screen', body.includes('need to call'))
 check('modelled ranges are shown', body.includes('modelled ranges'))
+check('the range grid is drawn', body.includes('tightest range'))
 
 // Play the hand out by checking or calling until it ends.
 for (let i = 0; i < 40; i++) {
@@ -118,6 +119,27 @@ if (await solveButton.count()) {
   check('the river solver returns a strategy', /exploitable for [\d.]+ chips/.test(solved))
 } else {
   console.log('skip this hand did not reach a heads-up river')
+}
+
+// Predict-then-reveal: the guess has to be asked for before the answer shows.
+await page.getByRole('button', { name: /^predict$/i }).click()
+await page.getByRole('button', { name: 'Deal' }).click()
+await page.waitForTimeout(800)
+const predicting = (await page.locator('body').innerText()).toLowerCase()
+check('predict mode asks for an estimate first', predicting.includes('estimate your equity'))
+// The prompt itself says "estimate your equity", so the tell that the numbers
+// are still hidden is the absence of the tiles beside it.
+check('the equity is hidden until it is guessed', !predicting.includes('need to call'))
+
+const guessButton = page.getByRole('button', { name: '40%', exact: true })
+if (await guessButton.count()) {
+  await guessButton.first().click()
+  await page.waitForTimeout(700)
+  const revealed = (await page.locator('body').innerText()).toLowerCase()
+  check('the guess is scored against the truth', /you guessed 40%/.test(revealed))
+  check('the equity appears once guessed', revealed.includes('your equity'))
+} else {
+  check('predict mode offers guesses', false)
 }
 
 await page.screenshot({ path: 'screenshot.png', fullPage: true })

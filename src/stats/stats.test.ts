@@ -12,11 +12,14 @@ import {
 } from '../game/session'
 import { aggregate } from './hand-stats'
 import {
+  STREET_SAMPLE,
   buildProfile,
   classifyMastery,
   classifyStyle,
   handsForPrecision,
   rateInterval,
+  styleByStreet,
+  styleContradiction,
   winrateInterval,
 } from './profile'
 import { exportHands, fromStored, importHands, migrate, toStored } from './serialize'
@@ -81,6 +84,63 @@ describe('mastery tiers', () => {
     expect(buildProfile({ ...aggregate([], 2), vpip: 20, pfr: 15, hands: 10 }, 3).reliable).toBe(
       false,
     )
+  })
+})
+
+describe('style street by street', () => {
+  const decisions = (street: string, action: string, count: number) =>
+    Array.from({ length: count }, () => ({ street, action }))
+
+  it('reads each street separately', () => {
+    const styles = styleByStreet([
+      ...decisions('preflop', 'fold', 40),
+      ...decisions('turn', 'raise', 40),
+    ])
+
+    expect(styles.map((s) => s.street)).toEqual(['preflop', 'turn'])
+    expect(styles[0]!.label).toBe('tight')
+    expect(styles[1]!.label).toBe('wild')
+  })
+
+  it('keeps the streets in the order they are played', () => {
+    const styles = styleByStreet([
+      ...decisions('river', 'call', 30),
+      ...decisions('preflop', 'call', 30),
+      ...decisions('flop', 'call', 30),
+    ])
+    expect(styles.map((s) => s.street)).toEqual(['preflop', 'flop', 'river'])
+  })
+
+  it('names the contradiction between two streets', () => {
+    const contradiction = styleContradiction(
+      styleByStreet([
+        ...decisions('preflop', 'fold', 40),
+        ...decisions('turn', 'raise', 40),
+      ]),
+    )
+    expect(contradiction).toContain('preflop')
+    expect(contradiction).toContain('turn')
+  })
+
+  it('stays quiet when the streets are played alike', () => {
+    const even = styleByStreet([
+      ...decisions('preflop', 'call', 40),
+      ...decisions('turn', 'call', 40),
+    ])
+    expect(styleContradiction(even)).toBeNull()
+  })
+
+  it('will not call a handful of decisions a style', () => {
+    const thin = styleByStreet([
+      ...decisions('preflop', 'fold', STREET_SAMPLE - 1),
+      ...decisions('turn', 'raise', STREET_SAMPLE - 1),
+    ])
+    expect(styleContradiction(thin)).toBeNull()
+  })
+
+  it('handles a player who has done nothing yet', () => {
+    expect(styleByStreet([])).toEqual([])
+    expect(styleContradiction([])).toBeNull()
   })
 })
 

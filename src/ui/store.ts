@@ -38,7 +38,8 @@ interface Store {
   exportHistory: () => Promise<string>
   importHistory: (json: string) => Promise<number>
   setHudLevel: (level: Store['hudLevel']) => void
-  submitGuess: (guess: number) => void
+  /** Record a guess against the equity it was guessing at. */
+  submitGuess: (guess: number, actual: number, street: string, boardSize: number) => void
   toggleReview: () => void
 }
 
@@ -133,6 +134,18 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   setHudLevel: (hudLevel) => set({ hudLevel }),
-  submitGuess: (guess) => set({ guess }),
+  submitGuess: (guess, actual, street, boardSize) => {
+    const { session } = get()
+    // Kept on the session so the estimate survives alongside the hand it was
+    // made in — a guess nobody records teaches nothing.
+    session.estimates.push({
+      handNumber: session.handNumber,
+      street,
+      guess,
+      actual: actual * 100,
+      boardSize,
+    })
+    set((s) => ({ guess, version: s.version + 1 }))
+  },
   toggleReview: () => set((s) => ({ showReview: !s.showReview })),
 }))

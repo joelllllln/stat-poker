@@ -129,6 +129,93 @@ export function buildProfile(stats: AggregateStats, evLostPer100: number): Profi
   }
 }
 
+export interface StreetStyle {
+  street: string
+  decisions: number
+  /** Share of decisions that were a bet or a raise. */
+  aggression: number
+  /** Share of decisions that were a fold. */
+  folding: number
+  /** A one-word style, e.g. `passive` or `wild`. */
+  label: string
+}
+
+/** Decisions needed on a street before its style is worth naming. */
+export const STREET_SAMPLE = 25
+
+/**
+ * Style, street by street.
+ *
+ * The single label hides the most useful thing a profile can say. Almost
+ * nobody plays the same way on every street, and "tight before the flop, wild
+ * on turns" is a diagnosis a player can act on tomorrow — where "loose
+ * aggressive" is only a description to nod at.
+ */
+export function styleByStreet(
+  decisions: readonly { street: string; action: string }[],
+): StreetStyle[] {
+  const groups = new Map<string, { street: string; action: string }[]>()
+  for (const decision of decisions) {
+    const group = groups.get(decision.street)
+    if (group) group.push(decision)
+    else groups.set(decision.street, [decision])
+  }
+
+  const order = ['preflop', 'flop', 'turn', 'river']
+  const out: StreetStyle[] = []
+
+  for (const street of order) {
+    const group = groups.get(street)
+    if (!group || group.length === 0) continue
+
+    const aggression = group.filter((d) => d.action === 'raise').length / group.length
+    const folding = group.filter((d) => d.action === 'fold').length / group.length
+
+    out.push({
+      street,
+      decisions: group.length,
+      aggression,
+      folding,
+      label:
+        aggression >= 0.45
+          ? 'wild'
+          : aggression >= 0.22
+            ? 'aggressive'
+            : folding >= 0.5
+              ? 'tight'
+              : 'passive',
+    })
+  }
+
+  return out
+}
+
+/**
+ * The sharpest thing the per-street breakdown has to say: the two streets
+ * furthest apart in style, where there are enough decisions to be sure.
+ */
+export function styleContradiction(styles: readonly StreetStyle[]): string | null {
+  const solid = styles.filter((style) => style.decisions >= STREET_SAMPLE)
+  if (solid.length < 2) return null
+
+  let widest: [StreetStyle, StreetStyle] | null = null
+  let gap = 0
+  for (const first of solid) {
+    for (const second of solid) {
+      if (first.street === second.street) continue
+      const distance = second.aggression - first.aggression
+      if (distance > gap) {
+        gap = distance
+        widest = [first, second]
+      }
+    }
+  }
+
+  // A small difference between streets is normal play, not a contradiction.
+  if (!widest || gap < 0.2) return null
+  return `${widest[0].label} on the ${widest[0].street}, ${widest[1].label} on the ${widest[1].street}`
+}
+
 /**
  * Wilson score interval for a rate.
  *

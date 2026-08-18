@@ -13,6 +13,7 @@ import { archetype, type Archetype } from '../bots/archetypes'
 import { decide } from '../bots/policy'
 import { deriveHandStats, type SeatHandStats } from '../stats/hand-stats'
 import type { DecisionGrade } from '../coach/grade'
+import type { Estimate } from '../stats/estimates'
 
 export interface SeatConfig {
   name: string
@@ -61,6 +62,8 @@ export interface SessionState {
   history: HandRecord[]
   /** Chips added to each seat by rebuys, so net results stay honest. */
   rebuys: number[]
+  /** Equity guesses made in predict-then-reveal mode. */
+  estimates: Estimate[]
 }
 
 const DEFAULT_SEATS: SeatConfig[] = [
@@ -97,6 +100,7 @@ export function createSession(config: SessionConfig): SessionState {
     currentStartingStacks: [],
     history: [],
     rebuys: config.seats.map(() => 0),
+    estimates: [],
   }
 }
 

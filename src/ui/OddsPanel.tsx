@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { potSize, type HandState } from '../engine/types'
 import { modelledWidth } from '../equity/opponent'
 import { preflopStrength, topPercentRange } from '../equity/preflop'
+import { classOf } from '../solver/blueprint'
+import { RangeGrid } from './RangeGrid'
 import { useEquity } from './useAnalysis'
 import { inBigBlinds, potOddsRatio, requiredEquity, stackToPotRatio } from '../coach/odds'
 import { useStore } from './store'
@@ -98,7 +100,9 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
               {[10, 20, 30, 40, 50, 60, 70, 80, 90].map((value) => (
                 <button
                   key={value}
-                  onClick={() => submitGuess(value)}
+                  onClick={() =>
+                    submitGuess(value, equity.equity, state.street, state.board.length)
+                  }
                   className="rounded bg-sky-900/60 px-2 py-1 text-xs hover:bg-sky-800"
                 >
                   {value}%
@@ -161,7 +165,8 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
             </div>
           )}
 
-          <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
             <div className="text-[11px] uppercase tracking-wide text-slate-500">
               Modelled ranges
             </div>
@@ -180,6 +185,17 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
                   </span>
                 </div>
               ))}
+            </div>
+            </div>
+
+            {/* The shape of the tightest range still in the hand, with your own
+                holding marked in it. */}
+            <div className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 sm:w-52">
+              <RangeGrid
+                width={Math.min(...widths.map((w) => w.width))}
+                title="Tightest range"
+                highlight={hero.holeCards ? classOf(hero.holeCards) : undefined}
+              />
             </div>
           </div>
         </>

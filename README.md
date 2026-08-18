@@ -35,7 +35,7 @@ src/
   bots/       archetypes and the policy that drives them
   coach/      pot odds, expected value, grading, leak finding, run-it-again
   solver/     CFR, the preflop game, and the solved blueprint
-  stats/      statistics, profile, all-in adjustment, hand-history storage
+  stats/      statistics, profile, all-in adjustment, estimate tracking, storage
   game/       session: the table across hands
   ui/         React front end
   workers/    equity and solving, off the interface thread
@@ -65,6 +65,10 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   comparison of every holding against every holding — they agree to 1e-9 on
   narrow ranges, wide ranges, the whole deck, and boards where every hand
   chops. The solve converges to 0.0016 chips per hand in a ten-chip pot.
+- **Estimate tracking**: error is the mean *absolute* miss, so being twenty
+  points out in both directions is not scored as accurate; bias is reported
+  separately, because running consistently high is a different and more
+  fixable fault than being scattered.
 - **Run it again**: aces all-in against kings price at the ~82% they were worth
   however the board fell; chips balance across every re-dealt runout.
 - **Leak finder**: a grouping that covers every decision scores zero excess and

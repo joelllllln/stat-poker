@@ -11,6 +11,8 @@ import {
   winrateInterval,
 } from '../stats/profile'
 import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '../coach/leaks'
+import { describeAccuracy, summarise } from '../stats/estimates'
+import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
 import { LuckChart } from './LuckChart'
 import { useStore } from './store'
 
@@ -70,8 +72,21 @@ export function Dashboard({ session }: { session: SessionState }) {
     const graded = session.history.filter((hand) => hand.grades !== undefined)
     if (graded.length === 0) return null
     const tagged = tagDecisions(graded, heroSeat, (record) => record.grades ?? [])
-    return { leak: biggestLeak(findLeaks(tagged)), decisions: tagged.length }
+    return {
+      leak: biggestLeak(findLeaks(tagged)),
+      decisions: tagged.length,
+      // The same graded decisions answer a different and often sharper
+      // question: whether the player is the same player on every street.
+      streets: styleByStreet(
+        tagged.map((item) => ({ street: item.street, action: item.grade.chosen.type })),
+      ),
+    }
   }, [session, version, heroSeat])
+
+  const estimates = useMemo(
+    () => summarise(session.estimates),
+    [session, version],
+  )
 
   const { records, stats, curve, winrate } = data
   if (stats.hands === 0) return null
@@ -138,6 +153,32 @@ export function Dashboard({ session }: { session: SessionState }) {
         </div>
       )}
 
+      {leak && leak.streets.length > 0 && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-slate-500">
+              Street by street
+            </span>
+            {styleContradiction(leak.streets) && (
+              <span className="text-[11px] text-amber-300">
+                {styleContradiction(leak.streets)}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {leak.streets.map((street) => (
+              <div key={street.street} className={street.decisions >= STREET_SAMPLE ? '' : 'opacity-50'}>
+                <div className="text-[11px] capitalize text-slate-500">{street.street}</div>
+                <div className="text-sm capitalize">{street.label}</div>
+                <div className="font-mono text-[10px] text-slate-500">
+                  {(street.aggression * 100).toFixed(0)}% aggressive · {street.decisions}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatTile
           label="VPIP"
@@ -162,6 +203,27 @@ export function Dashboard({ session }: { session: SessionState }) {
           reliable={stats.hands >= STYLE_SAMPLE}
         />
       </div>
+
+      {estimates.count > 0 && (
+        <div className="rounded-lg border border-sky-900/60 bg-sky-950/20 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-[11px] uppercase tracking-wide text-sky-300/70">
+              Reading equity
+            </span>
+            <span className="font-mono text-sm text-sky-100">
+              {estimates.meanError.toFixed(1)} points out — {describeAccuracy(estimates.meanError)}
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] text-sky-200/60">
+            {estimates.count} guess{estimates.count === 1 ? '' : 'es'};{' '}
+            {(estimates.withinFive * 100).toFixed(0)}% within five points.
+            {Math.abs(estimates.bias) > 3 &&
+              ` You run ${estimates.bias > 0 ? 'optimistic' : 'pessimistic'} by ${Math.abs(estimates.bias).toFixed(1)} points on average.`}
+            {estimates.improvement !== null &&
+              ` Your later guesses are ${Math.abs(estimates.improvement).toFixed(1)} points ${estimates.improvement > 0 ? 'closer' : 'further off'} than your early ones.`}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
