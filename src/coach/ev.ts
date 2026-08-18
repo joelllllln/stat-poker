@@ -20,6 +20,7 @@ import { potSize, type Action, type HandState } from '../engine/types'
 import { handEquity, subsetEquity } from '../equity/equity'
 import { modelOpponentRange, perceivedRangeAfterAggression } from '../equity/opponent'
 import { removeBlocked, rangeWeight, type Combo, type Range } from '../equity/range'
+import { normalCdf } from '../stats/inference'
 import { requiredEquity } from './odds'
 
 /** Rollouts when pricing a single villain combo. */
@@ -139,25 +140,6 @@ interface PricedCombo {
   equity: number
   /** Standard error on that equity; zero where it was enumerated. */
   error: number
-}
-
-/**
- * Normal cumulative distribution, to a few decimal places.
- *
- * Used to ask how likely a combo is to be on the calling side of a price when
- * its equity is only known to within a sampling error — Abramowitz and Stegun
- * 7.1.26, which is accurate to about 1e-7 and costs a handful of multiplies.
- */
-function normalCdf(z: number): number {
-  const sign = z < 0 ? -1 : 1
-  const x = Math.abs(z) / Math.SQRT2
-  const t = 1 / (1 + 0.3275911 * x)
-  const y =
-    1 -
-    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
-      t *
-      Math.exp(-x * x)
-  return 0.5 * (1 + sign * y)
 }
 
 /**

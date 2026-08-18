@@ -1,17 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Rng } from '../engine/cards'
-import { compare, compareMeans, compareProportions, holm, tCritical } from './inference'
-
-describe("Student's t", () => {
-  it('matches the published critical values', () => {
-    expect(tCritical(10)).toBeCloseTo(2.228, 2)
-    expect(tCritical(30)).toBeCloseTo(2.042, 2)
-    expect(tCritical(120)).toBeCloseTo(1.98, 2)
-    // And approaches the normal value from above, never below it.
-    expect(tCritical(10_000)).toBeGreaterThan(1.959)
-    expect(tCritical(10_000)).toBeLessThan(1.97)
-  })
-})
+import { compare, compareMeans, compareProportions, holm } from './inference'
 
 describe('comparing two rates', () => {
   it('will not call two hands against two a change', () => {

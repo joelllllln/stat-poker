@@ -34,28 +34,6 @@ export function normalCdf(z: number): number {
 /** Two-sided p-value for a z statistic. */
 export const twoSidedP = (z: number): number => 2 * (1 - normalCdf(Math.abs(z)))
 
-/**
- * The two-sided 95% critical value of Student's t at `df` degrees of freedom.
- *
- * A Cornish-Fisher expansion around the normal one, accurate to about a
- * thousandth from four degrees of freedom up. Using 1.96 regardless — which is
- * the normal value, reached only in the limit — makes every small-sample
- * interval too narrow, which is exactly the sample where it matters.
- */
-export function tCritical(df: number): number {
-  if (!Number.isFinite(df) || df <= 0) return Infinity
-  const z = 1.959964
-  const z3 = z ** 3
-  const z5 = z ** 5
-  const z7 = z ** 7
-  return (
-    z +
-    (z3 + z) / (4 * df) +
-    (5 * z5 + 16 * z3 + 3 * z) / (96 * df * df) +
-    (3 * z7 + 19 * z5 + 17 * z3 - 15 * z) / (384 * df * df * df)
-  )
-}
-
 export interface Comparison {
   /** Mean of the first sample, and of the second. */
   before: number
