@@ -30,6 +30,7 @@ npm run test:slow  # adds the exhaustive 133m-hand evaluator check (~80s)
 | 5 | Preflop solver, verified on Kuhn poker; heads-up preflop solved | done |
 | 7 | Leak finder, run-it-again spread | done |
 | 6 | Postflop river solver, analysis in a worker | done |
+| 8 | Statistics across sessions, trend over time, table interface | done |
 
 ## Layout
 
@@ -64,6 +65,9 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   board, result and statistics; a corrupt deck is refused rather than replayed
   as half a hand; statistics are recomputed on read, so improving a definition
   applies to hands already recorded.
+- **Metrics over time**: the browser test plays thirty hands, reloads the page,
+  and requires the dashboard to describe all thirty — the trend across blocks,
+  where the money goes, and the verdicts — rather than starting again from zero.
 - **All-in adjustment**: aces against kings all-in preflop price at the ~82% the
   hand was worth however the board fell, and chips still balance.
 - **River solver**: the fast showdown sweep is checked against a hand-by-hand
@@ -90,6 +94,26 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
 - **Coach**: folding a royal flush grades as a blunder, a correct call grades
   correct whatever the runout did, verdicts are deterministic, and no decision
   is ever offered a bet size that was not legal at the time.
+
+## Keeping score across sessions
+
+Every hand is stored, and the statistics are built from all of them rather than
+from the current tab. Three things follow from that, and each of them is a rule
+about honesty rather than a feature:
+
+- **Only replay inputs are stored** — the deck, the actions, the stacks. Every
+  statistic is recomputed on read, so improving a definition applies to hands
+  recorded months ago rather than only to hands played afterwards.
+- **Verdicts are cached against a grader version.** Grading a hand costs about a
+  third of a second, which cannot be paid again for a whole history on every
+  load; it is paid once, in a worker, newest hands first. Changing the coach
+  raises the version and every cached verdict is discarded and worked out again,
+  because a stale grade shown as a current one is worse than an ungraded hand.
+- **A trend is only reported when the sample supports it.** The history is cut
+  into blocks — wide enough to mean something, narrow enough to show movement —
+  and a change is called a change only when it is larger than the noise around
+  it. Over a few hundred hands the honest answer is usually that nothing has
+  moved, and the app says so.
 
 ## Counting outs
 
