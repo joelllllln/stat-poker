@@ -59,7 +59,7 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
             <div className="rounded border border-violet-900/70 bg-violet-950/30 px-2 py-1.5">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-[11px] uppercase tracking-wide text-violet-300/70">
-                  Solved strategy
+                  Solved strategy · {decision.blueprint.stack}bb
                 </span>
                 {/* How far from equilibrium the solve got, rather than a bare
                     claim that this is "GTO". */}

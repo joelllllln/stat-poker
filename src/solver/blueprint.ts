@@ -1,35 +1,54 @@
 /**
  * Looking a live decision up in the solved preflop strategy.
  *
- * The solve covers heads-up preflop at a hundred blinds, which in a six-handed
- * game is the spot reached whenever everyone folds to the blinds — the most
- * frequently repeated situation at the table. A hand is only looked up when it
- * translates into that game exactly: two players left, no dead money from
- * anyone who folded, and stacks at the depth that was solved.
+ * The solve covers heads-up preflop, which in a six-handed game is the spot
+ * reached whenever everyone folds to the blinds — the most frequently repeated
+ * situation at the table. A hand is only looked up when it translates into that
+ * game: two players left, no dead money from anyone who folded, and an
+ * effective stack near one of the depths that was solved.
  *
- * Anything that does not translate returns nothing rather than a near miss. A
- * strategy borrowed from a different spot is not an approximation; it is the
- * wrong answer delivered with the same confidence as a right one.
+ * Depth is part of the game rather than a detail of it — twenty blinds is a
+ * shove-or-fold game and a hundred is not — so several depths are solved and a
+ * hand is answered from the nearest, or from none. Anything that does not
+ * translate returns nothing rather than a near miss: a strategy borrowed from a
+ * different spot is not an approximation, it is the wrong answer delivered with
+ * the same confidence as a right one.
  */
 
 import { rankOf, suitOf, RANKS, type Card } from '../engine/cards'
 import type { HandState } from '../engine/types'
 import {
-  BLUEPRINT,
+  BLUEPRINTS,
+  BLUEPRINT_DEPTHS,
   BLUEPRINT_EXPLOITABILITY,
-  BLUEPRINT_STACK,
 } from './blueprint-table'
 import { CLASS_INDEX } from './matchup-table'
 import { ACTION_NAMES, contextOf, type PreflopConfig, type PreflopState } from './preflop'
 import { headsUpActions } from './preflop-hu'
 
-/** Stacks may sit this far from the solved depth and still use its strategy. */
+/** Stacks may sit this far from a solved depth and still use its strategy. */
 const DEPTH_TOLERANCE = 0.25
 
-const HU_CONFIG: PreflopConfig = {
-  players: 2,
-  stack: BLUEPRINT_STACK,
-  smallBlind: 0.5,
+const configFor = (stack: number): PreflopConfig => ({ players: 2, stack, smallBlind: 0.5 })
+
+/**
+ * The solved depth closest to what is actually behind, or null.
+ *
+ * "What is actually behind" is the effective stack — the shorter of the two —
+ * because that is the one that can be lost, and a game where one player covers
+ * the other by miles is the shorter player's game at their depth.
+ */
+function nearestDepth(effective: number): number | null {
+  let best: number | null = null
+  let bestGap = Infinity
+  for (const depth of BLUEPRINT_DEPTHS) {
+    const gap = Math.abs(effective - depth) / depth
+    if (gap < bestGap) {
+      bestGap = gap
+      best = depth
+    }
+  }
+  return best !== null && bestGap <= DEPTH_TOLERANCE ? best : null
 }
 
 export interface BlueprintAction {
@@ -46,6 +65,8 @@ export interface BlueprintAdvice {
   mixed: boolean
   /** How far from equilibrium the solve that produced this got, in bb/hand. */
   exploitability: number
+  /** The depth this advice was solved at, in big blinds. */
+  stack: number
 }
 
 /** The 169-class label for a holding, e.g. `AKs`. */
@@ -64,7 +85,10 @@ export function classOf(cards: readonly [Card, Card]): string {
  * strategy solved for a hundred blinds is simply a different strategy from the
  * one that is right for twenty.
  */
-export function toHeadsUpState(state: HandState, seat: number): PreflopState | null {
+export function toHeadsUpState(
+  state: HandState,
+  seat: number,
+): { state: PreflopState; config: PreflopConfig } | null {
   if (state.street !== 'preflop') return null
   if (state.toAct !== seat) return null
 
@@ -85,9 +109,9 @@ export function toHeadsUpState(state: HandState, seat: number): PreflopState | n
   if (state.seats.some((s) => s.status === 'folded' && s.totalCommitted > 0)) return null
 
   const depths = live.map((s) => (s.stack + s.totalCommitted) / bigBlind)
-  if (depths.some((depth) => Math.abs(depth - HU_CONFIG.stack) > HU_CONFIG.stack * DEPTH_TOLERANCE)) {
-    return null
-  }
+  const depth = nearestDepth(Math.min(...depths))
+  if (depth === null) return null
+  const config = configFor(depth)
 
   const toSolverSeat = (engineSeat: number) => (engineSeat === sbSeat ? 0 : 1)
   const committed: number[] = [0, 0]
@@ -110,15 +134,18 @@ export function toHeadsUpState(state: HandState, seat: number): PreflopState | n
   hands[toSolverSeat(seat)] = CLASS_INDEX[classOf(hero.holeCards)]!
 
   return {
-    hands,
-    committed,
-    folded,
-    allIn,
-    acted,
-    toAct: toSolverSeat(seat),
-    currentBet: state.currentBet / bigBlind,
-    raiseCount,
-    history: '',
+    config,
+    state: {
+      hands,
+      committed,
+      folded,
+      allIn,
+      acted,
+      toAct: toSolverSeat(seat),
+      currentBet: state.currentBet / bigBlind,
+      raiseCount,
+      history: '',
+    },
   }
 }
 
@@ -127,9 +154,13 @@ export function lookupPreflop(state: HandState, seat: number): BlueprintAdvice |
   const translated = toHeadsUpState(state, seat)
   if (!translated) return null
 
-  const actions = headsUpActions(translated, HU_CONFIG)
-  const key = `${translated.toAct}|${classOf(state.seats[seat]!.holeCards!)}|${contextOf(translated)}|${actions.join('')}`
-  const frequencies = BLUEPRINT[key]
+  const { state: solved, config } = translated
+  const table = BLUEPRINTS[config.stack]
+  if (!table) return null
+
+  const actions = headsUpActions(solved, config)
+  const key = `${solved.toAct}|${classOf(state.seats[seat]!.holeCards!)}|${contextOf(solved)}|${actions.join('')}`
+  const frequencies = table[key]
   if (!frequencies || frequencies.length !== actions.length) return null
 
   const entries: BlueprintAction[] = actions.map((action, i) => ({
@@ -145,9 +176,11 @@ export function lookupPreflop(state: HandState, seat: number): BlueprintAdvice |
     // A strategy that plays one action more than nine times in ten is not
     // meaningfully mixing, whatever the remaining fraction says.
     mixed: primary.frequency < 0.9,
-    exploitability: BLUEPRINT_EXPLOITABILITY,
+    exploitability: BLUEPRINT_EXPLOITABILITY[config.stack] ?? 0,
+    stack: config.stack,
   }
 }
 
-/** How many spots the shipped blueprint covers. */
-export const blueprintSize = (): number => Object.keys(BLUEPRINT).length
+/** How many spots the shipped blueprint covers, across every depth. */
+export const blueprintSize = (): number =>
+  BLUEPRINT_DEPTHS.reduce((sum, depth) => sum + Object.keys(BLUEPRINTS[depth] ?? {}).length, 0)

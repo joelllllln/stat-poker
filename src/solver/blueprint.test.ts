@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { freshDeck, parseCards, Rng, type Card } from '../engine/cards'
 import { applyAction, startHand, startHandWithDeck } from '../engine/hand'
 import type { Action, HandState } from '../engine/types'
-import { BLUEPRINT, BLUEPRINT_EXPLOITABILITY } from './blueprint-table'
+import { BLUEPRINTS, BLUEPRINT_DEPTHS, BLUEPRINT_EXPLOITABILITY } from './blueprint-table'
 import { blueprintSize, classOf, lookupPreflop, toHeadsUpState } from './blueprint'
 import { FOLD, RAISE } from './preflop'
 
@@ -48,8 +48,8 @@ describe('recognising the solved game inside a six-handed hand', () => {
     const state = foldedToTheBlinds()
     expect(state.toAct).toBe(1) // the small blind
 
-    const translated = toHeadsUpState(state, state.toAct!)
-    expect(translated).not.toBeNull()
+    const translated = toHeadsUpState(state, state.toAct!)?.state
+    expect(translated).not.toBeUndefined()
     // Seat 0 of the solve is always the small blind, whatever seat it sat in.
     expect(translated!.toAct).toBe(0)
     expect(translated!.committed[0]).toBeCloseTo(0.5, 6)
@@ -57,13 +57,13 @@ describe('recognising the solved game inside a six-handed hand', () => {
   })
 
   it('measures the pot in big blinds, not chips', () => {
-    const translated = toHeadsUpState(foldedToTheBlinds(), 1)!
+    const translated = toHeadsUpState(foldedToTheBlinds(), 1)!.state
     expect(translated.currentBet).toBe(1)
   })
 
   it('follows the action to the big blind', () => {
     const raised = applyAction(foldedToTheBlinds(), { type: 'raise', to: 5 })
-    const translated = toHeadsUpState(raised, raised.toAct!)!
+    const translated = toHeadsUpState(raised, raised.toAct!)!.state
     expect(translated.toAct).toBe(1) // the big blind now decides
     expect(translated.raiseCount).toBe(1)
     expect(translated.currentBet).toBe(2.5)
@@ -149,7 +149,7 @@ describe('the advice it gives', () => {
 
   it('reports how solved its advice is', () => {
     const advice = adviceFor(smallBlindHolding('Ah As'))!
-    expect(advice.exploitability).toBe(BLUEPRINT_EXPLOITABILITY)
+    expect(advice.exploitability).toBe(BLUEPRINT_EXPLOITABILITY[advice.stack])
     expect(advice.exploitability).toBeLessThan(0.01)
   })
 
@@ -174,10 +174,58 @@ describe('the advice it gives', () => {
     const state = sixMax()
     expect(lookupPreflop(state, state.toAct!)).toBeNull()
   })
+
+  it('answers from the depth nearest what is actually behind', () => {
+    // 200 chips at 1/2 is a hundred blinds; 80 is forty.
+    for (const [stack, depth] of [
+      [200, 100],
+      [80, 40],
+      [140, 70],
+      [300, 150],
+    ] as const) {
+      const state = foldedToTheBlinds(stack, ['Ah As'])
+      const advice = lookupPreflop(state, state.toAct!)
+      expect(advice, `${stack} chips`).not.toBeNull()
+      expect(advice!.stack, `${stack} chips`).toBe(depth)
+    }
+  })
+
+  it('says nothing at a depth it has not solved', () => {
+    // Six hundred blinds is a different game from any of them, and the honest
+    // answer is that this one was not solved.
+    const state = foldedToTheBlinds(1_200, ['Ah As'])
+    expect(lookupPreflop(state, state.toAct!)).toBeNull()
+  })
+
+  it('reads the depth off the shorter stack', () => {
+    // One seat covering the other by miles does not make it a deep game: only
+    // the shorter stack can be lost, and that is the game being played.
+    const state = play(
+      startHandWithDeck(
+        {
+          seats: [
+            { name: 'BTN', stack: 2_000 },
+            { name: 'BB', stack: 80 },
+          ],
+          buttonSeat: 0,
+          smallBlind: 1,
+          bigBlind: 2,
+        },
+        (() => {
+          const chosen = parseCards('Ah As')
+          return [...chosen, ...freshDeck().filter((c) => !chosen.includes(c))]
+        })(),
+      ),
+      [],
+    )
+    const advice = lookupPreflop(state, state.toAct!)
+    expect(advice).not.toBeNull()
+    expect(advice!.stack).toBe(40) // the short stack's game, not the deep one's
+  })
 })
 
 describe('the shipped blueprint', () => {
-  const entries = Object.entries(BLUEPRINT)
+  const entries = BLUEPRINT_DEPTHS.flatMap((depth) => Object.entries(BLUEPRINTS[depth] ?? {}))
 
   it('covers the tree', () => {
     expect(blueprintSize()).toBeGreaterThan(500)
@@ -206,7 +254,15 @@ describe('the shipped blueprint', () => {
   })
 
   it('was solved close enough to equilibrium to be worth quoting', () => {
-    expect(BLUEPRINT_EXPLOITABILITY).toBeLessThan(0.001)
-    expect(BLUEPRINT_EXPLOITABILITY).toBeGreaterThanOrEqual(0)
+    for (const depth of BLUEPRINT_DEPTHS) {
+      expect(BLUEPRINT_EXPLOITABILITY[depth], `${depth}bb`).toBeLessThan(0.001)
+      expect(BLUEPRINT_EXPLOITABILITY[depth], `${depth}bb`).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('solves every depth it offers', () => {
+    for (const depth of BLUEPRINT_DEPTHS) {
+      expect(Object.keys(BLUEPRINTS[depth] ?? {}).length, `${depth}bb`).toBeGreaterThan(300)
+    }
   })
 })
