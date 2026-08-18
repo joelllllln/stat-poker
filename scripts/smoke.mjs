@@ -9,6 +9,7 @@
 
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 
 const URL = process.env.SMOKE_URL ?? 'http://localhost:4173'
@@ -66,11 +67,92 @@ await page.waitForTimeout(500)
 const body = (await page.locator('body').innerText()).toLowerCase()
 check('a hand is in progress', /pot \d+/.test(body))
 check('the table shows the seats and the button', /you\s+btn|you\s+sb|you\s+bb|you\s+utg|you\s+hj|you\s+co/.test(body))
-check('the odds overlay is showing equity', body.includes('your equity'))
-check('pot odds are on screen', body.includes('need to call'))
-check('modelled ranges are shown', body.includes('modelled ranges'))
-check('the range grid is drawn', body.includes('tightest range'))
-check('outs have a place in the overlay', body.includes('outs'))
+
+/**
+ * Nothing on the table may be drawn on top of anything else on it.
+ *
+ * Checked by measuring rather than by looking: every seat, the board, the pot
+ * and every pile of chips reports its box, and no two boxes may intersect. The
+ * same measurement at three widths is what stands behind the claim that the
+ * layout holds up on a phone.
+ */
+async function overlapsAt(width, height) {
+  await page.setViewportSize({ width, height })
+  await page.waitForTimeout(400)
+  return page.evaluate(() => {
+    const nodes = [
+      ...document.querySelectorAll('[data-seat], [data-board], [data-pot], [data-chips]'),
+    ].filter((node) => node.getClientRects().length > 0 && node.getBoundingClientRect().width > 0)
+
+    const boxes = nodes.map((node) => {
+      const rect = node.getBoundingClientRect()
+      return {
+        name:
+          node.getAttribute('data-seat') ??
+          (node.hasAttribute('data-chips') ? `chips ${node.getAttribute('data-chips')}` : null) ??
+          (node.hasAttribute('data-board') ? 'board' : 'pot'),
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      }
+    })
+
+    const clashes = []
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]
+        const b = boxes[j]
+        // A shared edge is not an overlap; a pixel of shared area is.
+        const overlapX = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+        const overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+        if (overlapX > 1 && overlapY > 1) clashes.push(`${a.name} × ${b.name}`)
+      }
+    }
+
+    return {
+      tracked: boxes.length,
+      clashes,
+      // A page that scrolls sideways is the other way a layout runs into
+      // itself, and it is invisible to a box comparison.
+      overflows: document.documentElement.scrollWidth > window.innerWidth + 1,
+    }
+  })
+}
+
+for (const [name, width, height] of [
+  ['phone', 390, 844],
+  ['tablet', 820, 1180],
+  ['laptop', 1280, 800],
+]) {
+  const measured = await overlapsAt(width, height)
+  check(
+    `nothing overlaps on a ${name} (${measured.tracked} elements measured)`,
+    measured.tracked >= 8 && measured.clashes.length === 0,
+  )
+  if (measured.clashes.length) console.log('   ', measured.clashes.slice(0, 6).join(', '))
+  check(`the ${name} layout does not scroll sideways`, !measured.overflows)
+}
+await page.setViewportSize({ width: 1100, height: 1000 })
+await page.waitForTimeout(300)
+check('the odds panel says what the hand is worth', body.includes('your hand is worth'))
+check('the price is stated in plain words', /the price is (good|bad)|nobody has bet/.test(body))
+check('calling needs a number of its own', body.includes('calling needs'))
+
+// The rest is deliberately folded away: two numbers answer the question being
+// asked, and the working is one click behind them.
+check('the detail is closed until asked for', !body.includes('what they might hold'))
+const more = page.getByText('Show the rest', { exact: false })
+if (await more.count()) {
+  await more.first().click()
+  await page.waitForTimeout(200)
+  const opened = (await page.locator('body').innerText()).toLowerCase()
+  check('outs are there when asked for', opened.includes('cards that put you ahead'))
+  check('modelled ranges are there when asked for', opened.includes('what they might hold'))
+  check('the range grid is drawn', opened.includes('tightest of those ranges'))
+} else {
+  check('the detail can be opened', false)
+}
 
 // Play the hand out by checking or calling until it ends.
 for (let i = 0; i < 40; i++) {
@@ -87,6 +169,46 @@ for (let i = 0; i < 40; i++) {
 await page.waitForTimeout(4000)
 const after = (await page.locator('body').innerText()).toLowerCase()
 check('the hand resolved', /you (won|lost|broke even)/.test(after))
+
+// Showdown is when a seat has the most to say — the cards, what it held, what
+// it won — so it is the moment the boxes are largest and most likely to clash.
+const atShowdown = await overlapsAt(1280, 800)
+check(
+  `nothing overlaps at showdown (${atShowdown.tracked} elements measured)`,
+  atShowdown.clashes.length === 0,
+)
+if (atShowdown.clashes.length) console.log('   ', atShowdown.clashes.slice(0, 6).join(', '))
+
+// One hand shows one betting pattern. The felt is most crowded when several
+// players have chips in front of them at once, so this raises its way through
+// a few hands and measures after every action rather than trusting one moment.
+let busiest = 0
+const acrossHands = []
+for (let hand = 0; hand < 5; hand++) {
+  const deal = page.getByRole('button', { name: 'Deal', exact: true })
+  if (await deal.count()) await deal.first().click()
+  for (let step = 0; step < 8; step++) {
+    const raise = page.getByRole('button', { name: /^(Raise to|Bet) / })
+    const call = page.getByRole('button', { name: /^Call/ })
+    const checkButton = page.getByRole('button', { name: 'Check', exact: true })
+    if (step === 0 && (await raise.count())) await raise.first().click()
+    else if (await checkButton.count()) await checkButton.first().click()
+    else if (await call.count()) await call.first().click()
+    else break
+
+    const measured = await overlapsAt(1280, 800)
+    busiest = Math.max(busiest, measured.tracked)
+    acrossHands.push(...measured.clashes)
+  }
+}
+check(
+  `nothing overlaps while the betting runs (up to ${busiest} elements on the felt)`,
+  acrossHands.length === 0 && busiest >= 10,
+)
+if (acrossHands.length) console.log('   ', [...new Set(acrossHands)].slice(0, 6).join(', '))
+
+await page.setViewportSize({ width: 1100, height: 1000 })
+await page.waitForTimeout(300)
 check('the running record is beside the table', after.includes('this sitting'))
 check('the post-hand review appeared', after.includes('review'))
 check('the run-it-again spread appeared', /run it [\d,]+ times/.test(after))
@@ -160,7 +282,7 @@ if (await solveButton.count()) {
 }
 
 // Predict-then-reveal: the guess has to be asked for before the answer shows.
-await page.getByRole('button', { name: /^guess$/i }).click()
+await page.getByRole('button', { name: 'Guess first', exact: true }).click()
 await page.getByRole('button', { name: 'Deal', exact: true }).click()
 await page.waitForTimeout(1200)
 const predicting = (await page.locator('body').innerText()).toLowerCase()
@@ -175,7 +297,7 @@ if (await guessButton.count()) {
   await page.waitForTimeout(700)
   const revealed = (await page.locator('body').innerText()).toLowerCase()
   check('the guess is scored against the truth', /you guessed 40%/.test(revealed))
-  check('the equity appears once guessed', revealed.includes('your equity'))
+  check('the equity appears once guessed', revealed.includes('your hand is worth'))
 } else {
   check('predict mode offers guesses', false)
 }
@@ -190,7 +312,7 @@ check(
 // Metrics over time: the whole point of recording hands is that the record
 // outlives the tab. Play a handful more, reload, and the statistics must
 // describe every hand rather than restarting from zero.
-await page.getByRole('button', { name: 'Off', exact: true }).click()
+await page.getByRole('button', { name: 'Hide', exact: true }).click()
 for (let hand = 0; hand < 30; hand++) {
   const deal = page.getByRole('button', { name: 'Deal', exact: true })
   if (await deal.count()) await deal.first().click()
@@ -235,6 +357,34 @@ check(
   'verdicts were remembered rather than recomputed from nothing',
   /graded hands|bb\/100 given up/.test(reloaded),
 )
+
+// The backup: local-first is only a promise if the hands can leave.
+await page.getByRole('button', { name: 'Progress', exact: true }).click()
+await page.waitForTimeout(300)
+const download = await Promise.all([
+  page.waitForEvent('download'),
+  page.getByRole('button', { name: 'Save a copy', exact: true }).click(),
+]).then(([event]) => event)
+const backup = await download.path()
+const saved = JSON.parse(readFileSync(backup, 'utf8'))
+check(
+  `the backup holds every hand (${saved.hands?.length ?? 0})`,
+  Array.isArray(saved.hands) && saved.hands.length === played,
+)
+
+// And loading it back must not double the history it is meant to protect.
+await page.setInputFiles('input[type=file]', backup)
+await page.waitForTimeout(1200)
+const afterLoad = await page.evaluate(() => new Promise((resolve) => {
+  const request = indexedDB.open('stat-poker')
+  request.onsuccess = () => {
+    const db = request.result
+    const count = db.transaction('hands').objectStore('hands').count()
+    count.onsuccess = () => resolve(count.result)
+  }
+  request.onerror = () => resolve(-1)
+}))
+check(`loading the same backup twice changes nothing (${afterLoad})`, afterLoad === played)
 
 await page.screenshot({ path: 'screenshot.png', fullPage: true })
 check('no console errors', errors.length === 0)

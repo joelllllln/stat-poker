@@ -342,6 +342,44 @@ describe('the store', () => {
     }
   })
 
+  it('will not double a history when the same backup is loaded twice', async () => {
+    // Somebody who clicks load twice, or who keeps two copies of the same
+    // file, must not end up with every hand counted twice.
+    const source = new MemoryHandStore()
+    const session = await playSession(4)
+    await source.putMany(session.history.map((record, i) => toStored(record, 1_000 + i)))
+    await source.putEstimates([
+      { handNumber: 1, street: 'flop', guess: 35, actual: 41, boardSize: 3 },
+    ])
+
+    const backup = await exportStore(source)
+    const destination = new MemoryHandStore()
+
+    const first = await importIntoStore(destination, backup)
+    const second = await importIntoStore(destination, backup)
+
+    expect(first.hands).toHaveLength(4)
+    expect(second.hands).toHaveLength(0)
+    expect(second.estimates).toHaveLength(0)
+    expect(await destination.count()).toBe(4)
+    expect(await destination.allEstimates()).toHaveLength(1)
+  })
+
+  it('still takes hands it has not seen from a second file', async () => {
+    const destination = new MemoryHandStore()
+    const one = new MemoryHandStore()
+    const two = new MemoryHandStore()
+    const session = await playSession(6)
+    await one.putMany(session.history.slice(0, 3).map((r, i) => toStored(r, 2_000 + i)))
+    await two.putMany(session.history.slice(3).map((r, i) => toStored(r, 5_000 + i)))
+
+    await importIntoStore(destination, await exportStore(one))
+    const second = await importIntoStore(destination, await exportStore(two))
+
+    expect(second.hands).toHaveLength(3)
+    expect(await destination.count()).toBe(6)
+  })
+
   it('recomputes statistics on read, so improvements apply to old hands', async () => {
     const store = new MemoryHandStore()
     const session = await playSession(4)

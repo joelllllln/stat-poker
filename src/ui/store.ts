@@ -175,6 +175,11 @@ export const useStore = create<Store>((set, get) => {
     void handStore
       .putMany(stored)
       .catch((error: unknown) => console.warn('Could not save hand history', error))
+
+    // The count is what the screen reports as "stored in this browser", so it
+    // has to grow as hands are played rather than only at load: a record that
+    // says zero while you are playing reads as a record that is not being kept.
+    set((s) => ({ storedHands: s.storedHands + stored.length }))
     void fillGrades()
   }
 

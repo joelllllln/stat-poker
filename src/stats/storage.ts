@@ -8,6 +8,7 @@
  */
 
 import type { GradedDecision } from '../coach/grade'
+import { handKey } from './archive'
 import type { Estimate } from './estimates'
 import { exportHands, importHands, type StoredHand } from './serialize'
 
@@ -273,7 +274,24 @@ export async function importIntoStore(
   json: string,
 ): Promise<{ hands: StoredHand[]; estimates: Estimate[] }> {
   const { hands, estimates } = importHands(json)
-  await store.putMany(hands)
-  await store.putEstimates(estimates)
-  return { hands, estimates }
+
+  // Loading the same backup twice is a thing people do, and doubling every
+  // hand would quietly ruin the statistics it exists to protect. Hands carry
+  // an identity, so they are matched on it.
+  const [storedHands, storedEstimates] = await Promise.all([store.all(), store.allEstimates()])
+  const seen = new Set(storedHands.map(handKey))
+  const freshHands = hands.filter((hand) => !seen.has(handKey(hand)))
+
+  // Guesses carry no identity of their own, so two records that agree in every
+  // field are treated as the same guess. That is the lesser mistake: a guess
+  // counted once when it should have been twice moves an average slightly,
+  // while a whole history counted twice moves everything.
+  const fingerprint = (estimate: Estimate) =>
+    `${estimate.handNumber}:${estimate.street}:${estimate.guess}:${estimate.actual}:${estimate.boardSize}`
+  const known = new Set(storedEstimates.map(fingerprint))
+  const freshEstimates = estimates.filter((estimate) => !known.has(fingerprint(estimate)))
+
+  await store.putMany(freshHands)
+  await store.putEstimates(freshEstimates)
+  return { hands: freshHands, estimates: freshEstimates }
 }

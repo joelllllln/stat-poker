@@ -99,7 +99,7 @@ export function ActionBar({
   if (!yourTurn || hero === undefined || state === null) {
     const waiting = state !== null && state.result === null
     return (
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 shadow-lg shadow-black/40 sm:bg-slate-950/80 sm:shadow-none">
         <span className="text-xs text-slate-500">
           {state === null
             ? 'Six-max, no-limit hold’em. You are at the bottom of the table.'
@@ -122,7 +122,7 @@ export function ActionBar({
     'flex-1 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed'
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/80 p-3">
+    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-3 shadow-lg shadow-black/40 sm:bg-slate-950/80 sm:shadow-none">
       {raise && (
         <div className="flex flex-wrap items-center gap-2">
           {SIZINGS.map((s) => {

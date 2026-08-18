@@ -6,28 +6,49 @@ import { CardBack, CardRow, CardSlot, PlayingCard } from './Cards'
 /**
  * The table.
  *
- * Laid out the way an online client lays one out — an oval of felt inside a
- * rail, the person at the bottom, everyone else around it, the board and the
- * pot in the middle — because that arrangement carries information: who is next
- * to act, who is in the hand, and how much is in front of each player, all
- * readable without reading a word.
+ * Laid out the way an online client lays one out — an oval of felt, the person
+ * at the bottom, everyone else around it, the board and the pot in the middle —
+ * because that arrangement carries information: who is next to act, who is in
+ * the hand, and how much is in front of each player, all readable without
+ * reading a word.
  *
- * Seats are placed as percentages of the felt rather than in a grid, so the
- * table keeps its shape at any size.
+ * **Nothing overlaps at any width, by construction.** Every size on the felt is
+ * given in container units, so the whole arrangement scales with the felt
+ * rather than reflowing: seats that clear each other at one width clear each
+ * other at every width. Below the width where that would leave the text too
+ * small to read, the oval is abandoned entirely for a plain stacked layout with
+ * no absolute positioning in it — a small screen is a reason to change the
+ * arrangement, not to shrink it until it collides.
  */
 
 /** Where each seat sits, clockwise from the person's own seat at the bottom. */
 const SEAT_SPOTS = [
-  { left: 50, top: 88 },
-  { left: 12, top: 68 },
-  { left: 11, top: 30 },
-  { left: 50, top: 13 },
-  { left: 89, top: 30 },
-  { left: 88, top: 68 },
+  { left: 50, top: 82 },
+  { left: 15, top: 65 },
+  { left: 15, top: 31 },
+  { left: 50, top: 15 },
+  { left: 85, top: 31 },
+  { left: 85, top: 65 },
 ] as const
 
-/** Where a seat's chips sit: between the seat and the middle of the table. */
-const towardCentre = (spot: { left: number; top: number }, by = 0.34) => ({
+/**
+ * Where each seat's chips sit: between the seat and the board.
+ *
+ * Given per seat rather than computed as a fraction of the way to the middle,
+ * because the seats are not the same distance from it: the same fraction put
+ * the top seat's chips underneath the top seat's own plate.
+ */
+const CHIP_SPOTS = [
+  { left: 50, top: 62.5 },
+  { left: 30, top: 67 },
+  { left: 30, top: 27 },
+  { left: 50, top: 33 },
+  { left: 70, top: 27 },
+  { left: 70, top: 67 },
+] as const
+
+/** The dealer button rides just inside its seat, toward the middle. */
+const towardCentre = (spot: { left: number; top: number }, by: number) => ({
   left: spot.left + (50 - spot.left) * by,
   top: spot.top + (50 - spot.top) * by,
 })
@@ -39,28 +60,21 @@ const STREET_LABEL: Record<Street, string> = {
   river: 'River',
 }
 
-/** A stack of chips, drawn as chips rather than written as a number alone. */
-function Chips({ amount }: { amount: number }) {
-  const height = Math.min(4, Math.max(1, Math.ceil(Math.log10(amount + 1))))
-
-  return (
-    <div className="chip-in flex items-center gap-1.5">
-      <div className="relative h-4 w-4">
-        {Array.from({ length: height }, (_, i) => (
-          <span
-            key={i}
-            className="absolute left-0 h-2.5 w-4 rounded-full border border-black/40"
-            style={{
-              bottom: i * 3,
-              background: ['#e11d48', '#0ea5e9', '#22c55e', '#f5f5f4'][i % 4],
-              boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
-            }}
-          />
-        ))}
-      </div>
-      <span className="font-mono text-xs font-semibold text-amber-100 drop-shadow">{amount}</span>
-    </div>
-  )
+/**
+ * Sizes on the felt, as a share of its width.
+ *
+ * These are the numbers that keep the seats apart, and they were measured
+ * rather than guessed: the browser test reports every box on the felt and
+ * fails if any two of them share a pixel. The tightest corridor is the one
+ * between the pot and the player's own seat, which is why the chips there are
+ * small and the hero's cards are not as large as they could be.
+ */
+const FELT = {
+  seatWidth: 17,
+  heroWidth: 19,
+  villainCard: 4.4,
+  heroCard: 5.4,
+  boardCard: 5.8,
 }
 
 /** What a seat did last on this street, in the words a client would use. */
@@ -83,21 +97,24 @@ function lastActionLabel(state: HandState, seat: number): string | null {
   return null
 }
 
-function SeatView({
-  state,
-  seat,
-  isHero,
-  botName,
-  spot,
-  won,
-}: {
+interface SeatProps {
   state: HandState
   seat: number
   isHero: boolean
   botName: string | null
-  spot: { left: number; top: number }
   won: number
-}) {
+  /** CSS lengths, so the same seat renders on the felt and in the stack. */
+  scale: { plate: string; card: string; text: string; small: string }
+}
+
+/**
+ * One player.
+ *
+ * Everything a seat has to say lives inside its own box — cards, name, stack,
+ * what they just did, what they won — so a seat can never write on top of
+ * anything outside itself.
+ */
+function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
   const s = state.seats[seat]!
   const toAct = state.toAct === seat
   const folded = s.status === 'folded'
@@ -108,79 +125,137 @@ function SeatView({
 
   return (
     <div
-      className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-      style={{ left: `${spot.left}%`, top: `${spot.top}%` }}
+      data-seat={s.name}
+      className={`flex flex-col items-center rounded-xl border backdrop-blur-sm transition ${
+        folded
+          ? 'border-white/5 bg-black/40 opacity-50'
+          : won > 0
+            ? 'seat-won border-emerald-400/70 bg-emerald-950/80'
+            : toAct
+              ? 'to-act border-amber-300/80 bg-slate-900/90'
+              : 'border-white/10 bg-slate-900/85'
+      }`}
+      style={{ width: scale.plate, padding: `calc(${scale.plate} * 0.045)`, gap: '2px' }}
     >
-      <div
-        className={`flex flex-col items-center gap-1 rounded-xl border px-2.5 py-1.5 backdrop-blur-sm transition ${
-          folded
-            ? 'border-white/5 bg-black/30 opacity-45'
-            : won > 0
-              ? 'seat-won border-emerald-400/70 bg-emerald-950/70'
-              : toAct
-                ? 'to-act border-amber-300/80 bg-slate-900/85'
-                : 'border-white/10 bg-slate-900/75'
-        }`}
-      >
-        {/* Cards sit above the plate, the way they do on a table. */}
-        <div className="flex gap-0.5">
-          {s.holeCards && !folded ? (
-            showCards ? (
-              <CardRow cards={s.holeCards} size={isHero ? 'lg' : 'xs'} dealt />
-            ) : (
-              <>
-                <CardBack size="xs" dealt />
-                <CardBack size="xs" dealt delay={70} />
-              </>
-            )
+      <div className="flex" style={{ gap: '2px' }}>
+        {s.holeCards && !folded ? (
+          showCards ? (
+            <CardRow cards={s.holeCards} width={scale.card} dealt />
           ) : (
-            <div className="h-9 text-[10px] leading-9 text-slate-500">folded</div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
+            <>
+              <CardBack width={scale.card} dealt />
+              <CardBack width={scale.card} dealt delay={70} />
+            </>
+          )
+        ) : (
           <div
-            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
-              isHero ? 'bg-sky-700 text-white' : 'bg-slate-700 text-slate-200'
-            }`}
+            className="flex items-center justify-center text-slate-600"
+            style={{ height: `calc(${scale.card} * 1.4)`, fontSize: scale.small }}
             aria-hidden
           >
-            {s.name.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="leading-tight">
-            <div className="flex items-center gap-1 text-xs font-medium">
-              {s.name}
-              <span className="text-[9px] uppercase tracking-wide text-slate-500">
-                {positionName(seat, state.buttonSeat, state.seats.length)}
-              </span>
-            </div>
-            <div className="font-mono text-[11px] text-emerald-200/90">
-              {s.status === 'allin' ? 'all in' : s.stack}
-            </div>
-          </div>
-        </div>
-
-        {botName && !folded && (
-          <div className="text-[9px] uppercase tracking-wide text-slate-500">{botName}</div>
-        )}
-
-        {won > 0 && (
-          <div className="font-mono text-[11px] font-semibold text-emerald-300">+{won}</div>
-        )}
-        {showCards && handValue !== null && handValue !== undefined && (
-          <div className="max-w-32 truncate text-[10px] text-slate-400">
-            {describeHand(handValue)}
+            —
           </div>
         )}
       </div>
 
-      {action !== null && !over && (
-        <div className="mt-1 flex justify-center">
-          <span className="rounded-full bg-black/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
-            {action}
-          </span>
-        </div>
-      )}
+      <div className="w-full truncate text-center font-medium" style={{ fontSize: scale.text }}>
+        {s.name}{' '}
+        <span className="text-slate-500" style={{ fontSize: scale.small }}>
+          {positionName(seat, state.buttonSeat, state.seats.length)}
+        </span>
+      </div>
+
+      <div
+        className="font-mono text-emerald-200/90"
+        style={{ fontSize: scale.text }}
+      >
+        {s.status === 'allin' ? 'all in' : s.stack}
+      </div>
+
+      {/* One line that changes rather than a stack of badges: what this seat
+          did, or what it won, or what it held. */}
+      <div
+        className="w-full truncate text-center"
+        style={{ fontSize: scale.small, minHeight: `calc(${scale.small} * 1.4)` }}
+      >
+        {won > 0 ? (
+          <span className="font-mono font-semibold text-emerald-300">+{won}</span>
+        ) : showCards && handValue !== null && handValue !== undefined ? (
+          <span className="text-slate-400">{describeHand(handValue)}</span>
+        ) : folded ? (
+          <span className="uppercase tracking-wide text-slate-500">Folded</span>
+        ) : action !== null && !over ? (
+          <span className="uppercase tracking-wide text-slate-300">{action}</span>
+        ) : botName ? (
+          <span className="uppercase tracking-wide text-slate-500">{botName}</span>
+        ) : (
+          ' '
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Chips in front of a seat: drawn as chips, and labelled as a number. */
+function Chips({ amount, scale }: { amount: number; scale: string }) {
+  return (
+    <div
+      className="chip-in flex items-center rounded-full bg-black/50"
+      style={{ gap: `calc(${scale} * 0.4)`, padding: `calc(${scale} * 0.25) calc(${scale} * 0.5)` }}
+    >
+      <span
+        className="rounded-full border border-black/40 bg-rose-600"
+        style={{ width: scale, height: `calc(${scale} * 0.55)` }}
+        aria-hidden
+      />
+      <span className="font-mono font-semibold text-amber-100" style={{ fontSize: scale }}>
+        {amount}
+      </span>
+    </div>
+  )
+}
+
+function Board({
+  state,
+  cardWidth,
+  potFontSize,
+}: {
+  state: HandState
+  cardWidth: string
+  potFontSize: string
+}) {
+  const over = state.result !== null
+  return (
+    <div className="flex flex-col items-center" style={{ gap: `calc(${cardWidth} * 0.22)` }}>
+      <div data-board className="flex" style={{ gap: `calc(${cardWidth} * 0.14)` }}>
+        {Array.from({ length: 5 }, (_, i) => {
+          const card = state.board[i]
+          return card === undefined ? (
+            <CardSlot key={`slot-${i}`} width={cardWidth} />
+          ) : (
+            <PlayingCard
+              key={card}
+              card={card}
+              width={cardWidth}
+              dealt
+              delay={Math.max(0, i - 2) * 90}
+              // Cards dealt after the betting ended decided the hand without
+              // anybody choosing anything, and are shown as such.
+              dimmed={over && i >= state.result!.runoutFrom}
+            />
+          )
+        })}
+      </div>
+      <div
+        data-pot
+        className="flex items-center gap-2 rounded-full bg-black/50 px-3 py-1"
+        style={{ fontSize: potFontSize }}
+      >
+        <span className="uppercase tracking-[0.18em] text-emerald-200/60">
+          {STREET_LABEL[state.street]}
+        </span>
+        <span className="font-mono text-amber-100">Pot {potSize(state)}</span>
+      </div>
     </div>
   )
 }
@@ -192,15 +267,14 @@ export function Table({ session }: { session: SessionState }) {
 
   if (!state) {
     return (
-      <div className="rail rounded-[46%/32%] p-3">
-        <div className="felt flex aspect-[16/9] items-center justify-center rounded-[46%/32%] text-sm text-emerald-200/50">
-          Press Deal to start.
+      <div className="rail rounded-[12%/22%] p-2 sm:rounded-[46%/32%] sm:p-3">
+        <div className="felt flex aspect-[16/10] items-center justify-center rounded-[10%/20%] px-6 text-center text-sm text-emerald-200/60 sm:aspect-[16/9] sm:rounded-[46%/32%]">
+          Six-max no-limit hold’em. Press Deal to play a hand.
         </div>
       </div>
     )
   }
 
-  const pot = potSize(state)
   const over = state.result !== null
   const wonBySeat = state.seats.map((_, seat) =>
     over
@@ -211,80 +285,138 @@ export function Table({ session }: { session: SessionState }) {
       : 0,
   )
 
+  const seatProps = (seat: number, isHero: boolean): SeatProps => ({
+    state,
+    seat,
+    isHero,
+    botName: session.config.seats[seat]?.bot ?? null,
+    won: wonBySeat[seat]!,
+    scale: isHero
+      ? {
+          plate: `${FELT.heroWidth}cqw`,
+          card: `${FELT.heroCard}cqw`,
+          text: 'clamp(10px, 1.9cqw, 15px)',
+          small: 'clamp(8px, 1.5cqw, 12px)',
+        }
+      : {
+          plate: `${FELT.seatWidth}cqw`,
+          card: `${FELT.villainCard}cqw`,
+          text: 'clamp(9px, 1.7cqw, 14px)',
+          small: 'clamp(8px, 1.4cqw, 11px)',
+        },
+  })
+
+  const others = state.seats.map((s) => s.index).filter((i) => i !== heroSeat)
+
   return (
-    <div className="rail rounded-[46%/32%] p-2 sm:p-3">
-      <div className="felt relative aspect-[16/9] rounded-[46%/32%]">
-        {/* Board and pot, centre stage. */}
-        <div className="absolute left-1/2 top-[46%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
-          <div className="flex gap-1 sm:gap-1.5">
-            {Array.from({ length: 5 }, (_, i) => {
-              const card = state.board[i]
-              return card === undefined ? (
-                <CardSlot key={`slot-${i}`} size="md" />
-              ) : (
-                <PlayingCard
-                  key={card}
-                  card={card}
-                  size="md"
-                  dealt
-                  delay={Math.max(0, i - 2) * 90}
-                  // Cards dealt after the betting ended decided the hand
-                  // without anybody choosing anything, and are shown as such.
-                  dimmed={over && i >= state.result!.runoutFrom}
-                />
-              )
-            })}
+    <>
+      {/* Wide enough for an oval: everything sized against the felt, so the
+          arrangement is the same at every width. */}
+      <div className="rail hidden rounded-[46%/32%] p-3 sm:block">
+        <div className="felt relative aspect-[16/9] rounded-[46%/32%] @container">
+          <div className="absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2">
+            <Board
+              state={state}
+              cardWidth={`${FELT.boardCard}cqw`}
+              potFontSize="clamp(10px, 1.7cqw, 14px)"
+            />
           </div>
-          {/* The street rides with the pot rather than above the board, where
-              it collided with whoever was sitting at the top of the table. */}
-          <div className="flex items-center gap-2 rounded-full bg-black/45 px-3 py-1">
-            <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-200/60">
-              {STREET_LABEL[state.street]}
-            </span>
-            <span className="font-mono text-sm text-amber-100">Pot {pot}</span>
+
+          <DealerButton spot={SEAT_SPOTS[(state.buttonSeat - heroSeat + numSeats) % numSeats]!} />
+
+          {state.seats.map((s) => {
+            const seatIndex = (s.index - heroSeat + numSeats) % numSeats
+            const spot = SEAT_SPOTS[seatIndex]!
+            const chipSpot = CHIP_SPOTS[seatIndex]!
+            return (
+              <div key={s.index}>
+                <div
+                  className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${spot.left}%`, top: `${spot.top}%` }}
+                >
+                  <Seat {...seatProps(s.index, s.index === heroSeat)} />
+                </div>
+                {s.committed > 0 && (
+                  <div
+                    data-chips={s.name}
+                    className="absolute z-0 -translate-x-1/2 -translate-y-1/2"
+                    style={{ left: `${chipSpot.left}%`, top: `${chipSpot.top}%` }}
+                  >
+                    <Chips amount={s.committed} scale="clamp(8px, 1.2cqw, 11px)" />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Too narrow for an oval. The same pieces, stacked in reading order:
+          opponents, then the board, then you. Nothing is positioned, so
+          nothing can land on anything else. */}
+      <div className="rail rounded-2xl p-2 sm:hidden">
+        <div className="felt space-y-3 rounded-xl px-2 py-3 @container">
+          <div className="grid grid-cols-3 gap-1.5">
+            {others.map((seat) => (
+              <div key={seat} className="flex justify-center">
+                <Seat
+                  {...seatProps(seat, false)}
+                  scale={{
+                    plate: '30cqw',
+                    card: '8cqw',
+                    text: 'clamp(10px, 3.2cqw, 14px)',
+                    small: 'clamp(9px, 2.7cqw, 12px)',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <Board state={state} cardWidth="13cqw" potFontSize="clamp(11px, 3.4cqw, 15px)" />
+            {state.seats.some((s) => s.committed > 0) && (
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {state.seats
+                  .filter((s) => s.committed > 0)
+                  .map((s) => (
+                    <div key={s.index} data-chips={s.name} className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-400">{s.name}</span>
+                      <Chips amount={s.committed} scale="11px" />
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-center">
+            <Seat
+              {...seatProps(heroSeat, true)}
+              scale={{
+                plate: '46cqw',
+                card: '13cqw',
+                text: 'clamp(12px, 4cqw, 16px)',
+                small: 'clamp(10px, 3cqw, 13px)',
+              }}
+            />
           </div>
         </div>
-
-        {/* The dealer button, on the rail side of whoever has it. */}
-        <DealerButton
-          spot={SEAT_SPOTS[(state.buttonSeat - heroSeat + numSeats) % numSeats]!}
-        />
-
-        {state.seats.map((s) => {
-          const spot = SEAT_SPOTS[(s.index - heroSeat + numSeats) % numSeats]!
-          const chipSpot = towardCentre(spot)
-          return (
-            <div key={s.index}>
-              <SeatView
-                state={state}
-                seat={s.index}
-                isHero={s.index === heroSeat}
-                botName={session.config.seats[s.index]?.bot ?? null}
-                spot={spot}
-                won={wonBySeat[s.index]!}
-              />
-              {s.committed > 0 && (
-                <div
-                  className="absolute z-0 -translate-x-1/2 -translate-y-1/2"
-                  style={{ left: `${chipSpot.left}%`, top: `${chipSpot.top}%` }}
-                >
-                  <Chips amount={s.committed} />
-                </div>
-              )}
-            </div>
-          )
-        })}
       </div>
-    </div>
+    </>
   )
 }
 
 function DealerButton({ spot }: { spot: { left: number; top: number } }) {
-  const place = towardCentre(spot, 0.18)
+  const place = towardCentre(spot, 0.2)
   return (
     <div
-      className="absolute z-20 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-900 shadow-md"
-      style={{ left: `${place.left + 7}%`, top: `${place.top}%` }}
+      className="absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white font-bold text-slate-900 shadow-md"
+      style={{
+        left: `${place.left + 9}%`,
+        top: `${place.top}%`,
+        width: 'clamp(14px, 2.4cqw, 22px)',
+        height: 'clamp(14px, 2.4cqw, 22px)',
+        fontSize: 'clamp(8px, 1.4cqw, 12px)',
+      }}
       title="Dealer button"
     >
       D

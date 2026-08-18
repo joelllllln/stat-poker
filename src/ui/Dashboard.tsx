@@ -15,6 +15,7 @@ import {
 import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '../coach/leaks'
 import { describeAccuracy, summarise } from '../stats/estimates'
 import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
+import { DataCard } from './DataCard'
 import { LuckChart } from './LuckChart'
 import { allHands } from '../stats/archive'
 import { ARCHIVE_LIMIT, useStore } from './store'
@@ -162,7 +163,23 @@ export function Dashboard({ session }: { session: SessionState }) {
   )
 
   const { records, stats, curve, winrate } = data
-  if (stats.hands === 0) return null
+
+  // An empty screen reads as a broken one. Before there are any hands, say
+  // what will appear here and offer the one thing that is useful now.
+  if (stats.hands === 0) {
+    return (
+      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <h2 className="text-lg font-medium">Nothing to measure yet</h2>
+        <p className="max-w-prose text-sm text-slate-400">
+          Play some hands and this screen fills in: how you play, where the money goes, how
+          both change over time, and how much of your result was the deck rather than you.
+          Every hand is kept in this browser, so the record spans every session rather than
+          restarting each time.
+        </p>
+        <DataCard />
+      </div>
+    )
+  }
 
   // EV given up is filled in by the review panel as hands are graded; until a
   // hand has been graded it contributes nothing rather than a guess.
@@ -291,24 +308,24 @@ export function Dashboard({ session }: { session: SessionState }) {
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatTile
-          label="VPIP"
+          label="Hands played (VPIP)"
           value={`${stats.vpip.toFixed(0)}%`}
           interval={rateInterval(played, stats.hands)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
         <StatTile
-          label="PFR"
+          label="Hands raised (PFR)"
           value={`${stats.pfr.toFixed(0)}%`}
           interval={rateInterval(raised, stats.hands)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
         <StatTile
-          label="WTSD"
+          label="Flops taken to showdown (WTSD)"
           value={`${stats.wtsd.toFixed(0)}%`}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
         <StatTile
-          label="Aggression"
+          label="Bets and raises per call (AF)"
           value={stats.aggressionFactor.toFixed(2)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
@@ -365,6 +382,8 @@ export function Dashboard({ session }: { session: SessionState }) {
         </div>
         <LuckChart actual={curve.actual} adjusted={curve.adjusted} />
       </div>
+
+      <DataCard />
     </div>
   )
 }

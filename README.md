@@ -68,6 +68,12 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
 - **Metrics over time**: the browser test plays thirty hands, reloads the page,
   and requires the dashboard to describe all thirty — the trend across blocks,
   where the money goes, and the verdicts — rather than starting again from zero.
+- **Layout**: every box on the felt — each seat, the board, the pot, every pile
+  of chips — reports its position, and the test fails if any two of them share
+  a pixel. Checked on a phone, a tablet and a laptop, at showdown, and after
+  every action across five hands of betting. "It looked fine" is not a check.
+- **Backup**: a saved file holds every stored hand, and loading the same file
+  twice leaves the history exactly as it was rather than counting it twice.
 - **All-in adjustment**: aces against kings all-in preflop price at the ~82% the
   hand was worth however the board fell, and chips still balance.
 - **River solver**: the fast showdown sweep is checked against a hand-by-hand
@@ -94,6 +100,22 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
 - **Coach**: folding a royal flush grades as a blunder, a correct call grades
   correct whatever the runout did, verdicts are deterministic, and no decision
   is ever offered a bet size that was not legal at the time.
+
+## Reading the screen
+
+Two screens, not one: the **Table**, which is what you are doing, and
+**Progress**, which is why. The table screen shows one sentence about the
+decision in front of you — what your hand is worth against the range still in,
+and what the price demands — with the two numbers behind it and everything else
+folded away under a disclosure. Nine numbers on screen is not more informative
+than two; it is less, because nobody reads nine numbers while deciding whether
+to call.
+
+The felt is drawn in units of its own width, so the arrangement is identical at
+every size rather than reflowing into itself. Below the width where that would
+leave the text too small to read, the oval is dropped for a plain stacked
+layout — a small screen is a reason to change the arrangement, not to shrink it
+until it collides.
 
 ## Keeping score across sessions
 

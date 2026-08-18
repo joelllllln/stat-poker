@@ -48,31 +48,46 @@ function ResultBanner() {
   )
 }
 
+/**
+ * A labelled choice.
+ *
+ * The label is not decoration: a row of unlabelled segmented controls makes
+ * somebody guess what each one governs, and guessing is the opposite of what
+ * this app is for.
+ */
 function Toggle<T extends string>({
   options,
   value,
   onChange,
   label,
+  hint,
 }: {
   options: readonly { value: T; label: string }[]
   value: T
   onChange: (value: T) => void
   label: string
+  hint?: string
 }) {
   return (
-    <div className="flex rounded-lg border border-slate-800 p-0.5 text-xs" aria-label={label}>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          onClick={() => onChange(option.value)}
-          className={`rounded px-2.5 py-1 transition ${
-            value === option.value ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <label className="flex items-center gap-1.5 text-xs" title={hint}>
+      <span className="text-slate-500">{label}</span>
+      <span className="flex rounded-lg border border-slate-800 p-0.5">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            aria-pressed={value === option.value}
+            className={`rounded px-2.5 py-1 transition ${
+              value === option.value
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </span>
+    </label>
   )
 }
 
@@ -101,34 +116,54 @@ export function App() {
         <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-semibold tracking-tight">stat-poker</h1>
           <p className="text-xs text-slate-500">
-            Hand {session.handNumber} · {session.config.smallBlind}/{session.config.bigBlind}{' '}
-            · stack {session.stacks[heroSeat]}
+            Hand {session.handNumber} · blinds {session.config.smallBlind}/
+            {session.config.bigBlind} · your stack {session.stacks[heroSeat]}
             {storedHands > 0 && ` · ${storedHands.toLocaleString('en-US')} hands recorded`}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Toggle
-            label="Screen"
-            value={screen}
-            onChange={setScreen}
-            options={[
+        {/* The two screens are a choice about where you are; the rest are
+            settings for the table. Kept apart so they do not read as one row
+            of six equal buttons. */}
+        <nav className="flex rounded-lg border border-slate-800 p-0.5 text-sm" aria-label="Screen">
+          {(
+            [
               { value: 'table', label: 'Table' },
               { value: 'progress', label: 'Progress' },
-            ]}
-          />
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setScreen(tab.value)}
+              aria-current={screen === tab.value ? 'page' : undefined}
+              className={`rounded px-4 py-1.5 transition ${
+                screen === tab.value
+                  ? 'bg-slate-700 font-medium text-white'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {screen === 'table' && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <Toggle
-            label="Odds overlay"
+            label="Odds"
+            hint="Show the numbers while you decide, ask you to guess them first, or hide them."
             value={hudLevel}
             onChange={setHudLevel}
             options={[
-              { value: 'full', label: 'Odds' },
-              { value: 'predict', label: 'Guess' },
-              { value: 'off', label: 'Off' },
+              { value: 'full', label: 'Show' },
+              { value: 'predict', label: 'Guess first' },
+              { value: 'off', label: 'Hide' },
             ]}
           />
           <Toggle
-            label="Speed"
+            label="Bot speed"
+            hint="How long the other players take to act."
             value={speed}
             onChange={(value: Speed) => setSpeed(value)}
             options={[
@@ -136,13 +171,20 @@ export function App() {
               { value: 'fast', label: 'Fast' },
             ]}
           />
+          {/* Only worth saying where there is a keyboard to press. */}
+          <span className="hidden text-xs text-slate-600 sm:inline">
+            Keys: F fold · C check or call · R raise · A all in · Space deal
+          </span>
         </div>
-      </header>
+      )}
 
       {screen === 'table' ? (
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-3">
             <Table session={session} />
+            {/* Deliberately in the flow rather than floating: a bar that
+                hovers over the page covers whatever is under it, and the
+                controls sit directly below the table anyway. */}
             <ActionBar state={state} heroSeat={heroSeat} />
             <ResultBanner />
             {handOver && session.history.length > 0 && (
