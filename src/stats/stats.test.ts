@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { legalActions } from '../engine/hand'
-import { Rng } from '../engine/cards'
+import { applyAction, legalActions, startHandWithDeck } from '../engine/hand'
+import { freshDeck, parseCards, Rng, type Card } from '../engine/cards'
+import type { Action, HandState } from '../engine/types'
 import {
   createSession,
   defaultSessionConfig,
@@ -10,7 +11,7 @@ import {
   startNextHand,
   type SessionState,
 } from '../game/session'
-import { aggregate } from './hand-stats'
+import { aggregate, deriveHandStats } from './hand-stats'
 import {
   STREET_SAMPLE,
   buildProfile,
@@ -393,5 +394,117 @@ describe('the store', () => {
     const live = aggregate(recordsForSeat(session, session.config.heroSeat), 2)
 
     expect(fromStorage).toEqual(live)
+  })
+})
+
+/**
+ * The definitions behind the familiar tracker numbers.
+ *
+ * These are the denominators, and getting one wrong does not produce an
+ * obviously broken figure — it produces a plausible one that means something
+ * else. A player comparing their numbers with a friend's is entitled to have
+ * them measure the same thing.
+ */
+describe('street participation', () => {
+  const deck = (holeCards: string[], board: string): Card[] => {
+    const chosen = [...holeCards.flatMap((h) => parseCards(h)), ...parseCards(board)]
+    return [...chosen, ...freshDeck().filter((c) => !chosen.includes(c))]
+  }
+
+  const seats = (stacks: number[]) => ({
+    seats: stacks.map((stack, i) => ({ name: `P${i}`, stack })),
+    buttonSeat: 0,
+    smallBlind: 1,
+    bigBlind: 2,
+  })
+
+  const play = (state: HandState, actions: Action[]): HandState =>
+    actions.reduce((s, action) => applyAction(s, action), state)
+
+  it('counts a seat that saw the flop and folded on it', () => {
+    // Three limps, then the big blind folds to a bet on the flop. It saw the
+    // flop — that is what the denominator of showdown rates has to mean.
+    const state = play(
+      startHandWithDeck(seats([200, 200, 200]), deck(['Ac Ad', 'Kc Kd', '2c 2d'], 'Ah 7s 4d 9c 8h')),
+      [
+        { type: 'call' },
+        { type: 'call' },
+        { type: 'check' }, // to the flop three-handed
+        { type: 'raise', to: 6 },
+        { type: 'fold' },
+        { type: 'call' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+      ],
+    )
+    const stats = deriveHandStats(state)
+    expect(stats[2]!.sawFlop).toBe(true)
+    expect(stats[2]!.wentToShowdown).toBe(false)
+    expect(aggregate(stats, 2).wtsd).toBeCloseTo((2 / 3) * 100, 6)
+  })
+
+  it('does not count a seat that folded before the flop was dealt', () => {
+    const state = play(
+      startHandWithDeck(seats([200, 200, 200]), deck(['Ac Ad', 'Kc Kd', '2c 2d'], 'Ah 7s 4d 9c 8h')),
+      [
+        { type: 'fold' }, // button folds; the blinds play on to a showdown
+        { type: 'call' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+        { type: 'check' },
+      ],
+    )
+    const stats = deriveHandStats(state)
+    expect(stats[0]!.sawFlop).toBe(false)
+    expect(state.board).toHaveLength(5) // the flop came, just not for that seat
+  })
+
+  it('calls the second raise of the round the three-bet, and nothing else', () => {
+    const state = play(
+      startHandWithDeck(seats([400, 400, 400]), deck(['Ac Ad', 'Kc Kd', '2c 2d'], 'Ah 7s 4d 9c 8h')),
+      [
+        { type: 'raise', to: 6 }, // button opens
+        { type: 'raise', to: 18 }, // small blind three-bets
+        { type: 'fold' },
+        { type: 'raise', to: 54 }, // button four-bets
+        { type: 'fold' },
+      ],
+    )
+    const stats = deriveHandStats(state)
+    expect(stats[1]!.threeBet).toBe(true)
+    expect(stats[0]!.threeBet).toBe(false) // the four-bet is not a three-bet
+    expect(stats[0]!.pfr).toBe(true)
+  })
+
+  it('counts a limper who then faced a raise as having faced one', () => {
+    const state = play(
+      startHandWithDeck(seats([200, 200, 200]), deck(['Ac Ad', 'Kc Kd', '2c 2d'], 'Ah 7s 4d 9c 8h')),
+      [
+        { type: 'call' }, // button limps
+        { type: 'raise', to: 10 }, // small blind raises behind
+        { type: 'fold' },
+        { type: 'fold' }, // button gives up the limp
+      ],
+    )
+    const stats = deriveHandStats(state)
+    expect(stats[0]!.facedPreflopRaise).toBe(true)
+    expect(stats[0]!.foldedToPreflopRaise).toBe(true)
+  })
+
+  it('keeps showdowns inside the flops they came from, over a played session', async () => {
+    const session = await playSession(60, 77)
+    for (const record of session.history) {
+      for (const seat of record.stats) {
+        if (seat.wentToShowdown) expect(seat.sawFlop).toBe(true)
+      }
+    }
+    const stats = aggregate(recordsForSeat(session, session.config.heroSeat), 2)
+    expect(stats.wtsd).toBeLessThanOrEqual(100)
   })
 })

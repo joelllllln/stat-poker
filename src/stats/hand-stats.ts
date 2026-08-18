@@ -13,11 +13,18 @@ export interface SeatHandStats {
   vpip: boolean
   /** Raised preflop. */
   pfr: boolean
-  /** Reraised preflop. */
+  /** Made the second raise of the preflop round, which is what a 3-bet is. */
   threeBet: boolean
   /** Faced a preflop raise at all, which is the denominator for defence stats. */
   facedPreflopRaise: boolean
   foldedToPreflopRaise: boolean
+  /**
+   * Was still in the hand when the flop was dealt.
+   *
+   * This is a fact about when the seat left, which lives in the actions —
+   * reading it off the seat's status at the end instead would exclude everyone
+   * who saw a flop and later folded, which is most of the people who see one.
+   */
   sawFlop: boolean
   wentToShowdown: boolean
   wonAtShowdown: boolean
@@ -40,29 +47,45 @@ export function deriveHandStats(state: HandState): SeatHandStats[] {
   if (state.result === null) throw new Error('Hand is not complete')
   const result = state.result
 
+  // Whose raise was the second of the preflop round: that seat, and only that
+  // seat, three-bet. A fourth bet by the original raiser is not a 3-bet.
+  const preflopRaises = state.actions.filter(
+    (a) => a.street === 'preflop' && a.action.type === 'raise',
+  )
+  const threeBettor = preflopRaises[1]?.seat ?? null
+
   return state.seats.map((seat) => {
     const mine = state.actions.filter((a) => a.seat === seat.index)
     const preflop = mine.filter((a) => a.street === 'preflop')
     const postflop = mine.filter((a) => POSTFLOP.includes(a.street))
 
-    // A raise before this seat's first preflop action means it faced one.
-    const firstIndex = state.actions.findIndex((a) => a.seat === seat.index)
-    const facedPreflopRaise = state.actions
-      .slice(0, firstIndex < 0 ? state.actions.length : firstIndex)
-      .some((a) => a.street === 'preflop' && a.action.type === 'raise')
+    // Decisions this seat took with a raise already outstanding. A player who
+    // limped and then had the pot raised behind them faced a raise every bit
+    // as much as one who faced it first time round.
+    const facingRaise = state.actions.filter(
+      (entry, index) =>
+        entry.seat === seat.index &&
+        entry.street === 'preflop' &&
+        state.actions
+          .slice(0, index)
+          .some((a) => a.street === 'preflop' && a.action.type === 'raise'),
+    )
+    const facedPreflopRaise = facingRaise.length > 0
 
     const vpip = preflop.some((a) => a.action.type === 'call' || a.action.type === 'raise')
     const pfr = preflop.some((a) => a.action.type === 'raise')
     const showedDown = result.showdown && seat.status !== 'folded'
+    // The street this seat gave up on, which is what decides the streets it saw.
+    const foldedOn = mine.find((a) => a.action.type === 'fold')?.street ?? null
 
     return {
       seat: seat.index,
       vpip,
       pfr,
-      threeBet: facedPreflopRaise && pfr,
+      threeBet: threeBettor === seat.index,
       facedPreflopRaise,
-      foldedToPreflopRaise: facedPreflopRaise && preflop.some((a) => a.action.type === 'fold'),
-      sawFlop: state.board.length >= 3 && seat.status !== 'folded',
+      foldedToPreflopRaise: facingRaise.some((a) => a.action.type === 'fold'),
+      sawFlop: state.board.length >= 3 && foldedOn !== 'preflop',
       wentToShowdown: showedDown,
       wonAtShowdown: showedDown && result.pots.some((p) => p.winners.includes(seat.index)),
       aggressiveActions: postflop.filter((a) => a.action.type === 'raise').length,
