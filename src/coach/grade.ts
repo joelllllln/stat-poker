@@ -119,7 +119,7 @@ export interface HandGrade {
  */
 const SHOVE_SPR_LIMIT = 2
 
-function sizingsFor(state: HandState, heroSeat: number): number[] {
+export function sizingsFor(state: HandState, heroSeat: number): number[] {
   const option = legalActions(state).find((o) => o.type === 'raise')
   if (!option) return []
   const hero = state.seats[heroSeat]!

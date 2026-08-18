@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { describe } from '../engine/evaluator'
 import { ActionBar } from './ActionBar'
+import { ActionLog } from './ActionLog'
+import { Advice } from './Advice'
 import { Dashboard } from './Dashboard'
 import { OddsPanel } from './OddsPanel'
 import { Reflection } from './Reflection'
 import { SessionCard } from './SessionCard'
 import { Table } from './Table'
 import { useStore, type Speed } from './store'
+import { useAdvice } from './useAnalysis'
 
 /**
  * The shell.
@@ -98,6 +101,8 @@ export function App() {
   const setHudLevel = useStore((s) => s.setHudLevel)
   const speed = useStore((s) => s.speed)
   const setSpeed = useStore((s) => s.setSpeed)
+  const adviceLive = useStore((s) => s.adviceLive)
+  const setAdviceLive = useStore((s) => s.setAdviceLive)
   const loadHistory = useStore((s) => s.loadHistory)
   const storedHands = useStore((s) => s.storedHands)
   const [screen, setScreen] = useState<'table' | 'progress'>('table')
@@ -109,6 +114,16 @@ export function App() {
   const state = session.current
   const handOver = state === null || state.result !== null
   const heroSeat = session.config.heroSeat
+  const yourTurn = state !== null && state.result === null && state.toAct === heroSeat
+
+  // In predict-then-reveal the guess comes first, so the answer waits.
+  const guess = useStore((s) => s.guess)
+  const adviceHidden = hudLevel === 'predict' && guess === null
+  const { advice, pending: advicePending } = useAdvice(
+    adviceLive && yourTurn && !adviceHidden && state !== null
+      ? { state, heroSeat, startingStacks: session.currentStartingStacks }
+      : null,
+  )
 
   return (
     <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-3 sm:p-4">
@@ -163,6 +178,16 @@ export function App() {
             ]}
           />
           <Toggle
+            label="Coach"
+            hint="Say what the highest-value action is while you are deciding, or leave it to the review after the hand."
+            value={adviceLive ? 'live' : 'after'}
+            onChange={(value) => setAdviceLive(value === 'live')}
+            options={[
+              { value: 'live', label: 'While I play' },
+              { value: 'after', label: 'After the hand' },
+            ]}
+          />
+          <Toggle
             label="Bot speed"
             hint="How long the other players take to act."
             value={speed}
@@ -186,7 +211,13 @@ export function App() {
             {/* Deliberately in the flow rather than floating: a bar that
                 hovers over the page covers whatever is under it, and the
                 controls sit directly below the table anyway. */}
-            <ActionBar state={state} heroSeat={heroSeat} />
+            <ActionBar
+              state={state}
+              heroSeat={heroSeat}
+              {...(adviceLive && !adviceHidden && advice?.options[0]
+                ? { best: advice.options[0].action }
+                : {})}
+            />
             <ResultBanner />
             {handOver && session.history.length > 0 && (
               <Reflection
@@ -199,6 +230,14 @@ export function App() {
           {/* The coaching sits beside the table rather than under it, so the
               numbers are visible at the moment they are about to be used. */}
           <aside className="space-y-3">
+            {adviceLive && yourTurn && !adviceHidden && (
+              <Advice
+                advice={advice}
+                pending={advicePending}
+                bigBlind={session.config.bigBlind}
+              />
+            )}
+            {state && <ActionLog state={state} heroSeat={heroSeat} />}
             {state && !handOver && hudLevel !== 'off' ? (
               <OddsPanel state={state} heroSeat={heroSeat} />
             ) : (

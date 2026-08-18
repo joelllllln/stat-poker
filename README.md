@@ -101,6 +101,28 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   correct whatever the runout did, verdicts are deterministic, and no decision
   is ever offered a bet size that was not legal at the time.
 
+## Following the game, and knowing what to do
+
+Three things run while a hand is live, and between them they answer "what is
+happening" and "what should I do about it":
+
+- **What happened** — a running account of the hand as a dealer would give it:
+  the blinds, every action in order, and each street as its cards come out. A
+  pot of 33 tells you nothing about who raised and who came along; this does.
+- **What to do** — the highest-value action at the decision in front of you,
+  with *every* option priced beside it, so the recommendation is an argument
+  rather than an instruction: raising beats calling by 1.3 big blinds and
+  folding by 2.6. It is marked on the button it recommends, and a recommended
+  raise names its size.
+- **This decision** — the arithmetic underneath: what your hand is worth
+  against the ranges still in, and what the price demands.
+
+The live advice is the *same pricing that grades the hand afterwards*, run on
+the position as it stands, so what the coach says while you decide and what the
+review says when you are done cannot disagree. It can be switched off — being
+told the answer is how a spot becomes familiar, and not being told is how you
+find out whether it has.
+
 ## Reading the screen
 
 Two screens, not one: the **Table**, which is what you are doing, and

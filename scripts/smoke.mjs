@@ -153,6 +153,31 @@ for (const [name, width, height] of [
 }
 await page.setViewportSize({ width: 1100, height: 1000 })
 await page.waitForTimeout(300)
+// Live coaching: what to do, at the moment the decision is live.
+check('the coach says what to do while you decide', body.includes('what to do'))
+check(
+  'the recommendation is argued rather than asserted',
+  /worth [\d.]+bb more than|everything else here loses money|the only action available/.test(body),
+)
+// The advice is worked out off the interface thread, so it lands a moment
+// after the decision does.
+const marked = await page
+  .locator('.ring-emerald-300')
+  .first()
+  .waitFor({ timeout: 15_000 })
+  .then(() => true)
+  .catch(() => false)
+check('the recommended action is marked on the control itself', marked)
+
+// And a running account of what everyone else just did.
+check('the hand is narrated', body.includes('what happened'))
+check('the blinds are in the account', /posts the (small|big) blind/.test(body))
+check(
+  'the other players\' actions are in the account',
+  /(raises to|calls|folds|checks|bets)/.test(body),
+)
+check('the turn and the price are stated plainly', /your turn/.test(body) && /to call into a pot of|nothing to call/.test(body))
+
 check('the odds panel says what the hand is worth', body.includes('your hand is worth'))
 check('the price is stated in plain words', /the price is (good|bad)|nobody has bet/.test(body))
 check('calling needs a number of its own', body.includes('calling needs'))

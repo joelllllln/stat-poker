@@ -13,7 +13,11 @@
 
 import type { Card } from '../engine/cards'
 import { Rng } from '../engine/cards'
-import { gradeHand, type DecisionGrade } from '../coach/grade'
+import { gradeHand, sizingsFor, type DecisionGrade } from '../coach/grade'
+import { evContext, evaluateActions, heroEquity, type ActionEV } from '../coach/ev'
+import { requiredEquity } from '../coach/odds'
+import { applyAction, startHandWithDeck } from '../engine/hand'
+import { potSize, type Action } from '../engine/types'
 import { luckCurve } from '../stats/all-in-adjusted'
 import { hydrate } from '../stats/archive'
 import type { StoredHand } from '../stats/serialize'
@@ -77,7 +81,34 @@ export interface LuckRequest {
   bigBlind: number
 }
 
-export type AnalysisRequest = EquityRequest | SolveRequest | GradeRequest | LuckRequest
+/**
+ * What to do, right now.
+ *
+ * The hand in progress, sent as the deck and the actions so far, because that
+ * is all replay needs and it keeps the message small. The worker plays it
+ * forward to the decision the person is facing and prices every option they
+ * have — the same pricing the coach uses to grade the hand afterwards, so live
+ * advice and the post-hand verdict can never disagree.
+ */
+export interface AdviseRequest {
+  kind: 'advise'
+  id: number
+  deck: number[]
+  actions: { seat: number; type: Action['type']; to?: number }[]
+  seatNames: string[]
+  startingStacks: number[]
+  buttonSeat: number
+  smallBlind: number
+  bigBlind: number
+  heroSeat: number
+}
+
+export type AnalysisRequest =
+  | EquityRequest
+  | SolveRequest
+  | GradeRequest
+  | LuckRequest
+  | AdviseRequest
 
 export interface EquityReply {
   kind: 'equity'
@@ -137,6 +168,20 @@ export interface LuckReply {
   allInHands: number
 }
 
+export interface AdviseReply {
+  kind: 'advise'
+  id: number
+  /** Every option priced in chips relative to folding, best first. */
+  options: ActionEV[]
+  /** Equity against the modelled ranges at this moment. */
+  equity: number
+  /** Share of the pot a call has to win to break even, or 0 facing no bet. */
+  requiredEquity: number
+  /** Chips in the pot before the action. */
+  pot: number
+  toCall: number
+}
+
 export interface AnalysisError {
   kind: 'error'
   id: number
@@ -148,6 +193,7 @@ export type AnalysisReply =
   | SolveReply
   | GradeReply
   | LuckReply
+  | AdviseReply
   | AnalysisError
 
 const ranges = new Map<string, Range>()
@@ -275,6 +321,48 @@ function runLuck(request: LuckRequest): LuckReply {
   }
 }
 
+function runAdvise(request: AdviseRequest): AdviseReply {
+  let state = startHandWithDeck(
+    {
+      seats: request.seatNames.map((name, i) => ({
+        name,
+        stack: request.startingStacks[i]!,
+      })),
+      buttonSeat: request.buttonSeat,
+      smallBlind: request.smallBlind,
+      bigBlind: request.bigBlind,
+    },
+    request.deck as Card[],
+  )
+
+  for (const entry of request.actions) {
+    const action: Action =
+      entry.type === 'raise' ? { type: 'raise', to: entry.to! } : { type: entry.type }
+    state = applyAction(state, action)
+  }
+
+  if (state.result !== null || state.toAct !== request.heroSeat) {
+    throw new Error('That decision has already been made')
+  }
+
+  const context = evContext(state, request.heroSeat, new Rng(request.id * 7919 + 5))
+  const options = evaluateActions(context, sizingsFor(state, request.heroSeat))
+  const equity = heroEquity(context)
+  const hero = state.seats[request.heroSeat]!
+  const pot = potSize(state)
+  const toCall = Math.max(0, state.currentBet - hero.committed)
+
+  return {
+    kind: 'advise',
+    id: request.id,
+    options: [...options].sort((a, b) => b.ev - a.ev),
+    equity,
+    requiredEquity: requiredEquity(toCall, pot),
+    pot,
+    toCall,
+  }
+}
+
 function run(request: AnalysisRequest): AnalysisReply {
   switch (request.kind) {
     case 'equity':
@@ -285,6 +373,8 @@ function run(request: AnalysisRequest): AnalysisReply {
       return runGrade(request)
     case 'luck':
       return runLuck(request)
+    case 'advise':
+      return runAdvise(request)
   }
 }
 
