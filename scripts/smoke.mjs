@@ -55,22 +55,27 @@ const check = (label, condition) => {
 }
 
 /**
- * Deal the next hand, once the table is ready for one.
+ * Press a control, if it is there and ready to be pressed.
  *
- * The button is disabled while the other players are still acting, so a blind
- * click is a race the test loses occasionally. This waits for the state it
- * needs instead of assuming it.
+ * Buttons are disabled while the other players act and while the coach prices
+ * the decision, so a blind click is a race the test loses on a slow machine.
+ * Everything the play-out loops press goes through here: it waits for the
+ * control to be usable and reports failure rather than throwing, so a hand
+ * that cannot be advanced ends the loop instead of the run.
  */
-async function dealNextHand() {
-  const deal = page.getByRole('button', { name: 'Deal', exact: true })
-  if ((await deal.count()) === 0) return false
+async function press(locator, timeout = 4_000) {
+  if ((await locator.count()) === 0) return false
   try {
-    await deal.first().click({ timeout: 10_000 })
+    await locator.first().click({ timeout })
     return true
   } catch {
     return false
   }
 }
+
+/** Deal the next hand, once the table is ready for one. */
+const dealNextHand = () =>
+  press(page.getByRole('button', { name: 'Deal', exact: true }), 10_000)
 
 check('app renders', (await page.locator('h1').innerText()) === 'stat-poker')
 
@@ -79,7 +84,18 @@ check('app renders', (await page.locator('h1').innerText()) === 'stat-poker')
 await page.getByRole('button', { name: 'Fast', exact: true }).click()
 
 await page.getByRole('button', { name: 'Deal', exact: true }).click()
+
+// The odds and the advice are both worked out off the interface thread, and a
+// CI runner is slower than a laptop. Wait for them to land rather than
+// guessing at a delay that happens to work here.
 await page.waitForTimeout(500)
+for (const wanted of ['Your hand is worth', 'What to do']) {
+  await page
+    .getByText(wanted, { exact: false })
+    .first()
+    .waitFor({ timeout: 30_000 })
+    .catch(() => {})
+}
 
 // Labels are rendered with CSS uppercase, so innerText comes back shouting.
 const body = (await page.locator('body').innerText()).toLowerCase()
@@ -201,9 +217,7 @@ if (await more.count()) {
 for (let i = 0; i < 40; i++) {
   const check_ = page.getByRole('button', { name: 'Check', exact: true })
   const call = page.getByRole('button', { name: /^Call/ })
-  if (await check_.count()) await check_.first().click()
-  else if (await call.count()) await call.first().click()
-  else break
+  if (!(await press(check_)) && !(await press(call))) break
   await page.waitForTimeout(150)
 }
 
@@ -233,10 +247,11 @@ for (let hand = 0; hand < 5; hand++) {
     const raise = page.getByRole('button', { name: /^(Raise to|Bet) / })
     const call = page.getByRole('button', { name: /^Call/ })
     const checkButton = page.getByRole('button', { name: 'Check', exact: true })
-    if (step === 0 && (await raise.count())) await raise.first().click()
-    else if (await checkButton.count()) await checkButton.first().click()
-    else if (await call.count()) await call.first().click()
-    else break
+    const acted =
+      (step === 0 && (await press(raise))) ||
+      (await press(checkButton)) ||
+      (await press(call))
+    if (!acted) break
 
     const measured = await overlapsAt(1280, 800)
     busiest = Math.max(busiest, measured.tracked)
@@ -361,10 +376,7 @@ for (let hand = 0; hand < 30; hand++) {
     const checkButton = page.getByRole('button', { name: 'Check', exact: true })
     const call = page.getByRole('button', { name: /^Call/ })
     const fold = page.getByRole('button', { name: 'Fold', exact: true })
-    if (await checkButton.count()) await checkButton.first().click()
-    else if (await call.count()) await call.first().click()
-    else if (await fold.count()) await fold.first().click()
-    else break
+    if (!(await press(checkButton)) && !(await press(call)) && !(await press(fold))) break
     await page.waitForTimeout(20)
   }
   await page.waitForTimeout(30)
