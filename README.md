@@ -20,9 +20,9 @@ npm run test:slow  # adds the exhaustive 133m-hand evaluator check (~80s)
 | 0 | Cards, evaluator, betting engine | done |
 | 1 | Equity engine, archetype bots, playable table, live odds overlay | done |
 | 2 | Odds in a worker, predict-then-reveal metrics | overlay shipped, worker pending |
-| 3 | Hand-history persistence, stats dashboard, player profile | next |
+| 3 | Hand-history persistence, stats dashboard, player profile | done |
 | 4 | EV coach, Perfect Line view | done |
-| 5–7 | Preflop blueprint, postflop CFR solver, leak finder | |
+| 5–7 | Preflop blueprint, postflop CFR solver, leak finder | next |
 
 ## Layout
 
@@ -32,7 +32,7 @@ src/
   equity/     Monte Carlo + exact enumeration, ranges, opponent modelling
   bots/       archetypes and the policy that drives them
   coach/      pot odds, expected value, and per-decision grading
-  stats/      per-hand statistics and aggregation
+  stats/      statistics, profile, all-in adjustment, hand-history storage
   game/       session: the table across hands
   ui/         React front end
 scripts/      preflop table generator, browser smoke test
@@ -51,6 +51,12 @@ scripts/      preflop table generator, browser smoke test
   of error; AA over KK enumerates to 82% across all 1.7m runouts.
 - **Bots**: their statistical signatures are measured by simulation rather than
   asserted, and are required to stay separable.
+- **Storage**: a hand round-trips through the store and replays to the same
+  board, result and statistics; a corrupt deck is refused rather than replayed
+  as half a hand; statistics are recomputed on read, so improving a definition
+  applies to hands already recorded.
+- **All-in adjustment**: aces against kings all-in preflop price at the ~82% the
+  hand was worth however the board fell, and chips still balance.
 - **Coach**: folding a royal flush grades as a blunder, a correct call grades
   correct whatever the runout did, verdicts are deterministic, and no decision
   is ever offered a bet size that was not legal at the time.

@@ -1,54 +1,11 @@
+import { useEffect } from 'react'
 import { describe } from '../engine/evaluator'
-import { aggregate } from '../stats/hand-stats'
-import { recordsForSeat } from '../game/session'
 import { ActionBar } from './ActionBar'
+import { Dashboard } from './Dashboard'
 import { OddsPanel } from './OddsPanel'
 import { Reflection } from './Reflection'
 import { Table } from './Table'
 import { useStore } from './store'
-
-function SessionStats() {
-  const session = useStore((s) => s.session)
-  useStore((s) => s.version)
-
-  const heroSeat = session.config.heroSeat
-  const stats = aggregate(recordsForSeat(session, heroSeat), session.config.bigBlind)
-  if (stats.hands === 0) return null
-
-  // Rates need a sample before they mean anything; saying so is part of the
-  // product rather than a caveat bolted on later.
-  const reliable = stats.hands >= 50
-
-  const cells = [
-    { label: 'Hands', value: String(stats.hands) },
-    { label: 'VPIP', value: `${stats.vpip.toFixed(0)}%` },
-    { label: 'PFR', value: `${stats.pfr.toFixed(0)}%` },
-    { label: 'WTSD', value: `${stats.wtsd.toFixed(0)}%` },
-    { label: 'AF', value: stats.aggressionFactor.toFixed(1) },
-    { label: 'bb/100', value: stats.bbPer100.toFixed(0) },
-  ]
-
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-      <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">Your session</span>
-        {!reliable && (
-          <span className="text-[11px] text-amber-500/80">
-            too few hands to read anything into
-          </span>
-        )}
-      </div>
-      <div className={`grid grid-cols-3 gap-2 sm:grid-cols-6 ${reliable ? '' : 'opacity-50'}`}>
-        {cells.map((c) => (
-          <div key={c.label}>
-            <div className="text-[11px] text-slate-500">{c.label}</div>
-            <div className="font-mono text-sm">{c.value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function HandResult() {
   const session = useStore((s) => s.session)
@@ -88,6 +45,11 @@ export function App() {
   const setHudLevel = useStore((s) => s.setHudLevel)
   const showReview = useStore((s) => s.showReview)
   const toggleReview = useStore((s) => s.toggleReview)
+  const loadHistory = useStore((s) => s.loadHistory)
+
+  useEffect(() => {
+    void loadHistory()
+  }, [loadHistory])
 
   const state = session.current
   const handOver = state === null || state.result !== null
@@ -146,7 +108,7 @@ export function App() {
       {handOver && session.history.length > 0 && (
         <Reflection record={session.history[session.history.length - 1]!} heroSeat={heroSeat} />
       )}
-      <SessionStats />
+      <Dashboard session={session} />
     </div>
   )
 }

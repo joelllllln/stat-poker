@@ -39,6 +39,8 @@ export interface HandRecord {
   bigBlind: number
   state: HandState
   stats: SeatHandStats[]
+  /** Big blinds of expected value the hero gave up, once the hand is graded. */
+  evLostBB?: number
 }
 
 export interface SessionState {

@@ -64,6 +64,13 @@ export interface HandResult {
   showdown: boolean
   /** Evaluated hand value per seat at showdown, else null. */
   handValues: (number | null)[]
+  /**
+   * Board cards that were out when betting ended.
+   *
+   * Anything after this was dealt with no decisions left to make, which is
+   * exactly the part of the result that luck decided rather than the players.
+   */
+  runoutFrom: number
 }
 
 export interface HandState {
@@ -82,6 +89,11 @@ export interface HandState {
   lastRaiseSize: number
   /** Seat to act, or null when the hand is complete. */
   toAct: number | null
+  /**
+   * Board size at the moment betting ended for good, or null while betting can
+   * still happen. Cards dealt after this point were decided by the deck alone.
+   */
+  runoutFrom: number | null
   actions: ActionRecord[]
   result: HandResult | null
 }

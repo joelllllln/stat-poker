@@ -54,7 +54,9 @@ for (let i = 0; i < 40; i++) {
 
 const after = (await page.locator('body').innerText()).toLowerCase()
 check('the hand resolved', /you (won|lost|broke even)/.test(after))
-check('session stats appeared', after.includes('your session'))
+check('the dashboard appeared', after.includes('your game'))
+check('the winrate carries a confidence bound', /confidence|not enough hands/.test(after))
+check('the luck chart is present', after.includes('all-in adjusted') || after.includes('play a few hands'))
 check('the post-hand review appeared', after.includes('review'))
 
 // Open the decision timeline.
@@ -72,6 +74,30 @@ if (await showAll.count()) {
 } else {
   check('decision timeline available', false)
 }
+
+// Persistence: hands must survive a reload.
+const before = await page.evaluate(() => new Promise((resolve) => {
+  const request = indexedDB.open('stat-poker')
+  request.onsuccess = () => {
+    const db = request.result
+    const count = db.transaction('hands').objectStore('hands').count()
+    count.onsuccess = () => resolve(count.result)
+  }
+  request.onerror = () => resolve(-1)
+}))
+check(`hands were saved to IndexedDB (${before})`, typeof before === 'number' && before > 0)
+
+await page.reload({ waitUntil: 'networkidle' })
+const after2 = await page.evaluate(() => new Promise((resolve) => {
+  const request = indexedDB.open('stat-poker')
+  request.onsuccess = () => {
+    const db = request.result
+    const count = db.transaction('hands').objectStore('hands').count()
+    count.onsuccess = () => resolve(count.result)
+  }
+  request.onerror = () => resolve(-1)
+}))
+check('saved hands survive a reload', after2 === before)
 
 await page.screenshot({ path: 'screenshot.png', fullPage: true })
 check('no console errors', errors.length === 0)

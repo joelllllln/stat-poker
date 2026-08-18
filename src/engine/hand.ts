@@ -122,6 +122,7 @@ export function startHandWithDeck(config: HandConfig, deck: readonly Card[]): Ha
     currentBet: Math.max(bigBlind, ...seats.map((s) => s.committed)),
     lastRaiseSize: bigBlind,
     toAct: null,
+    runoutFrom: null,
     actions: [],
     result: null,
   }
@@ -267,10 +268,12 @@ function advance(state: HandState): HandState {
     const next = NEXT_STREET[state.street]
     if (next === null) return settle(state)
 
-    beginStreet(state, next)
+    // With at most one seat able to act, no further betting is possible. Note
+    // where the board stood before dealing on: everything from here was the
+    // deck's decision, not a player's, which is what all-in adjustment prices.
+    if (actors(state).length <= 1) state.runoutFrom ??= state.board.length
 
-    // With at most one seat able to act, no further betting is possible —
-    // deal the remaining streets and go to showdown.
+    beginStreet(state, next)
     if (actors(state).length <= 1) state.toAct = null
   }
 }
@@ -323,6 +326,42 @@ function returnUncalledChips(state: HandState): void {
   }
 }
 
+/**
+ * Split each pot among the best eligible hands.
+ *
+ * Returns chips won per seat rather than mutating, so the same rules can price
+ * a hypothetical runout without disturbing the hand that was actually played.
+ */
+export function awardPots(
+  pots: PotAward[],
+  handValues: readonly (number | null)[],
+  buttonSeat: number,
+  numSeats: number,
+): number[] {
+  const winnings = new Array<number>(numSeats).fill(0)
+
+  for (const pot of pots) {
+    const best = Math.max(...pot.eligible.map((i) => handValues[i] ?? -1))
+    const winners = pot.eligible.filter((i) => handValues[i] === best)
+    pot.winners = winners
+
+    const share = Math.floor(pot.amount / winners.length)
+    let remainder = pot.amount - share * winners.length
+    for (const index of winners) winnings[index]! += share
+
+    // Odd chips go to the first winner left of the button, as at a table.
+    for (let step = 1; step <= numSeats && remainder > 0; step++) {
+      const index = (buttonSeat + step) % numSeats
+      if (winners.includes(index)) {
+        winnings[index]! += 1
+        remainder -= 1
+      }
+    }
+  }
+
+  return winnings
+}
+
 function settle(state: HandState): HandState {
   returnUncalledChips(state)
 
@@ -330,6 +369,7 @@ function settle(state: HandState): HandState {
   const live = contenders(state)
   const pots = buildPots(state)
   const handValues: (number | null)[] = state.seats.map(() => null)
+  const runoutFrom = state.runoutFrom ?? state.board.length
 
   if (live.length === 1) {
     // Everyone folded — the last player standing takes it without showing.
@@ -352,24 +392,10 @@ function settle(state: HandState): HandState {
       handValues[seat.index] = evaluate([...seat.holeCards!, ...state.board])
     }
 
-    for (const pot of pots) {
-      const best = Math.max(...pot.eligible.map((i) => handValues[i] ?? -1))
-      const winners = pot.eligible.filter((i) => handValues[i] === best)
-      pot.winners = winners
-
-      const share = Math.floor(pot.amount / winners.length)
-      let remainder = pot.amount - share * winners.length
-      for (const index of winners) state.seats[index]!.stack += share
-
-      // Odd chips go to the first winner left of the button, as at a table.
-      for (let step = 1; step <= state.seats.length && remainder > 0; step++) {
-        const index = (state.buttonSeat + step) % state.seats.length
-        if (winners.includes(index)) {
-          state.seats[index]!.stack += 1
-          remainder -= 1
-        }
-      }
-    }
+    const winnings = awardPots(pots, handValues, state.buttonSeat, state.seats.length)
+    winnings.forEach((amount, index) => {
+      state.seats[index]!.stack += amount
+    })
   }
 
   state.toAct = null
@@ -378,6 +404,7 @@ function settle(state: HandState): HandState {
     pots,
     showdown: live.length > 1,
     handValues,
+    runoutFrom,
   } satisfies HandResult
 
   return state

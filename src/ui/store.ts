@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import type { Action } from '../engine/types'
+import { gradeHand } from '../coach/grade'
+import { toStored } from '../stats/serialize'
+import { createHandStore, exportStore, importIntoStore } from '../stats/storage'
 import {
   createSession,
   defaultSessionConfig,
@@ -26,11 +29,63 @@ interface Store {
   /** Whether the post-hand review is shown. */
   showReview: boolean
 
+  /** Hands recovered from storage, kept apart from this session's own. */
+  storedHands: number
+
   deal: () => void
   act: (action: Action) => void
+  loadHistory: () => Promise<void>
+  exportHistory: () => Promise<string>
+  importHistory: (json: string) => Promise<number>
   setHudLevel: (level: Store['hudLevel']) => void
   submitGuess: (guess: number) => void
   toggleReview: () => void
+}
+
+const handStore = createHandStore()
+
+/**
+ * Write any hands finished since `before` to storage.
+ *
+ * Persistence is fire-and-forget: a hand that fails to save must never block
+ * the table or lose the one being played.
+ */
+function persistNewHands(session: SessionState, before: number): void {
+  const finished = session.history.slice(before)
+  if (finished.length === 0) return
+  const now = Date.now()
+  void handStore
+    .putMany(finished.map((record) => toStored(record, now)))
+    .catch((error: unknown) => console.warn('Could not save hand history', error))
+}
+
+/**
+ * Grade finished hands off the critical path.
+ *
+ * Grading costs a few hundred milliseconds, which is far too long to spend
+ * between a hand ending and the table being ready again. It also cannot live in
+ * the review panel: the mastery rating would then exist only for players who
+ * leave the review switched on.
+ */
+function gradeNewHands(
+  session: SessionState,
+  before: number,
+  done: () => void,
+): void {
+  const finished = session.history.slice(before)
+  if (finished.length === 0) return
+
+  setTimeout(() => {
+    for (const record of finished) {
+      if (record.evLostBB !== undefined) continue
+      try {
+        record.evLostBB = gradeHand(record, session.config.heroSeat).totalEvLossBB
+      } catch (error) {
+        console.warn('Could not grade hand', error)
+      }
+    }
+    done()
+  }, 0)
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -39,20 +94,40 @@ export const useStore = create<Store>((set, get) => ({
   hudLevel: 'full',
   guess: null,
   showReview: true,
+  storedHands: 0,
 
   deal: () => {
     const { session } = get()
     if (session.current !== null && session.current.result === null) return
+    const before = session.history.length
     startNextHand(session)
     runBotsUntilHero(session)
+    persistNewHands(session, before)
+    gradeNewHands(session, before, () => set((s) => ({ version: s.version + 1 })))
     set((s) => ({ version: s.version + 1, guess: null }))
   },
 
   act: (action) => {
     const { session } = get()
+    const before = session.history.length
     heroAct(session, action)
     runBotsUntilHero(session)
+    persistNewHands(session, before)
+    gradeNewHands(session, before, () => set((s) => ({ version: s.version + 1 })))
     set((s) => ({ version: s.version + 1, guess: null }))
+  },
+
+  loadHistory: async () => {
+    const count = await handStore.count()
+    set({ storedHands: count })
+  },
+
+  exportHistory: () => exportStore(handStore),
+
+  importHistory: async (json) => {
+    const added = await importIntoStore(handStore, json)
+    set((s) => ({ storedHands: s.storedHands + added, version: s.version + 1 }))
+    return added
   },
 
   setHudLevel: (hudLevel) => set({ hudLevel }),
