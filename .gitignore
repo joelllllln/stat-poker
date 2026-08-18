@@ -7,3 +7,8 @@ coverage/
 screenshot.png
 dash*.png
 chart.png
+
+# Run outputs from the simulation harnesses: a record of one run,
+# not of the code that produced it.
+simulation-report.md
+soak-report.json

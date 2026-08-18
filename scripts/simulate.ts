@@ -1,0 +1,382 @@
+/**
+ * Serious play, headless.
+ *
+ * The tests prove the parts are right. This asks the question the tests do
+ * not: does the whole thing behave like a poker game, and does the app's
+ * central promise hold — that a player who follows the coach gives up nothing
+ * and beats opponents who do not?
+ *
+ * Several hero policies play the same bots over the same decks, and everything
+ * they do is measured: money won, expected value given up, how the grader
+ * rates them, what the profile calls them, and how long every part of the
+ * machinery takes. Run it with
+ *
+ *     npx vite-node scripts/simulate.ts -- --hands 2000
+ *
+ * and it writes a report to `simulation-report.md`.
+ */
+
+import { writeFileSync } from 'node:fs'
+import { Rng } from '../src/engine/cards'
+import { legalActions } from '../src/engine/hand'
+import { potSize, type Action, type HandState } from '../src/engine/types'
+import {
+  createSession,
+  defaultSessionConfig,
+  heroAct,
+  runBotsUntilHero,
+  startNextHand,
+  type HandRecord,
+  type SessionState,
+} from '../src/game/session'
+import { adviseOn, decisionsTaken } from '../src/coach/advise'
+import { evaluate, categoryOf, HandCategory } from '../src/engine/evaluator'
+import { preflopStrength } from '../src/equity/preflop'
+import { gradeHand } from '../src/coach/grade'
+import { aggregate } from '../src/stats/hand-stats'
+import { buildProfile, winrateInterval } from '../src/stats/profile'
+import { luckCurve } from '../src/stats/all-in-adjusted'
+import { biggestLeak, describeLeak, findLeaks, tagDecisions } from '../src/coach/leaks'
+import { toStored } from '../src/stats/serialize'
+import { hydrate } from '../src/stats/archive'
+import { blocks, blockSizeFor, describeMovement } from '../src/stats/timeline'
+
+interface Policy {
+  name: string
+  blurb: string
+  /** Chosen from the options the engine says are legal. */
+  act: (state: HandState, heroSeat: number, rng: Rng) => Action
+  /** Costly policies play fewer hands. */
+  scale?: number
+}
+
+const pick = <T,>(options: T[], rng: Rng): T => options[rng.nextInt(options.length)]!
+
+/** A raise to about `fraction` of the pot, clamped to what is legal. */
+function raiseTo(state: HandState, heroSeat: number, fraction: number): number | null {
+  const option = legalActions(state).find((o) => o.type === 'raise')
+  if (!option) return null
+  const hero = state.seats[heroSeat]!
+  const toCall = Math.max(0, state.currentBet - hero.committed)
+  const target = state.currentBet + (potSize(state) + toCall) * fraction
+  return Math.max(option.min!, Math.min(option.max!, Math.round(target)))
+}
+
+const POLICIES: Policy[] = [
+  {
+    name: 'Coach',
+    blurb: 'plays whatever the live coach says is worth the most',
+    scale: 0.4,
+    act: (state, heroSeat) =>
+      adviseOn(state, heroSeat, decisionsTaken(state, heroSeat)).options[0]!.action,
+  },
+  {
+    name: 'Solid human',
+    blurb: 'a plain tight-aggressive rule: strong hands bet, weak hands fold',
+    act: (state, heroSeat) => {
+      const options = legalActions(state)
+      const hero = state.seats[heroSeat]!
+      const toCall = Math.max(0, state.currentBet - hero.committed)
+      const can = (type: Action['type']) => options.some((o) => o.type === type)
+      const passive = (): Action =>
+        can('check') ? { type: 'check' } : can('fold') ? { type: 'fold' } : { type: 'call' }
+
+      if (state.board.length === 0) {
+        const percentile = preflopStrength(hero.holeCards!).percentile
+        if (percentile >= 0.86) {
+          const to = raiseTo(state, heroSeat, 0.75)
+          if (to !== null) return { type: 'raise', to }
+        }
+        if (percentile >= 0.7 && toCall <= state.bigBlind * 4 && can('call')) {
+          return { type: 'call' }
+        }
+        return passive()
+      }
+
+      // Postflop by what the hand actually is: a rule anybody could follow.
+      const made = categoryOf(evaluate([...hero.holeCards!, ...state.board]))
+      if (made >= HandCategory.TwoPair) {
+        const to = raiseTo(state, heroSeat, 0.75)
+        if (to !== null) return { type: 'raise', to }
+        return can('call') ? { type: 'call' } : passive()
+      }
+      if (made >= HandCategory.Pair) {
+        if (toCall === 0) return passive()
+        return toCall <= potSize(state) / 3 && can('call') ? { type: 'call' } : passive()
+      }
+      return passive()
+    },
+  },
+  {
+    name: 'Always fold',
+    blurb: 'folds everything it is allowed to fold',
+    act: (state) =>
+      legalActions(state).some((o) => o.type === 'fold') ? { type: 'fold' } : { type: 'check' },
+  },
+  {
+    name: 'Calling station',
+    blurb: 'never folds and never raises',
+    act: (state) => {
+      const options = legalActions(state)
+      if (options.some((o) => o.type === 'check')) return { type: 'check' }
+      if (options.some((o) => o.type === 'call')) return { type: 'call' }
+      return { type: 'fold' }
+    },
+  },
+  {
+    name: 'Maniac',
+    blurb: 'raises pot whenever it can',
+    act: (state, heroSeat) => {
+      const to = raiseTo(state, heroSeat, 1)
+      if (to !== null) return { type: 'raise', to }
+      const options = legalActions(state)
+      return options.some((o) => o.type === 'check') ? { type: 'check' } : { type: 'call' }
+    },
+  },
+  {
+    name: 'Random',
+    blurb: 'picks uniformly among the legal actions',
+    act: (state, _heroSeat, rng) => {
+      const choice = pick(legalActions(state), rng)
+      return choice.type === 'raise' ? { type: 'raise', to: choice.min! } : { type: choice.type }
+    },
+  },
+]
+
+interface Outcome {
+  policy: Policy
+  hands: number
+  records: HandRecord[]
+  seconds: number
+  decisions: number
+  /** Milliseconds spent choosing, which is what a player would wait. */
+  decisionMs: number
+}
+
+function play(policy: Policy, hands: number, seed: number): Outcome {
+  const session: SessionState = createSession(defaultSessionConfig(seed))
+  const rng = new Rng(seed + 7)
+  const started = Date.now()
+  let decisions = 0
+  let decisionMs = 0
+
+  for (let hand = 0; hand < hands; hand++) {
+    startNextHand(session)
+    runBotsUntilHero(session)
+
+    let guard = 0
+    while (session.current!.result === null && guard++ < 60) {
+      if (session.current!.toAct !== session.config.heroSeat) break
+      const at = Date.now()
+      const action = policy.act(session.current!, session.config.heroSeat, rng)
+      decisionMs += Date.now() - at
+      decisions += 1
+      heroAct(session, action)
+      if (session.current!.result === null) runBotsUntilHero(session)
+    }
+  }
+
+  return {
+    policy,
+    hands,
+    records: session.history,
+    seconds: (Date.now() - started) / 1000,
+    decisions,
+    decisionMs,
+  }
+}
+
+/** Everything the app would say about a policy after watching it play. */
+function report(outcome: Outcome) {
+  const { records } = outcome
+  const heroSeat = records[0]?.heroSeat ?? 0
+  const bigBlind = records[0]?.bigBlind ?? 2
+  const stats = aggregate(
+    records.map((record) => record.stats[record.heroSeat]!),
+    bigBlind,
+  )
+  const winrate = winrateInterval(
+    records.map((record) => record.stats[record.heroSeat]!),
+    bigBlind,
+  )
+
+  const gradedAt = Date.now()
+  // Grading every hand is the expensive part; a sample is enough to place a
+  // policy, and the report says how large it was.
+  const sample = records.slice(0, Math.min(records.length, 200))
+  const grades = sample.map((record) => gradeHand(record, record.heroSeat))
+  const gradingMs = Date.now() - gradedAt
+  const evLostPer100 =
+    grades.length === 0
+      ? 0
+      : (grades.reduce((sum, grade) => sum + grade.totalEvLossBB, 0) / grades.length) * 100
+
+  const verdicts = { optimal: 0, fine: 0, mistake: 0, blunder: 0 }
+  for (const grade of grades) {
+    for (const decision of grade.decisions) verdicts[decision.verdict] += 1
+  }
+
+  const tagged = tagDecisions(
+    sample.map((record, i) => ({ ...record, decisions: grades[i]!.decisions })),
+    heroSeat,
+    (record) => record.decisions ?? [],
+  )
+  const leak = biggestLeak(findLeaks(tagged))
+  const curve = luckCurve(
+    records.map((record) => ({
+      state: record.state,
+      bigBlind: record.bigBlind,
+      seat: record.heroSeat,
+    })),
+    heroSeat,
+  )
+
+  return {
+    stats,
+    winrate,
+    evLostPer100,
+    gradedHands: grades.length,
+    gradingMsPerHand: grades.length ? gradingMs / grades.length : 0,
+    verdicts,
+    leak: leak ? describeLeak(leak) : 'nothing stands out',
+    profile: buildProfile(stats, evLostPer100),
+    luckBB: curve.luckBB,
+    allIns: curve.allInHands,
+  }
+}
+
+/** Chips in must equal chips out, hand after hand, however they were played. */
+function conservationFaults(records: HandRecord[]): number {
+  let faults = 0
+  for (const record of records) {
+    const net = record.state.result!.net.reduce((sum, chips) => sum + chips, 0)
+    if (Math.abs(net) > 1e-9) faults += 1
+    const stacks = record.state.seats.reduce((sum, seat) => sum + seat.stack, 0)
+    const started = record.startingStacks.reduce((sum, chips) => sum + chips, 0)
+    if (Math.abs(stacks - started) > 1e-9) faults += 1
+  }
+  return faults
+}
+
+const argv = process.argv.slice(2)
+const handsArg = argv.indexOf('--hands')
+const HANDS = handsArg >= 0 ? Number(argv[handsArg + 1]) : 1_000
+
+console.log(`Playing ${HANDS} hands per policy (the coach plays fewer; it thinks).\n`)
+
+const outcomes = POLICIES.map((policy) => {
+  const hands = Math.max(40, Math.round(HANDS * (policy.scale ?? 1)))
+  process.stdout.write(`  ${policy.name}: ${hands} hands… `)
+  const outcome = play(policy, hands, 1234)
+  console.log(`${outcome.seconds.toFixed(1)}s`)
+  return outcome
+})
+
+const lines: string[] = []
+const say = (line = '') => {
+  lines.push(line)
+  console.log(line)
+}
+
+say('# Simulation report')
+say()
+say(`Played ${new Date().toISOString().slice(0, 16).replace('T', ' ')} against the five bots.`)
+say()
+say('| Policy | Hands | bb/100 | 95% interval | Given up bb/100 | VPIP | PFR | AF | Profile |')
+say('|---|---|---|---|---|---|---|---|---|')
+
+const results = outcomes.map((outcome) => ({ outcome, ...report(outcome) }))
+
+for (const result of results) {
+  const { outcome, stats, winrate, evLostPer100, profile } = result
+  say(
+    `| ${outcome.policy.name} | ${outcome.hands} | ${winrate.bbPer100.toFixed(1)} | ` +
+      `${winrate.low.toFixed(0)}–${winrate.high.toFixed(0)} | ${evLostPer100.toFixed(1)} | ` +
+      `${stats.vpip.toFixed(0)}% | ${stats.pfr.toFixed(0)}% | ${stats.aggressionFactor.toFixed(2)} | ` +
+      `${profile.label} |`,
+  )
+}
+
+say()
+say('## What the coach said about each of them')
+say()
+for (const result of results) {
+  const { outcome, verdicts, leak, gradedHands } = result
+  const total = Object.values(verdicts).reduce((a, b) => a + b, 0) || 1
+  say(
+    `- **${outcome.policy.name}** (${outcome.policy.blurb}) — over ${gradedHands} graded hands: ` +
+      `${((verdicts.optimal / total) * 100).toFixed(0)}% optimal, ` +
+      `${((verdicts.fine / total) * 100).toFixed(0)}% fine, ` +
+      `${((verdicts.mistake / total) * 100).toFixed(0)}% mistakes, ` +
+      `${((verdicts.blunder / total) * 100).toFixed(0)}% blunders. Biggest leak: ${leak}`,
+  )
+}
+
+say()
+say('## Timing')
+say()
+say('| Policy | Hands/second | Decision (ms) | Grading (ms/hand) |')
+say('|---|---|---|---|')
+for (const result of results) {
+  const { outcome, gradingMsPerHand } = result
+  say(
+    `| ${outcome.policy.name} | ${(outcome.hands / outcome.seconds).toFixed(0)} | ` +
+      `${(outcome.decisionMs / Math.max(1, outcome.decisions)).toFixed(1)} | ` +
+      `${gradingMsPerHand.toFixed(0)} |`,
+  )
+}
+
+say()
+say('## Integrity')
+say()
+const allRecords = outcomes.flatMap((outcome) => outcome.records)
+const faults = conservationFaults(allRecords)
+say(`- Chips conserved across ${allRecords.length} hands: ${faults === 0 ? 'yes' : `NO (${faults})`}`)
+
+const storedAt = Date.now()
+const stored = allRecords.map((record, i) => toStored(record, 1_700_000_000_000 + i * 60_000))
+const { hands: rebuilt, unreadable } = hydrate(stored)
+say(
+  `- Stored and replayed ${stored.length} hands in ${Date.now() - storedAt}ms; ` +
+    `${unreadable} unreadable`,
+)
+const sameStats = rebuilt.every(
+  (hand, i) => JSON.stringify(hand.record.stats) === JSON.stringify(allRecords[i]!.stats),
+)
+say(`- Statistics survive the round trip unchanged: ${sameStats ? 'yes' : 'NO'}`)
+const bytes = JSON.stringify(stored).length
+say(
+  `- Storage: ${(bytes / stored.length).toFixed(0)} bytes a hand, ` +
+    `${(bytes / 1024 / 1024).toFixed(1)}MB for ${stored.length}`,
+)
+
+const coach = results.find((result) => result.outcome.policy.name === 'Coach')!
+const others = results.filter((result) => result.outcome.policy.name !== 'Coach')
+say()
+say('## The claim the app makes')
+say()
+say(
+  `The coach gives up **${coach.evLostPer100.toFixed(1)}bb/100** and every other policy gives up ` +
+    `${Math.min(...others.map((o) => o.evLostPer100)).toFixed(1)}bb/100 or more.`,
+)
+say(
+  `Its winrate is ${coach.winrate.bbPer100.toFixed(1)}bb/100 ` +
+    `(${coach.winrate.low.toFixed(0)} to ${coach.winrate.high.toFixed(0)} at 95%), against ` +
+    others
+      .map((o) => `${o.outcome.policy.name} ${o.winrate.bbPer100.toFixed(0)}`)
+      .join(', ') +
+    '.',
+)
+
+// What the trend view would show about the longest run.
+const longest = results.reduce((a, b) => (b.outcome.hands > a.outcome.hands ? b : a))
+const size = blockSizeFor(longest.outcome.records.length)
+say()
+say(
+  `Over ${longest.outcome.policy.name}'s ${longest.outcome.records.length} hands the trend view ` +
+    `cuts ${blocks(longest.outcome.records, size).length} blocks of ${size}: ` +
+    (describeMovement(longest.outcome.records) ?? 'nothing has moved further than the noise'),
+)
+
+writeFileSync('simulation-report.md', `${lines.join('\n')}\n`)
+console.log('\nWritten to simulation-report.md')
