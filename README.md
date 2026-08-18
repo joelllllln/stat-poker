@@ -22,7 +22,8 @@ npm run test:slow  # adds the exhaustive 133m-hand evaluator check (~80s)
 | 2 | Odds in a worker, predict-then-reveal metrics | overlay shipped, worker pending |
 | 3 | Hand-history persistence, stats dashboard, player profile | done |
 | 4 | EV coach, Perfect Line view | done |
-| 5–7 | Preflop blueprint, postflop CFR solver, leak finder | next |
+| 5 | Preflop solver, verified on Kuhn poker; heads-up preflop solved | done |
+| 6–7 | Postflop CFR solver, leak finder | next |
 
 ## Layout
 
@@ -32,10 +33,11 @@ src/
   equity/     Monte Carlo + exact enumeration, ranges, opponent modelling
   bots/       archetypes and the policy that drives them
   coach/      pot odds, expected value, and per-decision grading
+  solver/     CFR, the preflop game, and the solved blueprint
   stats/      statistics, profile, all-in adjustment, hand-history storage
   game/       session: the table across hands
   ui/         React front end
-scripts/      preflop table generator, browser smoke test
+scripts/      preflop, matchup and blueprint generators; browser smoke test
 ```
 
 ## What is verified
@@ -57,6 +59,11 @@ scripts/      preflop table generator, browser smoke test
   applies to hands already recorded.
 - **All-in adjustment**: aces against kings all-in preflop price at the ~82% the
   hand was worth however the board fell, and chips still balance.
+- **Solver**: CFR is verified against Kuhn poker, whose equilibrium is known in
+  closed form. It converges to exploitability below 0.001 chips per hand, never
+  bets the queen, bluffs the jack at α ≤ ⅓, bets the king at exactly 3α, and
+  calls the queen a third of the time — the equilibrium, not a regression
+  against the solver's own output.
 - **Coach**: folding a royal flush grades as a blunder, a correct call grades
   correct whatever the runout did, verdicts are deterministic, and no decision
   is ever offered a bet size that was not legal at the time.
@@ -77,6 +84,38 @@ flop draw are not captured. Two consequences worth knowing:
   after discounting for the equity it will not get to realise. That is a
   defensible rule rather than a solved one, and Phase 6 replaces it for
   heads-up postflop.
+
+## What the solver solved, and what it did not
+
+The solver is verified on a game with a known answer before being pointed at one
+without. Kuhn poker's equilibrium has a closed form, and CFR reproduces it: the
+3:1 ratio between value bets and bluffs, the ⅓ calling frequency, exploitability
+below 0.001. Only then was it pointed at poker.
+
+**Six-handed preflop was attempted and abandoned.** With a strategy stored per
+hand per spot, a sampled deal trains only the hands it dealt; two million
+iterations across 349,000 information sets left most spots with a handful of
+observations. The result opened 2% under the gun and did not raise aces. That
+artefact was thrown away rather than shipped — an unconverged solution presented
+with a solver's authority is worse than no solution.
+
+**Heads-up preflop is solved properly**, by vector CFR: the public betting tree
+is traversed once per iteration and all 169 hands are updated at every node,
+with card removal counted exactly. It converges to an exploitability of
+0.000001 big blinds per hand — two-player and zero-sum, so that number means
+what it says. The resulting button range opens 82% of hands, which is where
+published solutions sit.
+
+This is not a lesser target than six-handed. **Every hand folded to the small
+blind is a heads-up preflop game at exactly these stakes**, which makes
+blind-versus-blind the most repeated spot at the table. The app looks a hand up
+only when it translates into that game exactly — two players left, no dead money
+from anyone who folded, stacks at the solved depth — and returns nothing
+otherwise. A strategy borrowed from a different spot is not an approximation.
+
+Two abstractions remain, both stated in the code: limping is not modelled (the
+opening decision is raise or fold), and everything after preflop is priced by
+position-adjusted all-in equity rather than played out. Postflop is Phase 6.
 
 ## Bot signatures
 

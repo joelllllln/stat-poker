@@ -41,6 +41,36 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
         <div className="space-y-3 border-t border-slate-800 px-3 py-3">
           <p className="text-sm text-slate-300">{decision.explanation}</p>
 
+          {decision.blueprint && (
+            <div className="rounded border border-violet-900/70 bg-violet-950/30 px-2 py-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-violet-300/70">
+                  Solved strategy
+                </span>
+                {/* How far from equilibrium the solve got, rather than a bare
+                    claim that this is "GTO". */}
+                <span className="font-mono text-[10px] text-violet-300/50">
+                  exploitable for {decision.blueprint.exploitability.toFixed(6)}bb/hand
+                </span>
+              </div>
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-violet-100">
+                {decision.blueprint.actions
+                  .filter((a) => a.frequency >= 0.005)
+                  .map((a) => (
+                    <span key={a.label}>
+                      {a.label} <span className="font-mono">{pct(a.frequency)}</span>
+                    </span>
+                  ))}
+              </div>
+              {decision.blueprint.mixed && (
+                <div className="mt-0.5 text-[11px] text-violet-300/60">
+                  A mixed spot — more than one action is close to best, so any of
+                  these is defensible.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <div>
               <div className="text-slate-500">Your equity</div>

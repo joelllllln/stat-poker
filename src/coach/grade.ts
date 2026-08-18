@@ -19,6 +19,7 @@ import { potSize, type Action, type HandState, type Street } from '../engine/typ
 import type { HandRecord } from '../game/session'
 import { requiredEquity } from './odds'
 import { evaluateActions, evContext, heroEquity, type ActionEV } from './ev'
+import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
 
 export type Verdict = 'optimal' | 'fine' | 'mistake' | 'blunder'
 
@@ -58,6 +59,14 @@ export interface DecisionGrade {
   evLossBB: number
   verdict: Verdict
   explanation: string
+  /**
+   * The solved strategy for this spot, where one exists.
+   *
+   * Shown as context, never as the grade. An action a solution plays a fifth
+   * of the time is not a mistake — actions inside a mix have nearly equal
+   * value, which is precisely why they are mixed.
+   */
+  blueprint?: BlueprintAdvice
 }
 
 export interface HandGrade {
@@ -185,6 +194,8 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
     const evLoss = Math.max(0, best.ev - chosen.ev)
     const evLossBB = evLoss / record.bigBlind
 
+    const solved = state.street === 'preflop' ? lookupPreflop(state, heroSeat) : null
+
     const partial = {
       street: state.street,
       potBefore: pot,
@@ -198,6 +209,7 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
       evLoss,
       evLossBB,
       verdict: verdictFor(evLossBB),
+      ...(solved ? { blueprint: solved } : {}),
     }
 
     decisions.push({ ...partial, explanation: explain(partial) })

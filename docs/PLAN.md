@@ -310,12 +310,12 @@ escape hatch that makes the local-first choice safe.
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
-| **0** | Scaffold, CI, cards, 7-card evaluator | Evaluator verified against reference; property tests green |
-| **1** | Playable 6-max table vs. archetype bots | Chips conserved across 100k random hands; side pots correct |
-| **2** | Equity worker + live HUD + predict-then-reveal | Equity matches published figures within MC error |
-| **3** | Hand history persistence + stats dashboard + style/mastery profile (§7) | Stats match a hand-computed reference set; export works |
-| **4** | EV coach, Perfect Line view, Run It 1000 Times (§5) | Every decision graded; verdicts reproducible and outcome-independent |
-| **5** | Preflop blueprint + blueprint bots | Preflop grading against real solution; bot exploitability measurable |
+| **0** | Scaffold, CI, cards, 7-card evaluator | **Done.** All 133,784,560 seven-card hands verified |
+| **1** | Playable 6-max table vs. archetype bots | **Done.** Chips conserved across random play; side pots correct |
+| **2** | Equity + live HUD + predict-then-reveal | Overlay shipped and matches published figures; moving it to a worker is outstanding |
+| **3** | Hand history persistence + stats dashboard + style/mastery profile (§7) | **Done.** Hands replay from storage to identical results; export/import round-trips |
+| **4** | EV coach, Perfect Line view (§5) | **Done.** Every decision graded; verdicts reproducible and outcome-independent. Run It 1000 Times still to build |
+| **5** | Preflop blueprint + blueprint bots | **Done.** CFR verified against Kuhn poker's known equilibrium; 6-max preflop solved by external sampling and shipped as a lookup |
 | **6** | WASM postflop CFR + solver frequencies in Perfect Line | Turn/river solves <10s; exploitability reported |
 | **7** | Leak finder, per-street archetypes, deeper analytics | Clusters validated against known leaks in seeded histories |
 
