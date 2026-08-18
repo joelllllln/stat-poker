@@ -257,9 +257,13 @@ later streets for position to act on, so the equity is the answer. Discounting
 those too priced a coin flip as 54/46 to the button, at exactly the decisions
 most sensitive to it.
 
-**The river is solved exactly.** With the board complete there is nothing left
-to draw, so a river solve is a statement about poker rather than about a model
-of it. Each player holds one of 1,081 possible pairs of cards, which would be a
+**The river is solved exactly in the cards.** With the board complete there is
+nothing left to draw, so no equity is estimated and no runout is assumed: every
+holding is compared against every holding. What is still an abstraction is the
+betting — two bet sizes and two raises deep — so the solve is exact about who
+beats whom and a model of how much they can bet about it.
+
+Each player holds one of 1,081 possible pairs of cards, which would be a
 million comparisons per showdown done naively; sorting holdings by strength once
 and sweeping them while carrying running totals of the opponent's range turns
 each showdown into a subtraction, and gets card removal out of the same sweep for
