@@ -14,11 +14,11 @@
  */
 
 import { Rng } from '../engine/cards'
-import { applyAction, legalActions, startHandWithDeck } from '../engine/hand'
+import { applyAction, legalActions, startHandWithDeck, winnablePot } from '../engine/hand'
 import { potSize, type Action, type HandState, type Street } from '../engine/types'
 import type { HandRecord } from '../game/session'
 import { requiredEquity } from './odds'
-import { evaluateActions, evContext, heroEquity, type ActionEV } from './ev'
+import { evaluateActions, evContext, type ActionEV } from './ev'
 import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
 
 /**
@@ -29,7 +29,7 @@ import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
  * whenever a change here would give a hand a different verdict: every cached
  * verdict below it is discarded and worked out again.
  */
-export const GRADER_VERSION = 1
+export const GRADER_VERSION = 2
 
 export type Verdict = 'optimal' | 'fine' | 'mistake' | 'blunder'
 
@@ -119,7 +119,7 @@ export interface HandGrade {
  */
 const SHOVE_SPR_LIMIT = 2
 
-function sizingsFor(state: HandState, heroSeat: number): number[] {
+export function sizingsFor(state: HandState, heroSeat: number): number[] {
   const option = legalActions(state).find((o) => o.type === 'raise')
   if (!option) return []
   const hero = state.seats[heroSeat]!
@@ -203,9 +203,14 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
     const context = evContext(state, heroSeat, rng)
     const hero = state.seats[heroSeat]!
     const pot = potSize(state)
-    const toCall = Math.max(0, state.currentBet - hero.committed)
+    // What continuing actually costs, and what it actually plays for: a stack
+    // too short to cover the bet pays less than the bet and can win less than
+    // the pot, and pricing it any other way flatters or damns the decision.
+    const toCall = Math.min(Math.max(0, state.currentBet - hero.committed), hero.stack)
+    const winnable = winnablePot(state, heroSeat, toCall)
 
-    const options = evaluateActions(context, sizingsFor(state, heroSeat))
+    const priced = evaluateActions(context, sizingsFor(state, heroSeat))
+    const options = priced.options
     if (options.length === 0) continue
 
     const best = options.reduce((a, b) => (b.ev > a.ev ? b : a))
@@ -213,8 +218,10 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
     // price it directly rather than looking it up.
     const chosenExact = options.find((o) => sameAction(o.action, action))
     const chosen =
-      chosenExact ?? evaluateActions(context, action.type === 'raise' ? [action.to] : [])
-        .find((o) => sameAction(o.action, action))
+      chosenExact ??
+      evaluateActions(context, action.type === 'raise' ? [action.to] : []).options.find((o) =>
+        sameAction(o.action, action),
+      )
 
     if (!chosen) continue
 
@@ -227,8 +234,8 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = 4242): Ha
       street: state.street,
       potBefore: pot,
       toCall,
-      equity: heroEquity(context),
-      requiredEquity: requiredEquity(toCall, pot),
+      equity: priced.equity,
+      requiredEquity: requiredEquity(toCall, winnable),
       options,
       chosen: action,
       chosenLabel: chosen.label,

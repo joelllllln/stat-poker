@@ -15,6 +15,7 @@
  */
 
 import { Rng, type Card } from '../engine/cards'
+import { winnablePot } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
 import { handEquity } from '../equity/equity'
 import { modelOpponentRange, perceivedRangeAfterAggression } from '../equity/opponent'
@@ -64,8 +65,31 @@ export interface ActionEV {
   label: string
   /** Chips, relative to folding. */
   ev: number
+  /**
+   * Standard error on `ev`, in chips.
+   *
+   * EV is linear in equity, so the error on a sampled equity carries through
+   * exactly rather than needing a second experiment to measure it. Zero when
+   * every runout behind the number was enumerated.
+   */
+  error: number
   /** How often the whole field folds to this bet, where it is a bet. */
   foldEquity?: number
+}
+
+/**
+ * Everything one decision is worth knowing, priced once.
+ *
+ * The equity comes back with the actions because it is the same number the
+ * actions were priced from. Asking for it a second time would sample it again
+ * and put a different figure on screen from the one behind the verdict.
+ */
+export interface DecisionEV {
+  /** Hero's equity against the field's modelled ranges. */
+  equity: number
+  /** Standard error on that equity; zero when it was enumerated exactly. */
+  equityError: number
+  options: ActionEV[]
 }
 
 /**
@@ -170,19 +194,28 @@ export function evContext(state: HandState, heroSeat: number, rng = new Rng(99))
   }
 }
 
+export interface HeroEquity {
+  equity: number
+  /** Standard error, not a 95% margin: zero when the answer was enumerated. */
+  error: number
+}
+
 /** Hero's equity against the field's modelled ranges. */
-export function heroEquity(context: EVContext, ranges?: Range[]): number {
+export function heroEquity(context: EVContext, ranges?: Range[]): HeroEquity {
   const { state, heroCards, villains, rng } = context
   const against = ranges ?? villains.map((seat) => modelOpponentRange(state, seat))
-  if (against.length === 0) return 1
+  if (against.length === 0) return { equity: 1, error: 0 }
   try {
-    return handEquity(heroCards, against, state.board, {
+    const result = handEquity(heroCards, against, state.board, {
       rng,
       iterations: HERO_ITERATIONS,
       exactBudget: HERO_EXACT_BUDGET,
-    }).equity
+    })
+    // `errorMargin` is a 95% interval; everything downstream composes standard
+    // errors, so it is halved once here rather than in every caller.
+    return { equity: result.equity, error: result.errorMargin / 2 }
   } catch {
-    return 0.5
+    return { equity: 0.5, error: 0 }
   }
 }
 
@@ -192,27 +225,40 @@ export function heroEquity(context: EVContext, ranges?: Range[]): number {
  * Bet sizes are the ones the interface offers, so the verdict is always
  * reachable: it never tells you to make a bet you could not have made.
  */
-export function evaluateActions(context: EVContext, sizings: number[]): ActionEV[] {
+export function evaluateActions(context: EVContext, sizings: number[]): DecisionEV {
   const { state, heroSeat, heroCards, villains, rng } = context
   const hero = state.seats[heroSeat]!
   const pot = potSize(state)
   const toCall = Math.max(0, state.currentBet - hero.committed)
-  const equity = heroEquity(context)
+  const { equity, error: equityError } = heroEquity(context)
 
-  const results: ActionEV[] = []
+  const options: ActionEV[] = []
+
+  // Folding is always legal, so it is always priced. It is the zero point:
+  // chips already in the middle are gone whatever happens next. Leaving it out
+  // where checking is free is what let a fold with the best hand go ungraded.
+  options.push({ action: { type: 'fold' }, label: 'Fold', ev: 0, error: 0 })
 
   if (toCall > 0) {
-    results.push({ action: { type: 'fold' }, label: 'Fold', ev: 0 })
     const cost = Math.min(toCall, hero.stack)
-    results.push({
+    // A call plays for what the bettor matched, not for what they bet: a stack
+    // too short to cover the bet leaves the remainder out of the hand.
+    const winnable = winnablePot(state, heroSeat, cost)
+    options.push({
       action: { type: 'call' },
       label: `Call ${cost}`,
-      ev: equity * pot - (1 - equity) * cost,
+      ev: equity * winnable - (1 - equity) * cost,
+      error: equityError * (winnable + cost),
     })
   } else {
     // Checking takes the hand to a showdown for free. Ignoring later betting,
     // that is worth the pot times your share of it.
-    results.push({ action: { type: 'check' }, label: 'Check', ev: equity * pot })
+    options.push({
+      action: { type: 'check' },
+      label: 'Check',
+      ev: equity * pot,
+      error: equityError * pot,
+    })
   }
 
   // Villains are priced against the range they would put the hero on *after*
@@ -253,20 +299,23 @@ export function evaluateActions(context: EVContext, sizings: number[]): ActionEV
       largestContribution = Math.max(largestContribution, contribution)
     }
 
-    const equityWhenCalled =
-      continuingRanges.length === 0 ? 1 : heroEquity(context, continuingRanges)
+    const called =
+      continuingRanges.length === 0
+        ? { equity: 1, error: 0 }
+        : heroEquity(context, continuingRanges)
     const won = pot + calledContributions
     const risked = Math.min(amount, largestContribution)
 
-    results.push({
+    options.push({
       action: { type: 'raise', to },
       label: state.currentBet > 0 ? `Raise to ${to}` : `Bet ${to}`,
       ev:
         foldEquity * pot +
-        (1 - foldEquity) * (equityWhenCalled * won - (1 - equityWhenCalled) * risked),
+        (1 - foldEquity) * (called.equity * won - (1 - called.equity) * risked),
+      error: (1 - foldEquity) * called.error * (won + risked),
       foldEquity,
     })
   }
 
-  return results
+  return { equity, equityError, options }
 }

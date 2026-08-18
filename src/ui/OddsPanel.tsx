@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { winnablePot } from '../engine/hand'
 import { potSize, type HandState } from '../engine/types'
 import { modelledWidth } from '../equity/opponent'
 import { preflopStrength, topPercentRange } from '../equity/preflop'
@@ -65,7 +66,11 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
   const hero = state.seats[heroSeat]!
   const pot = potSize(state)
-  const toCall = Math.max(0, state.currentBet - hero.committed)
+  // What continuing costs and what it plays for. A stack too short to cover
+  // the bet pays only what it has, and can only win what the bettor matched:
+  // quoting the price of a bet you cannot make is quoting the wrong price.
+  const toCall = Math.min(Math.max(0, state.currentBet - hero.committed), hero.stack)
+  const winnable = winnablePot(state, heroSeat, toCall)
 
   // The modelled widths double as the query: the worker takes ranges as text
   // so the message stays small, and the same numbers drive the display.
@@ -97,7 +102,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
     ) : null
   }
 
-  const needed = requiredEquity(toCall, pot)
+  const needed = requiredEquity(toCall, winnable)
   const callIsCorrect = toCall > 0 && equity.equity >= needed
   const effectiveStack = Math.min(
     hero.stack,
@@ -166,7 +171,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
             <Tile
               label="Calling needs"
               value={toCall > 0 ? pct(needed) : '—'}
-              hint={toCall > 0 ? `${toCall} to call · ${potOddsRatio(toCall, pot)}` : 'no bet to face'}
+              hint={toCall > 0 ? `${toCall} to call · ${potOddsRatio(toCall, winnable)}` : 'no bet to face'}
               tone={toCall > 0 ? (callIsCorrect ? 'good' : 'bad') : 'default'}
             />
           </div>

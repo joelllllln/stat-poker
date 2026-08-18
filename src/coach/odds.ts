@@ -11,6 +11,11 @@
  *
  * `pot` is the pot *before* the call. Calling 25 into 75 risks 25 to win 100,
  * so you need 25%.
+ *
+ * Where the caller cannot cover the bet, `pot` must be what the call can
+ * actually win rather than what is on the table — see `winnablePot`. Chips
+ * nobody matched are returned to whoever bet them, so they were never part of
+ * the price.
  */
 export function requiredEquity(toCall: number, pot: number): number {
   if (toCall <= 0) return 0
@@ -26,6 +31,9 @@ export function potOddsRatio(toCall: number, pot: number): string {
 
 /**
  * EV of calling, in chips, relative to folding.
+ *
+ * `pot` carries the same caveat as {@link requiredEquity}: it is what the call
+ * can win, which is the whole pot only when the caller covers the table.
  *
  * Folding is the zero point: chips already in the pot are gone either way, so
  * only the call and its outcomes count. This framing is what makes "correct

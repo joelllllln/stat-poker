@@ -9,7 +9,7 @@
  */
 
 import type { Rng } from '../engine/cards'
-import { legalActions } from '../engine/hand'
+import { legalActions, winnablePot } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
 import { handEquity } from '../equity/equity'
 import { liveOpponentRanges } from '../equity/opponent'
@@ -110,7 +110,10 @@ function decidePostflop(state: HandState, seat: number, bot: Archetype, rng: Rng
 
   // Facing a bet.
   if (toCall > 0) {
-    const needed = requiredEquity(toCall, pot) * bot.callDiscipline
+    // Priced on what the call actually costs this stack and what it can win —
+    // a short stack calling off is not being laid the odds the full bet implies.
+    const cost = Math.min(toCall, me.stack)
+    const needed = requiredEquity(cost, winnablePot(state, seat, cost)) * bot.callDiscipline
     if (equity > 0.78 && rng.nextFloat() < bot.aggression) {
       const raise = raiseWithin(state, state.currentBet + (pot + toCall) * bot.betSizing)
       if (raise) return raise

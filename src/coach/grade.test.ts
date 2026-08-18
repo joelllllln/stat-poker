@@ -6,7 +6,8 @@ import type { Action, HandState } from '../engine/types'
 import { deriveHandStats } from '../stats/hand-stats'
 import type { HandRecord } from '../game/session'
 import { evOfCall, potOddsRatio, requiredEquity, stackToPotRatio } from './odds'
-import { gradeHand, replayHand, verdictFor } from './grade'
+import { gradeHand, replayHand, sizingsFor, verdictFor } from './grade'
+import { evaluateActions, evContext } from './ev'
 import {
   createSession,
   defaultSessionConfig,
@@ -209,6 +210,108 @@ describe('grading', () => {
           expect(option.action.to).toBeLessThanOrEqual(200)
         }
       }
+    }
+  })
+
+  it('prices a call all-in for less against what it can actually win', () => {
+    // Hero has 30 behind and faces a bet of 400. Only 28 of that bet is at
+    // stake, so the call is playing for 32 and not for the 404 on the table.
+    const record = recordFrom(
+      [30, 500],
+      ['Ac Ad', 'Kc Kd'],
+      'Ah 7s 4d 9c 8h',
+      [
+        { type: 'call' }, // hero limps the button
+        { type: 'check' },
+        { type: 'raise', to: 400 }, // villain bets far more than hero can call
+        { type: 'call' }, // hero calls off 28
+      ],
+    )
+    const grade = gradeHand(record, 0)
+    const flop = grade.decisions.find((d) => d.street === 'flop')!
+    const called = flop.options.find((o) => o.action.type === 'call')!
+
+    expect(flop.toCall).toBe(28) // what it cost, not what was bet
+    // Aces on an ace-high board win almost always, so the call is worth close
+    // to the 32 chips it plays for — never the 394 the whole pot would imply.
+    expect(called.ev).toBeGreaterThan(25)
+    expect(called.ev).toBeLessThan(32)
+    expect(flop.requiredEquity).toBeCloseTo(28 / 60, 6)
+  })
+
+  it('grades a fold when checking was free', () => {
+    // Folding the second nuts for nothing is the cheapest blunder in poker to
+    // make and the one a coach must never fail to notice.
+    const record = recordFrom(
+      [200, 200],
+      ['As Ks', '2h 3d'],
+      'Qs Js Ts 4c 5d',
+      [
+        { type: 'call' }, // hero limps the button
+        { type: 'check' },
+        { type: 'check' }, // flop: the big blind checks to the hero
+        { type: 'fold' }, // ...who folds a royal flush rather than checking
+      ],
+    )
+    const grade = gradeHand(record, 0)
+    const flop = grade.decisions.find((d) => d.street === 'flop')!
+
+    expect(flop.chosen.type).toBe('fold')
+    expect(flop.verdict).toBe('blunder')
+    expect(flop.evLossBB).toBeGreaterThan(2)
+  })
+
+  it('prices every action the rules allow', () => {
+    const record = recordFrom([200, 200], ['As Ks', '2h 3d'], 'Qs Js Ts 4c 5d', [
+      { type: 'raise', to: 6 },
+      { type: 'call' },
+      { type: 'check' }, // flop
+      { type: 'raise', to: 10 },
+      { type: 'call' },
+      { type: 'check' }, // turn
+      { type: 'check' },
+      { type: 'check' }, // river
+      { type: 'check' },
+    ])
+
+    for (const { state, action } of replayHand(record)) {
+      if (state.toAct !== 0) continue
+      const priced = evaluateActions(evContext(state, 0, new Rng(1)), sizingsFor(state, 0))
+      const legal = new Set(legalActions(state).map((o) => o.type))
+      const offered = new Set(priced.options.map((o) => o.action.type))
+      // Anything the engine calls legal has a price, or a player can take it
+      // and never be told what it cost them.
+      for (const type of legal) expect(offered.has(type)).toBe(true)
+      expect(action).toBeDefined()
+    }
+  })
+
+  it('shows the equity it graded with', () => {
+    const record = recordFrom([200, 200], ['As Ks', '2h 3d'], 'Qs Js Ts 4c 5d', [
+      { type: 'raise', to: 6 },
+      { type: 'call' },
+      { type: 'check' }, // flop
+      { type: 'raise', to: 8 },
+      { type: 'call' },
+      { type: 'check' }, // turn
+      { type: 'check' },
+      { type: 'check' }, // river
+      { type: 'check' },
+    ])
+    const grade = gradeHand(record, 0)
+
+    for (const decision of grade.decisions) {
+      const passive = decision.options.find(
+        (o) => o.action.type === (decision.toCall > 0 ? 'call' : 'check'),
+      )
+      if (!passive) continue
+      // The number on screen has to be the number the EV was built from.
+      const pot = decision.potBefore
+      const implied =
+        decision.toCall > 0
+          ? (passive.ev + decision.toCall) / (pot + decision.toCall)
+          : passive.ev / pot
+      expect(implied).toBeCloseTo(decision.equity, 6)
     }
   })
 

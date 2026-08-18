@@ -308,6 +308,29 @@ export function buildPots(state: HandState): PotAward[] {
 }
 
 /**
+ * Chips a seat can win by putting `extra` more in, and no more than that.
+ *
+ * A seat only wins from an opponent what it has matched: money bet beyond a
+ * short stack's reach is returned to whoever bet it, not paid out. So calling
+ * off 28 against a bet of 400 plays for the 28 the bettor matched, and the
+ * other 372 is never at stake.
+ *
+ * This is {@link buildPots} restated for one seat — the layers it would be
+ * eligible for, summed — and it is the figure a call has to be priced against.
+ * Where the seat covers the table it is simply the pot, which is why the usual
+ * case needs no special handling.
+ */
+export function winnablePot(state: HandState, seat: number, extra: number): number {
+  const hero = state.seats[seat]!
+  const total = hero.totalCommitted + extra
+  let sum = hero.totalCommitted
+  for (const other of state.seats) {
+    if (other.index !== seat) sum += Math.min(other.totalCommitted, total)
+  }
+  return sum
+}
+
+/**
  * Chips nobody matched are returned rather than won — this is what makes a
  * shove into a shorter stack cost only what the short stack could call.
  */

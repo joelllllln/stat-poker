@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { freshDeck, parseCards, Rng, type Card } from './cards'
-import { applyAction, legalActions, startHand, startHandWithDeck } from './hand'
+import {
+  applyAction,
+  legalActions,
+  startHand,
+  startHandWithDeck,
+  winnablePot,
+} from './hand'
 import { positionName, potSize, type Action, type HandConfig, type HandState } from './types'
 
 const table = (stacks: number[], buttonSeat = 0): HandConfig => ({
@@ -198,6 +204,78 @@ describe('pot resolution', () => {
     expect(pot.winners).toEqual([1, 2])
     // Seat 1 is first to the button's left, so it takes the extra chip.
     expect(state.result!.net).toEqual([-5, 3, 2])
+  })
+})
+
+/**
+ * What a call can win, checked against what the hand actually pays.
+ *
+ * The oracle is the engine itself: play the same hand out twice, once folding
+ * and once calling, and the difference in what the seat ends with *is* the
+ * definition of what calling was playing for. Nothing here trusts the formula.
+ */
+describe('the pot a call plays for', () => {
+  const netFromCalling = (state: HandState, seat: number, rest: Action[]): number => {
+    const folded = play(state, [fold, ...rest.slice(1)])
+    const called = play(state, [call, ...rest.slice(1)])
+    return called.result!.net[seat]! - folded.result!.net[seat]!
+  }
+
+  it('stops at what the bettor matched, not at what they bet', () => {
+    // Hero has 30 behind and faces 400. Only 28 of that bet is ever at stake.
+    const deck = stackedDeck(['Ac Ad', 'Kc Kd'], 'Ah 7s 4d 9c 8h')
+    const start = play(startHandWithDeck(table([30, 500], 0), deck), [call, check])
+    const facing = play(start, [raiseTo(400)])
+
+    expect(winnablePot(facing, 0, 28)).toBe(32)
+    expect(potSize(facing)).toBe(404) // what the naive figure would have been
+    expect(netFromCalling(facing, 0, [call])).toBe(32)
+  })
+
+  it('counts the dead money a folded seat left behind', () => {
+    // Seat 2 pays 10 and folds; the hero can win all of it, being in for more.
+    const deck = stackedDeck(['Ac Ad', 'Kc Kd', 'Qc Qd'], 'Ah 7s 4d 9c 8h')
+    const preflop = play(startHandWithDeck(table([30, 500, 50], 0), deck), [
+      call,
+      raiseTo(10),
+      call,
+      call,
+    ])
+    const facing = play(preflop, [raiseTo(400), fold])
+
+    expect(winnablePot(facing, 0, 20)).toBe(50)
+    expect(netFromCalling(facing, 0, [call])).toBe(50)
+  })
+
+  it('is the whole pot whenever the seat covers the table', () => {
+    const rng = new Rng(4)
+    for (let hand = 0; hand < 400; hand++) {
+      const numSeats = 2 + rng.nextInt(5)
+      const stacks = Array.from({ length: numSeats }, () => 2 + rng.nextInt(400))
+      let state = startHand(table(stacks, rng.nextInt(numSeats)), rng)
+
+      while (state.result === null) {
+        const seat = state.seats[state.toAct!]!
+        const toCall = state.currentBet - seat.committed
+        const covers = state.seats.every(
+          (other) => other.totalCommitted <= seat.totalCommitted + toCall,
+        )
+        // A seat that can cover everyone is playing for the whole pot, so the
+        // capped figure and the naive one have to agree.
+        if (toCall > 0 && toCall <= seat.stack && covers) {
+          expect(winnablePot(state, seat.index, toCall)).toBe(potSize(state))
+        }
+
+        const options = legalActions(state)
+        const choice = options[rng.nextInt(options.length)]!
+        state = applyAction(
+          state,
+          choice.type === 'raise'
+            ? raiseTo(choice.min! + rng.nextInt(choice.max! - choice.min! + 1))
+            : { type: choice.type },
+        )
+      }
+    }
   })
 })
 
