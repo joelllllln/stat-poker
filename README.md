@@ -55,8 +55,12 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   is also checked against the best of all 21 five-card subsets.
 - **Betting engine**: chips are conserved, pots distribute fully, and no seat
   acts out of turn across 10,000 randomly played hands with random stacks and
-  table sizes. Side pots, uncalled-bet returns, short all-ins that do not
-  reopen betting, and odd-chip distribution each have targeted tests.
+  table sizes. Side pots, uncalled-bet returns, odd-chip distribution, and the
+  rule that decides when a raise reopens the betting each have targeted tests —
+  including two short all-ins that add up to a full raise, which reopen it.
+- **What a call plays for**: checked against the engine rather than against a
+  formula. The same hand is played out twice, once folding and once calling,
+  and what the seat ends up with has to match what the call was priced at.
 - **Equity**: exact enumeration and sampling agree within the reported margin
   of error; AA over KK enumerates to 82% across all 1.7m runouts.
 - **Bots**: their statistical signatures are measured by simulation rather than
@@ -88,18 +92,36 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   separately, because running consistently high is a different and more
   fixable fault than being scattered.
 - **Run it again**: aces all-in against kings price at the ~82% they were worth
-  however the board fell; chips balance across every re-dealt runout.
-- **Leak finder**: a grouping that covers every decision scores zero excess and
-  cannot be named a leak; a spot with too few decisions behind it is never
-  called a habit.
+  however the board fell; chips balance across every re-dealt runout. The board
+  is re-dealt from the point the betting ended, which is the only stretch over
+  which holding the betting fixed says anything about the hand, and a hand the
+  hero folded is priced as the call it is compared against — with the price of
+  finding out in the number.
+- **Leak finder**: a spot is compared against the decisions outside it rather
+  than against an average it is part of, a spot with too few decisions behind it
+  is never called a habit, and a dozen groups tested at once are corrected for
+  as a dozen.
 - **Solver**: CFR is verified against Kuhn poker, whose equilibrium is known in
   closed form. It converges to exploitability below 0.001 chips per hand, never
   bets the queen, bluffs the jack at α ≤ ⅓, bets the king at exactly 3α, and
   calls the queen a third of the time — the equilibrium, not a regression
   against the solver's own output.
-- **Coach**: folding a royal flush grades as a blunder, a correct call grades
-  correct whatever the runout did, verdicts are deterministic, and no decision
-  is ever offered a bet size that was not legal at the time.
+- **Coach**: folding a royal flush grades as a blunder — whether it cost
+  something to fold or nothing at all — a correct call grades correct whatever
+  the runout did, every action the rules allow comes back with a price, and no
+  decision is offered a bet size that was not legal at the time.
+- **Verdicts do not depend on the seed**: the same hands are graded under four
+  different sampling seeds and every verdict has to come out the same. This is
+  the acceptance test for the whole expected-value model, and the reason for
+  the error bars, the shared random numbers and the extra rollouts spent on
+  close decisions.
+- **Nothing is announced from noise**: two halves drawn from the same player
+  must be called a trend no more than one time in twenty, and a player whose
+  costs have nothing to do with the spots they happened in must be handed a
+  leak no more than one time in twenty. Both are measured against results
+  shaped the way poker results are shaped — mostly nothing, occasionally
+  enormous — and both keep the power to find a difference that is really
+  there.
 
 ## Reading the screen
 
@@ -126,16 +148,19 @@ about honesty rather than a feature:
 - **Only replay inputs are stored** — the deck, the actions, the stacks. Every
   statistic is recomputed on read, so improving a definition applies to hands
   recorded months ago rather than only to hands played afterwards.
-- **Verdicts are cached against a grader version.** Grading a hand costs about a
-  third of a second, which cannot be paid again for a whole history on every
-  load; it is paid once, in a worker, newest hands first. Changing the coach
-  raises the version and every cached verdict is discarded and worked out again,
-  because a stale grade shown as a current one is worse than an ungraded hand.
+- **Verdicts are cached against a grader version.** Grading a hand costs under
+  a second, which cannot be paid again for a whole history on every load; it is
+  paid once, in a worker, newest hands first. Changing the coach raises the
+  version and every cached verdict is discarded and worked out again, because a
+  stale grade shown as a current one is worse than an ungraded hand.
 - **A trend is only reported when the sample supports it.** The history is cut
   into blocks — wide enough to mean something, narrow enough to show movement —
-  and a change is called a change only when it is larger than the noise around
-  it. Over a few hundred hands the honest answer is usually that nothing has
-  moved, and the app says so.
+  and a change is called a change only when the sample can carry the claim.
+  Rates are compared as proportions and chips by permutation, because chips per
+  hand are nothing like normally distributed and a test that assumes they are
+  will find trends in anybody. Several questions asked of one history are
+  corrected for as several. Over a few hundred hands the honest answer is
+  usually that nothing has moved, and the app says so.
 
 ## Counting outs
 
@@ -149,22 +174,46 @@ That finds the flush cards without knowing what a flush is, declines to count a
 card that improves them more than it improves you, and handles any board texture
 identically because it never had a texture rule to begin with.
 
+With two cards to come the question changes from "how often does an out
+arrive?" to **"how often does the hand end up in front?"**, and every pair of
+cards still to come is tried rather than assuming what an out is stays the same
+after the first one lands. A fourth heart can fill their range as easily as
+yours, and a turn that puts you ahead can be undone by the river. The usual
+"miss twice" shortcut cannot see either.
+
 ## What the coach can and cannot see
 
 The EV model prices **one street**: what folding, calling, checking or betting
 is worth right now. It is exact where the hand ends there — a river call is
 fully priced — and an approximation where it does not, so implied odds on a
-flop draw are not captured. Two consequences worth knowing:
+flop draw are not captured. Three consequences worth knowing:
 
 - All-in is only offered as a candidate when stacks are shallow (SPR ≤ 2).
   Inside a one-street model a huge bet with a strong hand always scores best,
   because there is no later street in which it could cost the value a smaller
   bet would have collected. Offering it everywhere made the coach recommend
   jamming the nuts on the flop.
-- Whether a villain folds is modelled by whether its hand clears the price,
-  after discounting for the equity it will not get to realise. That is a
-  defensible rule rather than a solved one, and Phase 6 replaces it for
-  heads-up postflop.
+- Whether a villain folds is modelled by whether its hand clears the price it
+  is personally being laid, after discounting for the equity it will not get to
+  realise. That is a defensible rule rather than a solved one, and Phase 6
+  replaces it for heads-up postflop.
+- Which opponents call is not known when a bet is made, so every way the field
+  can split is priced and weighted by how likely it is. Their decisions are
+  modelled as independent; the arithmetic then follows from that assumption
+  rather than quietly contradicting it.
+
+A call is priced against what it can actually win. Facing 400 with 30 behind,
+only 28 of that bet is ever at stake and the rest goes back to whoever bet it —
+so the call plays for 32 chips, not for the 404 on the table.
+
+**Every priced action carries its error bar**, because most of them are
+sampled. Expected value is linear in equity, so the sampler's error carries
+through exactly, and the alternatives are priced against the same random draws
+so that most of it cancels where they are compared. A verdict is then read off
+the *conservative* end of that bar: noise can lose a blunder but can never
+invent one. Where the bar straddles a band, that one decision is priced again
+with far more rollouts — which is where they change what is said, and the only
+place they are spent.
 
 ## What the solver solved, and what it did not
 
@@ -187,11 +236,17 @@ with card removal counted exactly. It converges to an exploitability of
 what it says. The resulting button range opens 80% of hands, which is where
 published solutions sit.
 
+**Four depths are solved, not one**: 40, 70, 100 and 150 big blinds. Depth is
+the game rather than a detail of it — forty blinds and a hundred disagree about
+which hands can open and about when a three-bet is a shove — so a hand is
+answered from the rung nearest the *effective* stack, the shorter of the two,
+and from none at all outside them.
+
 This is not a lesser target than six-handed. **Every hand folded to the small
 blind is a heads-up preflop game at exactly these stakes**, which makes
 blind-versus-blind the most repeated spot at the table. The app looks a hand up
-only when it translates into that game exactly — two players left, no dead money
-from anyone who folded, stacks at the solved depth — and returns nothing
+only when it translates into that game — two players left, no dead money from
+anyone who folded, an effective stack near a solved depth — and returns nothing
 otherwise. A strategy borrowed from a different spot is not an approximation.
 
 Two abstractions remain, both stated in the code: limping is not modelled (the
@@ -220,19 +275,25 @@ button.
 Measured over 1,200 hands of the five archetypes playing each other. These are
 emergent — the policy takes style parameters, not target stats.
 
-| | VPIP | PFR | 3-bet | Fold to 3-bet | WTSD | AF |
+| | VPIP | PFR | 3-bet | Fold to raise | WTSD | AF |
 |---|---|---|---|---|---|---|
-| The Rock (nit) | 9.0% | 6.4% | 1.9% | 93% | 77% | 1.79 |
-| The Eagle (TAG) | 21.6% | 17.7% | 3.8% | 86% | 63% | 2.60 |
-| The Hawk (LAG) | 35.6% | 25.9% | 8.6% | 68% | 62% | 2.62 |
-| The Fish (station) | 42.2% | 6.3% | 0.4% | 56% | 86% | 0.29 |
-| The Maniac | 51.1% | 42.5% | 28.7% | 49% | 56% | 3.87 |
+| The Rock (nit) | 9.0% | 6.3% | 1.5% | 93% | 48% | 1.32 |
+| The Eagle (TAG) | 23.1% | 18.2% | 3.3% | 82% | 48% | 2.05 |
+| The Hawk (LAG) | 32.3% | 22.1% | 5.7% | 69% | 51% | 2.81 |
+| The Fish (station) | 43.9% | 7.0% | 0.5% | 43% | 57% | 0.25 |
+| The Maniac | 45.9% | 35.7% | 21.3% | 52% | 45% | 3.31 |
 
-Preflop profiles are realistic. **WTSD is not**: real players show down 25–30%
-of the flops they see, and these bots are far higher because multiway pots get
-checked down rather than bet. It makes them too passive on later streets — the
-known weakness of this generation of bots, and the reason Phase 5 replaces the
-policy with a solved preflop blueprint.
+Preflop profiles are realistic. **WTSD is still not**: real players show down
+25–30% of the flops they see and these bots roughly double it, because multiway
+pots get checked down rather than bet. It makes them too passive on later
+streets — the known weakness of this generation of bots, and the reason Phase 5
+replaces the policy with a solved preflop blueprint.
+
+These numbers used to read 60–86%, and most of that was a measurement rather
+than the bots: whether a seat had seen the flop was read off whether it was
+still in the hand at the end, which strikes out everyone who saw a flop and
+folded on it. The denominator of a rate decides what the rate means, and a
+wrong one produces a plausible number that answers a different question.
 
 Winrates in these tables are noise at this sample size, which is exactly the
 point the app's own dashboard makes about your own.
@@ -250,3 +311,10 @@ point the app's own dashboard makes about your own.
   correct call, and the app says so.
 - **Rates carry their sample size.** A winrate over 200 hands is noise, and
   showing it as anything else is the main way poker software misleads people.
+- **A claim about a player gets a test that could refute it.** Not an assertion
+  that the code does what it says, but a measured false-positive rate: point
+  the trend finder at a player who has not changed, or the leak finder at a
+  player with no leak, and require them to say so nineteen times in twenty.
+- **A verdict is a property of the decision, not of the run.** Anything the app
+  computes by sampling carries the error of that sampling, and no verdict is
+  delivered that the sample cannot support.
