@@ -7,11 +7,34 @@
  *     node scripts/smoke.mjs
  */
 
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { chromium } from 'playwright'
 
 const URL = process.env.SMOKE_URL ?? 'http://localhost:4173'
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
+/**
+ * Find a browser to drive.
+ *
+ * A pre-installed one is used where the environment provides it, even when its
+ * build number is not the one this version of Playwright would download, and
+ * Playwright's own resolution is left alone otherwise. The same script then
+ * runs on a machine with a browser already there and on a fresh CI runner.
+ */
+function browserPath() {
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH
+  const root = process.env.PLAYWRIGHT_BROWSERS_PATH
+  if (!root || !existsSync(root)) return null
+  for (const entry of readdirSync(root)) {
+    if (!entry.startsWith('chromium-')) continue
+    const candidate = join(root, entry, 'chrome-linux', 'chrome')
+    if (existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+const executablePath = browserPath()
+const browser = await chromium.launch(executablePath ? { executablePath } : {})
 const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } })
 
 const errors = []

@@ -21,6 +21,33 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Install a browser for the smoke test
+        run: npx playwright install --with-deps chromium
+      # Served from a subdirectory rather than the root, because that is what
+      # Pages does: a build with absolute asset paths passes at the root and
+      # then loads nothing once published.
+      - name: Serve the build the way Pages serves it
+        run: |
+          mkdir -p site/stat-poker
+          cp -r dist/. site/stat-poker/
+          python3 -m http.server 4180 --directory site &
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:4180/stat-poker/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo 'the built site never came up' >&2
+          exit 1
+      - name: Smoke test
+        run: node scripts/smoke.mjs
+        env:
+          SMOKE_URL: http://localhost:4180/stat-poker/
+      - name: Screenshot from a failed smoke test
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshot
+          path: screenshot.png
+          if-no-files-found: ignore
 
   # The exhaustive checks run on their own schedule rather than on every push:
   # verifying all 133,784,560 seven-card hands takes over a minute, and it can
@@ -40,7 +67,8 @@ jobs:
 
   # Publishing runs behind the checks rather than beside them: the deployed
   # link outlives the push that made it, so it should never carry a build that
-  # did not pass. Pages must be switched on for the repository first
+  # did not typecheck, pass its tests, and run in a browser at a Pages-shaped
+  # URL. Pages must be switched on for the repository first
   # (Settings -> Pages -> Source: GitHub Actions); the workflow token is not
   # allowed to switch it on by itself.
   publish:
