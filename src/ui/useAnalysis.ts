@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card } from '../engine/cards'
-import type { EquityReply, SolveReply } from '../workers/analysis.worker'
+import type { AdviseReply, EquityReply, SolveReply } from '../workers/analysis.worker'
+import type { HandState } from '../engine/types'
 import { ask } from './analysis-client'
 
 export interface EquityQuery {
@@ -129,4 +130,73 @@ export function useRiverSolve(): {
         })
     },
   }
+}
+
+
+export interface AdviceQuery {
+  state: HandState
+  heroSeat: number
+  startingStacks: readonly number[]
+}
+
+/**
+ * What the coach would do, at the decision in front of you.
+ *
+ * The same pricing that grades the hand afterwards, run on the position as it
+ * stands — so the advice while you decide and the verdict after you have
+ * cannot disagree. It costs a tenth of a second or so, which is why it runs in
+ * the worker and why the previous answer stays on screen until the new one
+ * lands rather than the panel emptying between decisions.
+ */
+export function useAdvice(query: AdviceQuery | null): {
+  advice: AdviseReply | null
+  pending: boolean
+} {
+  const [advice, setAdvice] = useState<AdviseReply | null>(null)
+  const [pending, setPending] = useState(false)
+  const latest = useRef(0)
+
+  // The decision is identified by how many actions have been taken: one more
+  // action means a different question, and nothing else about it can change.
+  const key = query
+    ? `${query.state.actions.length}:${query.state.street}:${query.heroSeat}`
+    : null
+
+  useEffect(() => {
+    if (!query || key === null) {
+      setAdvice(null)
+      return
+    }
+
+    const token = ++latest.current
+    setPending(true)
+    ask<AdviseReply>({
+      kind: 'advise',
+      deck: [...query.state.deck],
+      actions: query.state.actions.map((entry) =>
+        entry.action.type === 'raise'
+          ? { seat: entry.seat, type: entry.action.type, to: entry.action.to }
+          : { seat: entry.seat, type: entry.action.type },
+      ),
+      seatNames: query.state.seats.map((seat) => seat.name),
+      startingStacks: [...query.startingStacks],
+      buttonSeat: query.state.buttonSeat,
+      smallBlind: query.state.smallBlind,
+      bigBlind: query.state.bigBlind,
+      heroSeat: query.heroSeat,
+    })
+      .then((reply) => {
+        if (token !== latest.current) return
+        setAdvice(reply)
+        setPending(false)
+      })
+      .catch(() => {
+        if (token !== latest.current) return
+        setAdvice(null)
+        setPending(false)
+      })
+    // `key` names the decision; the rest of the query follows from it.
+  }, [key])
+
+  return { advice, pending }
 }

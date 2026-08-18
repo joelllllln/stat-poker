@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { legalActions } from '../engine/hand'
-import { potSize, type HandState } from '../engine/types'
+import { potSize, type Action, type HandState } from '../engine/types'
 import { useStore } from './store'
 
 /**
@@ -27,10 +27,13 @@ const SIZINGS = [
 export function ActionBar({
   state,
   heroSeat,
+  best,
 }: {
   /** Null before the first hand of the session is dealt. */
   state: HandState | null
   heroSeat: number
+  /** The highest-value action, when the coach is running live. */
+  best?: Action | undefined
 }) {
   const act = useStore((s) => s.act)
   const deal = useStore((s) => s.deal)
@@ -119,10 +122,36 @@ export function ActionBar({
   }
 
   const button =
-    'flex-1 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed'
+    'relative flex-1 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed'
+
+  // The recommendation is marked on the control it recommends, because that is
+  // where somebody is looking when they need it. A recommended raise marks the
+  // raise button whatever the slider says, and names the size it means — the
+  // advice is "raise, and this much", and hiding it until the slider happens to
+  // agree would mark nothing most of the time.
+  const recommended = (type: Action['type']) =>
+    best?.type === type ? ' ring-2 ring-emerald-300 ring-offset-2 ring-offset-slate-950' : ''
+
+  const bestBadge = (type: Action['type']) =>
+    best?.type === type ? (
+      <span
+        aria-hidden
+        className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-300 px-2 text-[10px] font-bold text-emerald-950"
+      >
+        {best.type === 'raise' && best.to !== amount ? `best: ${best.to}` : 'best'}
+      </span>
+    ) : null
 
   return (
     <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-3 shadow-lg shadow-black/40 sm:bg-slate-950/80 sm:shadow-none">
+      {/* What the situation is, in one line, before what to do about it. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
+        <span className="font-medium text-amber-300">Your turn</span>
+        <span className="text-slate-400">
+          {toCall > 0 ? `${toCall} to call into a pot of ${pot}` : `nothing to call · pot ${pot}`}
+        </span>
+      </div>
+
       {raise && (
         <div className="flex flex-wrap items-center gap-2">
           {SIZINGS.map((s) => {
@@ -153,6 +182,16 @@ export function ActionBar({
             All in <span aria-hidden className="opacity-60">a</span>
           </button>
 
+          {/* The size the coach would use, one click away. */}
+          {best?.type === 'raise' && best.to !== amount && (
+            <button
+              onClick={() => setCustom(best.to)}
+              className="rounded-md border border-emerald-500 px-2.5 py-1 text-xs text-emerald-200 transition hover:bg-emerald-900/40"
+            >
+              Best {best.to}
+            </button>
+          )}
+
           <input
             type="range"
             min={raise.min}
@@ -180,35 +219,39 @@ export function ActionBar({
 
       <div className="flex gap-2">
         <button
-          className={`${button} bg-slate-700 hover:bg-slate-600`}
+          className={`${button} bg-slate-700 hover:bg-slate-600${recommended('fold')}`}
           disabled={!canFold}
           onClick={() => act({ type: 'fold' })}
         >
+          {bestBadge('fold')}
           Fold <span aria-hidden className="text-[10px] opacity-60">f</span>
         </button>
 
         {canCheck ? (
           <button
-            className={`${button} bg-sky-700 hover:bg-sky-600`}
+            className={`${button} bg-sky-700 hover:bg-sky-600${recommended('check')}`}
             onClick={() => act({ type: 'check' })}
           >
+            {bestBadge('check')}
             Check <span aria-hidden className="text-[10px] opacity-60">c</span>
           </button>
         ) : (
           <button
-            className={`${button} bg-sky-700 hover:bg-sky-600`}
+            className={`${button} bg-sky-700 hover:bg-sky-600${recommended('call')}`}
             disabled={!canCall}
             onClick={() => act({ type: 'call' })}
           >
+            {bestBadge('call')}
             Call {Math.min(toCall, hero.stack)} <span aria-hidden className="text-[10px] opacity-60">c</span>
           </button>
         )}
 
         <button
-          className={`${button} bg-emerald-600 hover:bg-emerald-500`}
+          className={`${button} bg-emerald-600 hover:bg-emerald-500${recommended('raise')}`}
           disabled={!raise}
           onClick={() => raise && act({ type: 'raise', to: amount })}
         >
+          {bestBadge('raise')}
           {state.currentBet > 0 ? 'Raise to' : 'Bet'} {raise ? amount : '—'}{' '}
           <span aria-hidden className="text-[10px] opacity-60">r</span>
         </button>

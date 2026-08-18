@@ -68,6 +68,15 @@ interface Store {
   version: number
   /** How much of the odds overlay to show while deciding. */
   hudLevel: 'full' | 'predict' | 'off'
+  /**
+   * Whether the coach says what to do while the decision is live.
+   *
+   * Off is a real setting rather than a hidden one: being told the answer is
+   * how a spot becomes familiar, and not being told is how you find out
+   * whether it has.
+   */
+  adviceLive: boolean
+  setAdviceLive: (live: boolean) => void
   /** The player's equity guess this decision, in predict-then-reveal mode. */
   guess: number | null
   /** Whether the post-hand review is shown. */
@@ -114,10 +123,11 @@ const PREFERENCES = 'stat-poker:preferences'
 interface Preferences {
   hudLevel: Store['hudLevel']
   speed: Speed
+  adviceLive: boolean
 }
 
 function loadPreferences(): Preferences {
-  const fallback: Preferences = { hudLevel: 'full', speed: 'normal' }
+  const fallback: Preferences = { hudLevel: 'full', speed: 'normal', adviceLive: true }
   try {
     const raw = localStorage.getItem(PREFERENCES)
     if (raw === null) return fallback
@@ -128,6 +138,7 @@ function loadPreferences(): Preferences {
           ? parsed.hudLevel
           : fallback.hudLevel,
       speed: parsed.speed === 'fast' ? 'fast' : 'normal',
+      adviceLive: parsed.adviceLive !== false,
     }
   } catch {
     // A browser with storage switched off is not a reason to fail to start.
@@ -155,7 +166,12 @@ let botTimer: ReturnType<typeof setTimeout> | null = null
 export const useStore = create<Store>((set, get) => {
   const preferences = loadPreferences()
   const bump = () => set((s) => ({ version: s.version + 1 }))
-  const remember = () => savePreferences({ hudLevel: get().hudLevel, speed: get().speed })
+  const remember = () =>
+    savePreferences({
+      hudLevel: get().hudLevel,
+      speed: get().speed,
+      adviceLive: get().adviceLive,
+    })
 
   /**
    * Write any hands finished since `before` to storage.
@@ -286,6 +302,11 @@ export const useStore = create<Store>((set, get) => {
     session: createSession(defaultSessionConfig(Date.now() >>> 0)),
     version: 0,
     hudLevel: preferences.hudLevel,
+    adviceLive: preferences.adviceLive,
+    setAdviceLive: (adviceLive) => {
+      set({ adviceLive })
+      remember()
+    },
     guess: null,
     showReview: true,
     archive: [],
