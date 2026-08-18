@@ -35,21 +35,6 @@ export function evOfCall(equity: number, toCall: number, pot: number): number {
   return equity * pot - (1 - equity) * toCall
 }
 
-/**
- * EV of a bet or raise that risks `amount` into `pot`, given how often it is
- * folded to and the equity when it is called.
- */
-export function evOfAggression(
-  amount: number,
-  pot: number,
-  foldEquity: number,
-  equityWhenCalled: number,
-): number {
-  const winsNow = foldEquity * pot
-  const goesToShowdown = (1 - foldEquity) * (equityWhenCalled * (pot + amount) - (1 - equityWhenCalled) * amount)
-  return winsNow + goesToShowdown
-}
-
 /** Stack-to-pot ratio, the usual shorthand for how much room is left to play. */
 export function stackToPotRatio(effectiveStack: number, pot: number): number {
   if (pot <= 0) return Infinity

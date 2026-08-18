@@ -54,6 +54,24 @@ const check = (label, condition) => {
   if (!condition) process.exitCode = 1
 }
 
+/**
+ * Deal the next hand, once the table is ready for one.
+ *
+ * The button is disabled while the other players are still acting, so a blind
+ * click is a race the test loses occasionally. This waits for the state it
+ * needs instead of assuming it.
+ */
+async function dealNextHand() {
+  const deal = page.getByRole('button', { name: 'Deal', exact: true })
+  if ((await deal.count()) === 0) return false
+  try {
+    await deal.first().click({ timeout: 10_000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 check('app renders', (await page.locator('h1').innerText()) === 'stat-poker')
 
 // Bots act with a pause between them, the way a client deals. The test does
@@ -185,8 +203,7 @@ if (atShowdown.clashes.length) console.log('   ', atShowdown.clashes.slice(0, 6)
 let busiest = 0
 const acrossHands = []
 for (let hand = 0; hand < 5; hand++) {
-  const deal = page.getByRole('button', { name: 'Deal', exact: true })
-  if (await deal.count()) await deal.first().click()
+  await dealNextHand()
   for (let step = 0; step < 8; step++) {
     const raise = page.getByRole('button', { name: /^(Raise to|Bet) / })
     const call = page.getByRole('button', { name: /^Call/ })
@@ -314,8 +331,7 @@ check(
 // describe every hand rather than restarting from zero.
 await page.getByRole('button', { name: 'Hide', exact: true }).click()
 for (let hand = 0; hand < 30; hand++) {
-  const deal = page.getByRole('button', { name: 'Deal', exact: true })
-  if (await deal.count()) await deal.first().click()
+  await dealNextHand()
   for (let i = 0; i < 12; i++) {
     const checkButton = page.getByRole('button', { name: 'Check', exact: true })
     const call = page.getByRole('button', { name: /^Call/ })

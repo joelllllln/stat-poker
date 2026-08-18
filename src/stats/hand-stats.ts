@@ -5,7 +5,7 @@
  * a definition here retroactively improves every hand already in the history.
  */
 
-import { potSize, type HandState, type Street } from '../engine/types'
+import type { HandState, Street } from '../engine/types'
 
 export interface SeatHandStats {
   seat: number
@@ -135,6 +135,3 @@ export function aggregate(records: SeatHandStats[], bigBlind: number): Aggregate
     bbPer100: (net / bigBlind / hands) * 100,
   }
 }
-
-/** Final pot of a completed hand, for display in the history list. */
-export const finalPot = (state: HandState): number => potSize(state)
