@@ -14,6 +14,7 @@ export function DataCard() {
   const importHistory = useStore((s) => s.importHistory)
   const storedHands = useStore((s) => s.storedHands)
   const unreadable = useStore((s) => s.unreadable)
+  const storageBroken = useStore((s) => s.storageBroken)
   const [message, setMessage] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -49,8 +50,9 @@ export function DataCard() {
       <div className="text-[11px] uppercase tracking-wide text-slate-500">Your hands</div>
 
       <p className="text-xs text-slate-400">
-        {storedHands.toLocaleString('en-US')} hand{storedHands === 1 ? '' : 's'} are stored in this
-        browser and nowhere else.
+        {storageBroken
+          ? 'This browser will not let the app store anything — in a private window, or with site data blocked. You can still play, but nothing will be kept after you close the tab.'
+          : `${storedHands.toLocaleString('en-US')} hand${storedHands === 1 ? '' : 's'} are stored in this browser and nowhere else.`}
         {storedHands > ARCHIVE_LIMIT &&
           ` Statistics are built from the most recent ${ARCHIVE_LIMIT.toLocaleString('en-US')}.`}
         {unreadable > 0 &&

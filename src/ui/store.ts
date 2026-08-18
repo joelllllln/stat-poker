@@ -3,6 +3,7 @@ import type { Action } from '../engine/types'
 import { GRADER_VERSION, type DecisionGrade, type GradedDecision } from '../coach/grade'
 import { allHands, handKey, hydrate, type ArchivedHand } from '../stats/archive'
 import { toStored, type StoredHand } from '../stats/serialize'
+import type { Estimate } from '../stats/estimates'
 import {
   createHandStore,
   exportStore,
@@ -78,6 +79,8 @@ interface Store {
   storedHands: number
   /** Hands that would not replay, so the count on screen can be honest. */
   unreadable: number
+  /** True when this browser will not let the app store anything. */
+  storageBroken: boolean
   /** The luck curve over the archive, computed off the interface thread. */
   archiveLuck: Omit<LuckReply, 'kind' | 'id'> | null
   /** Hands still waiting for a verdict, for the progress the dashboard shows. */
@@ -288,6 +291,7 @@ export const useStore = create<Store>((set, get) => {
     archive: [],
     storedHands: 0,
     unreadable: 0,
+    storageBroken: false,
     archiveLuck: null,
     gradingLeft: 0,
 
@@ -327,11 +331,23 @@ export const useStore = create<Store>((set, get) => {
       if (loadedHistory) return
       loadedHistory = true
 
-      const [stored, estimates, cached] = await Promise.all([
-        handStore.all(),
-        handStore.allEstimates(),
-        handStore.allGrades(),
-      ])
+      // A browser with storage blocked — private mode, a locked-down profile —
+      // must still deal cards. The record is what is lost, not the game, and
+      // saying so once is better than an unhandled rejection.
+      let stored: StoredHand[] = []
+      let estimates: Estimate[] = []
+      let cached: CachedGrade[] = []
+      try {
+        ;[stored, estimates, cached] = await Promise.all([
+          handStore.all(),
+          handStore.allEstimates(),
+          handStore.allGrades(),
+        ])
+      } catch (error) {
+        console.warn('Could not read the stored history; this session will not be recorded', error)
+        set({ storageBroken: true })
+        return
+      }
 
       const recent = [...stored]
         .sort((a, b) => a.playedAt - b.playedAt)

@@ -118,7 +118,8 @@ export function App() {
           <p className="text-xs text-slate-500">
             Hand {session.handNumber} · blinds {session.config.smallBlind}/
             {session.config.bigBlind} · your stack {session.stacks[heroSeat]}
-            {storedHands > 0 && ` · ${storedHands.toLocaleString('en-US')} hands recorded`}
+            {storedHands > 0 &&
+              ` · ${storedHands.toLocaleString('en-US')} hand${storedHands === 1 ? '' : 's'} recorded`}
           </p>
         </div>
 
