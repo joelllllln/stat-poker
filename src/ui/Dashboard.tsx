@@ -215,7 +215,10 @@ export function Dashboard({ session }: { session: SessionState }) {
         </div>
         <div className="ml-auto text-right text-xs">
           {graded.length >= MASTERY_SAMPLE ? (
-            <span className="font-mono text-slate-300">
+            <span
+              className="font-mono text-slate-300"
+              title="Measured against this app's own model of the spot, not against a solved answer. It says how far your decisions sit from what the coach would have done."
+            >
               −{evLostPer100.toFixed(1)}bb/100 given up
             </span>
           ) : (
@@ -230,6 +233,15 @@ export function Dashboard({ session }: { session: SessionState }) {
           )}
         </div>
       </div>
+
+      {/* What the rating is, and is not. A player reading "Elite" deserves to
+          know it is agreement with a model rather than a solved verdict. */}
+      <p className="px-1 text-[11px] text-slate-500">
+        Your rating measures how far your decisions sit from what this app's coach would
+        have done, priced against the ranges it models. That is a yardstick, not the truth:
+        the coach prices one street at a time, so it is a good guide to obvious errors and a
+        poor one to fine judgement.
+      </p>
 
       {/* The same numbers over time. One figure describes a player as though
           they have always been the same one, which is the opposite of what a
