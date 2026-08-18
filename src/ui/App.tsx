@@ -8,6 +8,7 @@ import { OddsPanel } from './OddsPanel'
 import { Reflection } from './Reflection'
 import { SessionCard } from './SessionCard'
 import { Table } from './Table'
+import { InfoTabs, type InfoTab } from './InfoTabs'
 import { useStore, type Speed } from './store'
 import { useAdvice } from './useAnalysis'
 
@@ -80,7 +81,7 @@ function Toggle<T extends string>({
             key={option.value}
             onClick={() => onChange(option.value)}
             aria-pressed={value === option.value}
-            className={`rounded px-2.5 py-1 transition ${
+            className={`min-h-11 touch-manipulation rounded px-3 transition sm:min-h-8 ${
               value === option.value
                 ? 'bg-slate-700 text-white'
                 : 'text-slate-400 hover:text-slate-200'
@@ -106,6 +107,7 @@ export function App() {
   const loadHistory = useStore((s) => s.loadHistory)
   const storedHands = useStore((s) => s.storedHands)
   const [screen, setScreen] = useState<'table' | 'progress'>('table')
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   useEffect(() => {
     void loadHistory()
@@ -125,23 +127,66 @@ export function App() {
       : null,
   )
 
+  // One list of panels, shown side by side where there is room and one at a
+  // time where there is not.
+  const panels: InfoTab[] = []
+  if (adviceLive && yourTurn && !adviceHidden) {
+    panels.push({
+      id: 'coach',
+      label: 'Coach',
+      badge: advice?.options[0] ? 'best' : undefined,
+      content: (
+        <Advice advice={advice} pending={advicePending} bigBlind={session.config.bigBlind} />
+      ),
+    })
+  }
+  if (state) {
+    panels.push({
+      id: 'hand',
+      label: 'Hand',
+      content: <ActionLog state={state} heroSeat={heroSeat} />,
+    })
+  }
+  if (state && !handOver && hudLevel !== 'off') {
+    panels.push({
+      id: 'odds',
+      label: 'Odds',
+      content: <OddsPanel state={state} heroSeat={heroSeat} />,
+    })
+  }
+  panels.push({
+    id: 'you',
+    label: 'You',
+    content: <SessionCard session={session} />,
+  })
+
   return (
-    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-3 sm:p-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-          <h1 className="whitespace-nowrap text-lg font-semibold tracking-tight">stat-poker</h1>
-          <p className="text-xs text-slate-500">
-            Hand {session.handNumber} · blinds {session.config.smallBlind}/
-            {session.config.bigBlind} · your stack {session.stacks[heroSeat]}
-            {storedHands > 0 &&
-              ` · ${storedHands.toLocaleString('en-US')} hand${storedHands === 1 ? '' : 's'} recorded`}
+    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-2 p-2 sm:gap-3 sm:p-4">
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+          <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
+            stat-poker
+          </h1>
+          {/* Three facts fit a phone header; the words around them do not. */}
+          <p className="truncate text-[11px] leading-tight text-slate-500 sm:text-xs">
+            Hand {session.handNumber} ·<span className="hidden sm:inline"> blinds</span>{' '}
+            {session.config.smallBlind}/{session.config.bigBlind} ·
+            <span className="hidden sm:inline"> stack</span> {session.stacks[heroSeat]}
+            {storedHands > 0 && (
+              <span className="hidden sm:inline">
+                {` · ${storedHands.toLocaleString('en-US')} hand${storedHands === 1 ? '' : 's'} recorded`}
+              </span>
+            )}
           </p>
         </div>
 
         {/* The two screens are a choice about where you are; the rest are
             settings for the table. Kept apart so they do not read as one row
             of six equal buttons. */}
-        <nav className="flex rounded-lg border border-slate-800 p-0.5 text-sm" aria-label="Screen">
+        <nav
+          className="flex shrink-0 rounded-lg border border-slate-800 p-0.5 text-sm"
+          aria-label="Screen"
+        >
           {(
             [
               { value: 'table', label: 'Table' },
@@ -152,7 +197,7 @@ export function App() {
               key={tab.value}
               onClick={() => setScreen(tab.value)}
               aria-current={screen === tab.value ? 'page' : undefined}
-              className={`rounded px-4 py-1.5 transition ${
+              className={`min-h-11 touch-manipulation rounded px-5 transition sm:min-h-9 ${
                 screen === tab.value
                   ? 'bg-slate-700 font-medium text-white'
                   : 'text-slate-400 hover:text-slate-200'
@@ -162,51 +207,70 @@ export function App() {
             </button>
           ))}
         </nav>
+
+        {screen === 'table' && (
+          <button
+            onClick={() => setSettingsOpen((open) => !open)}
+            aria-expanded={settingsOpen}
+            className={`min-h-11 min-w-11 shrink-0 touch-manipulation rounded-lg border border-slate-800 text-slate-400 transition sm:hidden ${
+              settingsOpen ? 'bg-slate-800 text-white' : ''
+            }`}
+            aria-label="Settings"
+          >
+            ⚙
+          </button>
+        )}
       </header>
 
       {screen === 'table' && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Toggle
-            label="Odds"
-            hint="Show the numbers while you decide, ask you to guess them first, or hide them."
-            value={hudLevel}
-            onChange={setHudLevel}
-            options={[
-              { value: 'full', label: 'Show' },
-              { value: 'predict', label: 'Guess first' },
-              { value: 'off', label: 'Hide' },
-            ]}
-          />
-          <Toggle
-            label="Coach"
-            hint="Say what the highest-value action is while you are deciding, or leave it to the review after the hand."
-            value={adviceLive ? 'live' : 'after'}
-            onChange={(value) => setAdviceLive(value === 'live')}
-            options={[
-              { value: 'live', label: 'While I play' },
-              { value: 'after', label: 'After the hand' },
-            ]}
-          />
-          <Toggle
-            label="Bot speed"
-            hint="How long the other players take to act."
-            value={speed}
-            onChange={(value: Speed) => setSpeed(value)}
-            options={[
-              { value: 'normal', label: 'Normal' },
-              { value: 'fast', label: 'Fast' },
-            ]}
-          />
-          {/* Only worth saying where there is a keyboard to press. */}
-          <span className="hidden text-xs text-slate-600 sm:inline">
-            Keys: F fold · C check or call · R raise · A all in · Space deal
-          </span>
+        // Folded away on a phone, where six settings buttons would cost a
+        // third of the screen the game is played on.
+        <div
+          className={`${settingsOpen ? '' : 'hidden'} rounded-xl border border-slate-800 sm:block sm:border-0`}
+        >
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-3 sm:p-0">
+            <Toggle
+              label="Odds"
+              hint="Show the numbers while you decide, ask you to guess them first, or hide them."
+              value={hudLevel}
+              onChange={setHudLevel}
+              options={[
+                { value: 'full', label: 'Show' },
+                { value: 'predict', label: 'Guess first' },
+                { value: 'off', label: 'Hide' },
+              ]}
+            />
+            <Toggle
+              label="Coach"
+              hint="Say what the highest-value action is while you are deciding, or leave it to the review after the hand."
+              value={adviceLive ? 'live' : 'after'}
+              onChange={(value) => setAdviceLive(value === 'live')}
+              options={[
+                { value: 'live', label: 'While I play' },
+                { value: 'after', label: 'After the hand' },
+              ]}
+            />
+            <Toggle
+              label="Bot speed"
+              hint="How long the other players take to act."
+              value={speed}
+              onChange={(value: Speed) => setSpeed(value)}
+              options={[
+                { value: 'normal', label: 'Normal' },
+                { value: 'fast', label: 'Fast' },
+              ]}
+            />
+            {/* Only worth saying where there is a keyboard to press. */}
+            <span className="hidden text-xs text-slate-600 sm:inline">
+              Keys: F fold · C check or call · R raise · A all in · Space deal
+            </span>
+          </div>
         </div>
       )}
 
       {screen === 'table' ? (
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-3">
+        <div className="grid gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="space-y-2 sm:space-y-3">
             <Table session={session} />
             {/* Deliberately in the flow rather than floating: a bar that
                 hovers over the page covers whatever is under it, and the
@@ -219,6 +283,13 @@ export function App() {
                 : {})}
             />
             <ResultBanner />
+
+            {/* On a phone the same panels are one at a time, directly under
+                the controls, so the whole game stays on one screen. */}
+            <div className="lg:hidden">
+              <InfoTabs tabs={panels} />
+            </div>
+
             {handOver && session.history.length > 0 && (
               <Reflection
                 record={session.history[session.history.length - 1]!}
@@ -227,28 +298,12 @@ export function App() {
             )}
           </div>
 
-          {/* The coaching sits beside the table rather than under it, so the
+          {/* Where there is room, the coaching sits beside the table, so the
               numbers are visible at the moment they are about to be used. */}
-          <aside className="space-y-3">
-            {adviceLive && yourTurn && !adviceHidden && (
-              <Advice
-                advice={advice}
-                pending={advicePending}
-                bigBlind={session.config.bigBlind}
-              />
-            )}
-            {state && <ActionLog state={state} heroSeat={heroSeat} />}
-            {state && !handOver && hudLevel !== 'off' ? (
-              <OddsPanel state={state} heroSeat={heroSeat} />
-            ) : (
-              hudLevel === 'off' && (
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-500">
-                  The odds overlay is off. Turn it back on above when you want the numbers
-                  while you decide.
-                </div>
-              )
-            )}
-            <SessionCard session={session} />
+          <aside className="hidden space-y-3 lg:block">
+            {panels.map((panel) => (
+              <div key={panel.id}>{panel.content}</div>
+            ))}
           </aside>
         </div>
       ) : (

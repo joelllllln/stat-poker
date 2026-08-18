@@ -119,7 +119,7 @@ export function ActionBar({
         <button
           onClick={deal}
           disabled={waiting}
-          className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-30"
+          className="min-h-12 touch-manipulation rounded-lg bg-emerald-600 px-6 text-base font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-30 sm:min-h-10 sm:text-sm"
         >
           Deal <span aria-hidden className="ml-1 text-[10px] opacity-70">space</span>
         </button>
@@ -128,7 +128,7 @@ export function ActionBar({
   }
 
   const button =
-    'relative flex-1 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed'
+    'relative min-h-14 flex-1 touch-manipulation whitespace-nowrap rounded-lg px-3 text-base font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed sm:min-h-12 sm:px-4 sm:text-sm'
 
   // The recommendation is marked on the control it recommends, because that is
   // where somebody is looking when they need it. A recommended raise marks the
@@ -149,7 +149,7 @@ export function ActionBar({
     ) : null
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-3 shadow-lg shadow-black/40 sm:bg-slate-950/80 sm:shadow-none">
+    <div className="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950 p-2 shadow-lg shadow-black/40 sm:space-y-2 sm:bg-slate-950/80 sm:p-3 sm:shadow-none">
       {/* What the situation is, in one line, before what to do about it. */}
       <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
         <span className="font-medium text-amber-300">Your turn</span>
@@ -159,67 +159,77 @@ export function ActionBar({
       </div>
 
       {raise && (
-        <div className="flex flex-wrap items-center gap-2">
-          {SIZINGS.map((s) => {
-            const size = sizeFor(s.fraction)
-            return (
-              <button
-                key={s.label}
-                onClick={() => setCustom(size)}
-                disabled={size <= raise.min! && s.fraction < 1 && size === amount}
-                className={`rounded-md border px-2.5 py-1 text-xs transition ${
-                  amount === size
-                    ? 'border-emerald-500 bg-emerald-600/20 text-emerald-200'
-                    : 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                {s.label}
-              </button>
-            )
-          })}
-          <button
-            onClick={() => setCustom(raise.max!)}
-            className={`rounded-md border px-2.5 py-1 text-xs transition ${
-              amount === raise.max
-                ? 'border-rose-500 bg-rose-600/20 text-rose-200'
-                : 'border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            All in <span aria-hidden className="opacity-60">a</span>
-          </button>
-
-          {/* The size the coach would use, one click away. */}
-          {best?.type === 'raise' && best.to !== amount && (
-            <button
-              onClick={() => setCustom(best.to)}
-              className="rounded-md border border-emerald-500 px-2.5 py-1 text-xs text-emerald-200 transition hover:bg-emerald-900/40"
-            >
-              Best {best.to}
-            </button>
-          )}
-
-          <input
-            type="range"
-            min={raise.min}
-            max={raise.max}
-            value={amount}
-            onChange={(e) => setCustom(Number(e.target.value))}
-            className="ml-1 min-w-24 flex-1 accent-emerald-500"
-            aria-label="Bet size"
-          />
-          <input
-            type="number"
-            min={raise.min}
-            max={raise.max}
-            value={amount}
-            onChange={(e) =>
-              setCustom(
-                Math.max(raise.min!, Math.min(raise.max!, Math.round(Number(e.target.value)))),
+        // Two rows, always: the fractions, then the slider with the amount and
+        // the coach's size. Left to wrap on its own it becomes three rows on a
+        // narrow phone and pushes the buttons off the screen.
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            {SIZINGS.map((s) => {
+              const size = sizeFor(s.fraction)
+              return (
+                <button
+                  key={s.label}
+                  onClick={() => setCustom(size)}
+                  disabled={size <= raise.min! && s.fraction < 1 && size === amount}
+                  className={`min-h-11 flex-1 touch-manipulation rounded-md border text-sm transition sm:min-h-9 sm:flex-none sm:px-3 sm:text-xs ${
+                    amount === size
+                      ? 'border-emerald-500 bg-emerald-600/20 text-emerald-200'
+                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  {s.label}
+                </button>
               )
-            }
-            className="w-20 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-right font-mono text-xs"
-            aria-label="Bet amount"
-          />
+            })}
+            <button
+              onClick={() => setCustom(raise.max!)}
+              className={`min-h-11 flex-1 touch-manipulation whitespace-nowrap rounded-md border text-sm transition sm:min-h-9 sm:flex-none sm:px-3 sm:text-xs ${
+                amount === raise.max
+                  ? 'border-rose-500 bg-rose-600/20 text-rose-200'
+                  : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              All in <span aria-hidden className="opacity-60">a</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={raise.min}
+              max={raise.max}
+              value={amount}
+              onChange={(e) => setCustom(Number(e.target.value))}
+              className="h-11 min-w-16 flex-1 touch-manipulation accent-emerald-500 sm:h-auto"
+              aria-label="Bet size"
+            />
+            <span className="w-10 shrink-0 text-right font-mono text-sm text-slate-200 sm:hidden">
+              {amount}
+            </span>
+            <input
+              type="number"
+              min={raise.min}
+              max={raise.max}
+              value={amount}
+              onChange={(e) =>
+                setCustom(
+                  Math.max(raise.min!, Math.min(raise.max!, Math.round(Number(e.target.value)))),
+                )
+              }
+              className="hidden min-h-9 w-20 rounded-md border border-slate-700 bg-slate-900 px-2 text-right font-mono text-xs sm:block"
+              aria-label="Bet amount"
+            />
+
+            {/* The size the coach would use, one tap away. */}
+            {best?.type === 'raise' && best.to !== amount && (
+              <button
+                onClick={() => setCustom(best.to)}
+                className="min-h-11 shrink-0 touch-manipulation whitespace-nowrap rounded-md border border-emerald-500 px-3 text-sm text-emerald-200 transition hover:bg-emerald-900/40 sm:min-h-9 sm:text-xs"
+              >
+                Best {best.to}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -258,8 +268,16 @@ export function ActionBar({
           onClick={() => raise && act({ type: 'raise', to: amount })}
         >
           {bestBadge('raise')}
-          {state.currentBet > 0 ? 'Raise to' : 'Bet'} {raise ? amount : '—'}{' '}
-          <span aria-hidden className="text-[10px] opacity-60">r</span>
+          {/* "Raise to 17" wraps on a narrow phone and makes the row taller;
+              the preposition is the part nobody needs. */}
+          {state.currentBet > 0 ? (
+            <>
+              Raise<span className="hidden sm:inline"> to</span>
+            </>
+          ) : (
+            'Bet'
+          )}{' '}
+          {raise ? amount : '—'} <span aria-hidden className="text-[10px] opacity-60">r</span>
         </button>
       </div>
     </div>

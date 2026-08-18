@@ -355,7 +355,7 @@ export function Table({ session }: { session: SessionState }) {
           opponents, then the board, then you. Nothing is positioned, so
           nothing can land on anything else. */}
       <div className="rail rounded-2xl p-2 sm:hidden">
-        <div className="felt space-y-3 rounded-xl px-2 py-3 @container">
+        <div className="felt space-y-2 rounded-xl px-2 py-2 @container">
           <div className="grid grid-cols-3 gap-1.5">
             {others.map((seat) => (
               <div key={seat} className="flex justify-center">
@@ -363,9 +363,9 @@ export function Table({ session }: { session: SessionState }) {
                   {...seatProps(seat, false)}
                   scale={{
                     plate: '30cqw',
-                    card: '8cqw',
-                    text: 'clamp(10px, 3.2cqw, 14px)',
-                    small: 'clamp(9px, 2.7cqw, 12px)',
+                    card: '6.4cqw',
+                    text: 'clamp(10px, 3cqw, 13px)',
+                    small: 'clamp(9px, 2.5cqw, 11px)',
                   }}
                 />
               </div>
@@ -373,7 +373,7 @@ export function Table({ session }: { session: SessionState }) {
           </div>
 
           <div className="flex flex-col items-center gap-2">
-            <Board state={state} cardWidth="13cqw" potFontSize="clamp(11px, 3.4cqw, 15px)" />
+            <Board state={state} cardWidth="10.5cqw" potFontSize="clamp(11px, 3.2cqw, 14px)" />
             {state.seats.some((s) => s.committed > 0) && (
               <div className="flex flex-wrap justify-center gap-1.5">
                 {state.seats
@@ -392,10 +392,10 @@ export function Table({ session }: { session: SessionState }) {
             <Seat
               {...seatProps(heroSeat, true)}
               scale={{
-                plate: '46cqw',
-                card: '13cqw',
-                text: 'clamp(12px, 4cqw, 16px)',
-                small: 'clamp(10px, 3cqw, 13px)',
+                plate: '42cqw',
+                card: '10.5cqw',
+                text: 'clamp(12px, 3.6cqw, 15px)',
+                small: 'clamp(10px, 2.8cqw, 12px)',
               }}
             />
           </div>

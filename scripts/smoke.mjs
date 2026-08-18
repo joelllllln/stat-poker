@@ -154,6 +154,71 @@ async function overlapsAt(width, height) {
   })
 }
 
+/**
+ * Can the game be played on this screen without scrolling?
+ *
+ * This is primarily a phone game, so the table and the controls have to share
+ * one screen: a fold button below the fold is a fold button nobody presses.
+ * Tap targets are measured at the same time, against the 44px both platforms
+ * ask for.
+ */
+async function reachAt(width, height) {
+  await page.setViewportSize({ width, height })
+  await page.waitForTimeout(400)
+  return page.evaluate(() => {
+    const visible = [...document.querySelectorAll('button')].filter(
+      (node) => node.getClientRects().length > 0,
+    )
+    const actions = visible.filter((node) => /^(Fold|Check|Call|Raise|Bet|Deal)\b/.test(node.textContent ?? ''))
+    const smallest = visible
+      .map((node) => {
+        const rect = node.getBoundingClientRect()
+        return { label: (node.textContent ?? '').trim().slice(0, 14), size: Math.min(rect.width, rect.height) }
+      })
+      .sort((a, b) => a.size - b.size)[0]
+
+    return {
+      controlsBottom: actions.length
+        ? Math.round(Math.max(...actions.map((node) => node.getBoundingClientRect().bottom)))
+        : null,
+      viewport: window.innerHeight,
+      smallestTap: smallest ? Math.round(smallest.size) : 0,
+      smallestLabel: smallest?.label ?? '',
+    }
+  })
+}
+
+for (const [name, width, height] of [
+  ['iPhone', 390, 844],
+  ['a small Android', 360, 740],
+]) {
+  const reach = await reachAt(width, height)
+  check(
+    `the table and the controls share one screen on ${name} (controls end at ${reach.controlsBottom} of ${reach.viewport})`,
+    reach.controlsBottom !== null && reach.controlsBottom <= reach.viewport,
+  )
+  check(
+    `every control on ${name} is thumb-sized (smallest ${reach.smallestTap}px: "${reach.smallestLabel}")`,
+    reach.smallestTap >= 44,
+  )
+}
+
+// The panels beside the table on a desktop are tabs under the controls here.
+await page.setViewportSize({ width: 390, height: 844 })
+await page.waitForTimeout(300)
+const tabs = await page.getByRole('tab').count()
+check(`the coaching panels are tabs on a phone (${tabs})`, tabs >= 3)
+if (tabs >= 3) {
+  await press(page.getByRole('tab', { name: /^Hand/ }))
+  await page.waitForTimeout(250)
+  const onHand = (await page.locator('body').innerText()).toLowerCase()
+  check('a phone tab shows its own panel', onHand.includes('what happened'))
+  check(
+    'and only its own panel',
+    !onHand.includes('priced against what they are modelled to hold'),
+  )
+}
+
 for (const [name, width, height] of [
   ['phone', 390, 844],
   ['tablet', 820, 1180],
