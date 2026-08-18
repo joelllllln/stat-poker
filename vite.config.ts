@@ -4,6 +4,9 @@ import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  // Relative asset paths, so the built app runs from wherever it is served:
+  // the root in development, and a repository subpath on GitHub Pages.
+  base: './',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
