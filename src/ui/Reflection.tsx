@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { describe as describeHand } from '../engine/evaluator'
 import { gradeHand, type DecisionGrade, type HandGrade, type Verdict } from '../coach/grade'
 import type { HandRecord } from '../game/session'
+import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
 import { useStore } from './store'
 
@@ -193,6 +194,8 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
       <Summary grade={grade} record={record} heroSeat={heroSeat} />
 
       <Spread state={record.state} heroSeat={heroSeat} bigBlind={record.bigBlind} />
+
+      <SolveRiver state={record.state} heroSeat={heroSeat} />
 
       {expanded ? (
         <div className="space-y-1.5">

@@ -109,6 +109,17 @@ const after2 = await page.evaluate(() => new Promise((resolve) => {
 }))
 check('saved hands survive a reload', after2 === before)
 
+// The river solver, where the hand reached one heads-up.
+const solveButton = page.getByRole('button', { name: 'Solve', exact: true })
+if (await solveButton.count()) {
+  await solveButton.first().click()
+  await page.waitForSelector('text=/iterations in/', { timeout: 120000 })
+  const solved = (await page.locator('body').innerText()).toLowerCase()
+  check('the river solver returns a strategy', /exploitable for [\d.]+ chips/.test(solved))
+} else {
+  console.log('skip this hand did not reach a heads-up river')
+}
+
 await page.screenshot({ path: 'screenshot.png', fullPage: true })
 check('no console errors', errors.length === 0)
 if (errors.length) console.log(errors.slice(0, 5).join('\n'))

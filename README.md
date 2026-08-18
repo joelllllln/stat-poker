@@ -19,12 +19,12 @@ npm run test:slow  # adds the exhaustive 133m-hand evaluator check (~80s)
 |---|---|---|
 | 0 | Cards, evaluator, betting engine | done |
 | 1 | Equity engine, archetype bots, playable table, live odds overlay | done |
-| 2 | Odds in a worker, predict-then-reveal metrics | overlay shipped, worker pending |
+| 2 | Odds in a worker, predict-then-reveal | done |
 | 3 | Hand-history persistence, stats dashboard, player profile | done |
 | 4 | EV coach, Perfect Line view | done |
 | 5 | Preflop solver, verified on Kuhn poker; heads-up preflop solved | done |
 | 7 | Leak finder, run-it-again spread | done |
-| 6 | Postflop CFR solver | next |
+| 6 | Postflop river solver, analysis in a worker | done |
 
 ## Layout
 
@@ -38,6 +38,7 @@ src/
   stats/      statistics, profile, all-in adjustment, hand-history storage
   game/       session: the table across hands
   ui/         React front end
+  workers/    equity and solving, off the interface thread
 scripts/      preflop, matchup and blueprint generators; browser smoke test
 ```
 
@@ -60,6 +61,10 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   applies to hands already recorded.
 - **All-in adjustment**: aces against kings all-in preflop price at the ~82% the
   hand was worth however the board fell, and chips still balance.
+- **River solver**: the fast showdown sweep is checked against a hand-by-hand
+  comparison of every holding against every holding — they agree to 1e-9 on
+  narrow ranges, wide ranges, the whole deck, and boards where every hand
+  chops. The solve converges to 0.0016 chips per hand in a ten-chip pot.
 - **Run it again**: aces all-in against kings price at the ~82% they were worth
   however the board fell; chips balance across every re-dealt runout.
 - **Leak finder**: a grouping that covers every decision scores zero excess and
@@ -121,7 +126,20 @@ otherwise. A strategy borrowed from a different spot is not an approximation.
 
 Two abstractions remain, both stated in the code: limping is not modelled (the
 opening decision is raise or fold), and everything after preflop is priced by
-position-adjusted all-in equity rather than played out. Postflop is Phase 6.
+position-adjusted all-in equity rather than played out.
+
+**The river is solved exactly.** With the board complete there is nothing left
+to draw, so a river solve is a statement about poker rather than about a model
+of it. Each player holds one of 1,081 possible pairs of cards, which would be a
+million comparisons per showdown done naively; sorting holdings by strength once
+and sweeping them while carrying running totals of the opponent's range turns
+each showdown into a subtraction, and gets card removal out of the same sweep for
+free. A river solves in about three seconds, in a worker, on request — the
+interface thread computes nothing.
+
+Turn and flop solves are not built. They multiply a river solve by every card
+that could still come, and belong in a background job rather than behind a
+button.
 
 ## Bot signatures
 
