@@ -9,9 +9,15 @@ branch push would slow the loop without catching anything sooner.
 
 # Publishing
 
-`pages.yml` builds the app and publishes it to GitHub Pages, after running the
-same typecheck and tests as CI — the deployed link outlives the push that made
-it, so it should not ship a build nobody checked.
+The `publish` job in `ci.yml` builds the app and publishes it to GitHub Pages.
+It runs only on `main`, and only behind `check`: the deployed link outlives the
+push that made it, so it should never carry a build that did not pass.
+
+Pages has to be switched on once for the repository — Settings -> Pages ->
+Source: GitHub Actions. The workflow token cannot do that itself, and the
+`github-pages` environment only accepts deployments from the default branch,
+which is why publishing is tied to `main` rather than to whatever branch is in
+flight.
 
 Assets are built with a relative base (`vite.config.ts`), so the same `dist`
 runs from the site root in development and from the repository subpath that

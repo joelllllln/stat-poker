@@ -4,6 +4,11 @@ A 6-max No-Limit Hold'em trainer. Play against bots with the odds visible the
 whole time, get every decision graded against what you should have done, and
 watch your leaks close over hundreds of sessions.
 
+**Play it: https://joelllllln.github.io/stat-poker/** — no install, no
+account, no server. Everything runs in the browser, and your hand history stays
+in it: hands are stored locally and never leave the machine unless you export
+them yourself.
+
 Full design in [`docs/PLAN.md`](docs/PLAN.md).
 
 ```bash

@@ -37,3 +37,37 @@ jobs:
       - run: npm ci
       - name: Exhaustive evaluator and solver checks
         run: npm run test:slow
+
+  # Publishing runs behind the checks rather than beside them: the deployed
+  # link outlives the push that made it, so it should never carry a build that
+  # did not pass. Pages must be switched on for the repository first
+  # (Settings -> Pages -> Source: GitHub Actions); the workflow token is not
+  # allowed to switch it on by itself.
+  publish:
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
