@@ -12,6 +12,7 @@ import type { Action, HandState } from '../engine/types'
 import { archetype, type Archetype } from '../bots/archetypes'
 import { decide } from '../bots/policy'
 import { deriveHandStats, type SeatHandStats } from '../stats/hand-stats'
+import type { DecisionGrade } from '../coach/grade'
 
 export interface SeatConfig {
   name: string
@@ -41,6 +42,8 @@ export interface HandRecord {
   stats: SeatHandStats[]
   /** Big blinds of expected value the hero gave up, once the hand is graded. */
   evLostBB?: number
+  /** The hero's graded decisions, kept so analysis need not regrade. */
+  grades?: DecisionGrade[]
 }
 
 export interface SessionState {

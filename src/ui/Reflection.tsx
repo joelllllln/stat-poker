@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { describe as describeHand } from '../engine/evaluator'
 import { gradeHand, type DecisionGrade, type HandGrade, type Verdict } from '../coach/grade'
 import type { HandRecord } from '../game/session'
+import { Spread } from './Spread'
 import { useStore } from './store'
 
 const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; bar: string }> = {
@@ -190,6 +191,8 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
       </div>
 
       <Summary grade={grade} record={record} heroSeat={heroSeat} />
+
+      <Spread state={record.state} heroSeat={heroSeat} bigBlind={record.bigBlind} />
 
       {expanded ? (
         <div className="space-y-1.5">

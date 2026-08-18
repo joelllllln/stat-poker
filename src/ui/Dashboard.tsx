@@ -10,6 +10,7 @@ import {
   rateInterval,
   winrateInterval,
 } from '../stats/profile'
+import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '../coach/leaks'
 import { LuckChart } from './LuckChart'
 import { useStore } from './store'
 
@@ -44,7 +45,10 @@ function StatTile({
 }
 
 export function Dashboard({ session }: { session: SessionState }) {
-  useStore((s) => s.version)
+  // The session is held by identity and mutated in place, so this counter is
+  // what tells React anything changed — including grades arriving after the
+  // hand they belong to has already been recorded.
+  const version = useStore((s) => s.version)
   const heroSeat = session.config.heroSeat
   const bigBlind = session.config.bigBlind
 
@@ -57,7 +61,17 @@ export function Dashboard({ session }: { session: SessionState }) {
     )
     const winrate = winrateInterval(records, bigBlind)
     return { records, stats, curve, winrate }
-  }, [session, session.history.length, heroSeat, bigBlind])
+  }, [session, version, heroSeat, bigBlind])
+
+  // Hooks must all run before any early return, so this sits with the rest.
+  // Grading already happened off the critical path; this reuses those results
+  // rather than paying for them a second time.
+  const leak = useMemo(() => {
+    const graded = session.history.filter((hand) => hand.grades !== undefined)
+    if (graded.length === 0) return null
+    const tagged = tagDecisions(graded, heroSeat, (record) => record.grades ?? [])
+    return { leak: biggestLeak(findLeaks(tagged)), decisions: tagged.length }
+  }, [session, version, heroSeat])
 
   const { records, stats, curve, winrate } = data
   if (stats.hands === 0) return null
@@ -71,6 +85,7 @@ export function Dashboard({ session }: { session: SessionState }) {
       : (graded.reduce((sum, h) => sum + (h.evLostBB ?? 0), 0) / graded.length) * 100
 
   const profile = buildProfile(stats, evLostPer100)
+
   const played = records.filter((r) => r.vpip).length
   const raised = records.filter((r) => r.pfr).length
   const handsNeeded = handsForPrecision(winrate.standardDeviation, 10)
@@ -105,6 +120,23 @@ export function Dashboard({ session }: { session: SessionState }) {
           )}
         </div>
       </div>
+
+      {leak && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+          <div className="text-[11px] uppercase tracking-wide text-slate-500">
+            Where it goes
+          </div>
+          {leak.leak ? (
+            <div className="mt-0.5 text-sm text-amber-200">{describeLeak(leak.leak)}</div>
+          ) : (
+            <div className="mt-0.5 text-xs text-slate-400">
+              {leak.decisions < MIN_SAMPLE
+                ? `${leak.decisions} graded decisions so far — a leak needs at least ${MIN_SAMPLE} in one kind of spot before it is a habit rather than a bad afternoon.`
+                : 'No single spot stands out yet: what you give up is spread evenly rather than concentrated anywhere.'}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatTile

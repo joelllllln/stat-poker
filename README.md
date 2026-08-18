@@ -23,7 +23,8 @@ npm run test:slow  # adds the exhaustive 133m-hand evaluator check (~80s)
 | 3 | Hand-history persistence, stats dashboard, player profile | done |
 | 4 | EV coach, Perfect Line view | done |
 | 5 | Preflop solver, verified on Kuhn poker; heads-up preflop solved | done |
-| 6–7 | Postflop CFR solver, leak finder | next |
+| 7 | Leak finder, run-it-again spread | done |
+| 6 | Postflop CFR solver | next |
 
 ## Layout
 
@@ -32,7 +33,7 @@ src/
   engine/     cards, hand evaluator, betting rules   — pure, deterministic
   equity/     Monte Carlo + exact enumeration, ranges, opponent modelling
   bots/       archetypes and the policy that drives them
-  coach/      pot odds, expected value, and per-decision grading
+  coach/      pot odds, expected value, grading, leak finding, run-it-again
   solver/     CFR, the preflop game, and the solved blueprint
   stats/      statistics, profile, all-in adjustment, hand-history storage
   game/       session: the table across hands
@@ -59,6 +60,11 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   applies to hands already recorded.
 - **All-in adjustment**: aces against kings all-in preflop price at the ~82% the
   hand was worth however the board fell, and chips still balance.
+- **Run it again**: aces all-in against kings price at the ~82% they were worth
+  however the board fell; chips balance across every re-dealt runout.
+- **Leak finder**: a grouping that covers every decision scores zero excess and
+  cannot be named a leak; a spot with too few decisions behind it is never
+  called a habit.
 - **Solver**: CFR is verified against Kuhn poker, whose equilibrium is known in
   closed form. It converges to exploitability below 0.001 chips per hand, never
   bets the queen, bluffs the jack at α ≤ ⅓, bets the king at exactly 3α, and

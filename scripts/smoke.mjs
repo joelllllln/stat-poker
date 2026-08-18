@@ -52,12 +52,17 @@ for (let i = 0; i < 40; i++) {
   await page.waitForTimeout(150)
 }
 
+// Grading runs off the critical path, so the analysis that depends on it
+// lands a moment after the hand itself does.
+await page.waitForTimeout(2500)
 const after = (await page.locator('body').innerText()).toLowerCase()
 check('the hand resolved', /you (won|lost|broke even)/.test(after))
 check('the dashboard appeared', after.includes('your game'))
 check('the winrate carries a confidence bound', /confidence|not enough hands/.test(after))
 check('the luck chart is present', after.includes('all-in adjusted') || after.includes('play a few hands'))
+check('the leak finder reports', after.includes('where it goes'))
 check('the post-hand review appeared', after.includes('review'))
+check('the run-it-again spread appeared', /run it [\d,]+ times/.test(after))
 
 // Open the decision timeline.
 const showAll = page.getByRole('button', { name: /show all \d+ decisions/i })
@@ -66,8 +71,13 @@ if (await showAll.count()) {
   await page.waitForTimeout(200)
   const expanded = (await page.locator('body').innerText()).toLowerCase()
   check('decisions are graded', /(optimal|fine|mistake|blunder)/.test(expanded))
-  // Expand the first decision to reveal the priced alternatives.
-  await page.locator('button:has-text("PREFLOP")').first().click()
+  // Expand the first decision to reveal the priced alternatives. Match on the
+  // verdict chip: the spread's street buttons also mention the streets.
+  await page
+    .locator('button')
+    .filter({ hasText: /(Optimal|Fine|Mistake|Blunder)/ })
+    .first()
+    .click()
   await page.waitForTimeout(200)
   const detail = (await page.locator('body').innerText()).toLowerCase()
   check('alternatives are priced', detail.includes('your equity') && /bb/.test(detail))

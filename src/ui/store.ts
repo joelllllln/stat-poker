@@ -79,7 +79,9 @@ function gradeNewHands(
     for (const record of finished) {
       if (record.evLostBB !== undefined) continue
       try {
-        record.evLostBB = gradeHand(record, session.config.heroSeat).totalEvLossBB
+        const grade = gradeHand(record, session.config.heroSeat)
+        record.evLostBB = grade.totalEvLossBB
+        record.grades = grade.decisions
       } catch (error) {
         console.warn('Could not grade hand', error)
       }
