@@ -138,21 +138,48 @@ export function priceInWords(toCall: number, pot: number): string {
 }
 
 /** Where you are sitting and what that means for the hand. */
-const SEAT_MEANING: Record<string, string> = {
-  BTN: 'you act last after the flop, which is the best seat at the table',
-  SB: 'you act first after the flop, which is the hardest seat',
-  BB: 'you have already paid the big blind, so it costs less to continue',
-  UTG: 'you act first, with everybody still to come',
-  CO: 'only the button acts after you',
-  HJ: 'two players act after you',
-  MP: 'several players still act after you',
+const SEAT_MEANING: Record<string, { plain: string; why: string }> = {
+  BTN: {
+    plain: 'the dealer',
+    why: 'you act last after the flop, which is the best seat at the table',
+  },
+  SB: {
+    plain: 'the small blind',
+    why: 'you paid half a blind before the cards, and act first after the flop',
+  },
+  BB: {
+    plain: 'the big blind',
+    why: 'you paid a full blind before the cards, so it costs less to continue',
+  },
+  UTG: { plain: 'first to act', why: 'everybody is still to come after you' },
+  CO: { plain: 'one before the dealer', why: 'only the dealer acts after you' },
+  HJ: { plain: 'two before the dealer', why: 'two players act after you' },
+  MP: { plain: 'in the middle', why: 'several players still act after you' },
+}
+
+/** The plain name of a seat: "the big blind", never "BB". */
+export function seatInWords(seat: number, buttonSeat: number, numSeats: number): string {
+  const name = positionName(seat, buttonSeat, numSeats)
+  return SEAT_MEANING[name]?.plain ?? name
 }
 
 export function positionInWords(seat: number, buttonSeat: number, numSeats: number): string {
   const name = positionName(seat, buttonSeat, numSeats)
   const meaning = SEAT_MEANING[name]
-  return meaning ? `${name} — ${meaning}` : name
+  return meaning ? `${meaning.plain} — ${meaning.why}` : name
 }
+
+/**
+ * What a big blind is, said once where the number is used.
+ *
+ * Poker counts money in big blinds so that a result means the same thing at
+ * any stake, and every book and every training tool writes it "bb". Nobody
+ * arrives knowing that, and a unit you cannot read makes every number wearing
+ * it unreadable too.
+ */
+export const bigBlindsExplained = (bigBlind: number): string =>
+  `bb means big blinds — the unit poker counts in, so that a result means the ` +
+  `same at any stake. One big blind is ${bigBlind} chips here.`
 
 /** A bet size as a share of the pot, said as what it is. */
 export function sizeInWords(to: number, pot: number, toCall: number): string {
@@ -193,9 +220,12 @@ export function reasonInWords(reason: {
   foldEquity?: number | undefined
   /** True when the top two options are too close to separate. */
   tooClose?: boolean | undefined
+  /** Share of what a call plays for that it has to win to break even. */
+  requiredEquity?: number | undefined
 }): string {
   const holding = strengthInWords(reason.equity)
   const wins = timesInTen(reason.equity)
+  const price = reason.requiredEquity ?? 0
 
   if (reason.tooClose) {
     return `You are ${holding}. Either of the top two is fine here — they are worth the same once you allow for how rough these numbers are.`
@@ -212,8 +242,16 @@ export function reasonInWords(reason: {
         ? `You are ${holding}, but betting does not gain here — take the free card and keep the pot small enough to control.`
         : `You are ${holding}. Nobody has bet, so see the next card for nothing rather than paying to find out.`
 
-    case 'call':
-      return `You are ${holding} — you would win this ${wins}, which is more than the price needs.`
+    case 'call': {
+      // "You are behind … which is more than the price needs" reads like a
+      // contradiction. Being behind and still having a call is the normal
+      // case, and it is worth saying as one sentence rather than two clauses
+      // that appear to argue with each other.
+      const needs = Math.max(1, Math.round(price * 10))
+      return reason.equity >= 0.5
+        ? `You are ${holding}, and the price only asks that you win ${needs} in 10 — you win it ${wins}.`
+        : `You are behind, but not by enough to fold: the price asks that you win ${needs} in 10 and you win it ${wins}.`
+    }
 
     case 'raise': {
       const folds = reason.foldEquity ?? 0

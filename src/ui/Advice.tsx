@@ -1,6 +1,6 @@
 import type { Action } from '../engine/types'
 import type { AdviseReply } from '../workers/analysis.worker'
-import { reasonInWords } from './plain'
+import { bigBlindsExplained, reasonInWords } from './plain'
 
 /**
  * What to do, while you still have to do it.
@@ -80,6 +80,7 @@ export function Advice({
           pot: advice.pot + advice.toCall,
           foldEquity: best.foldEquity,
           tooClose,
+          requiredEquity: advice.requiredEquity,
         })}
       </p>
 
@@ -134,10 +135,11 @@ export function Advice({
           What it will not do is teach a bluff, and it should say so rather
           than let somebody assume its silence means bluffing is wrong. */}
       <p className="text-[11px] text-slate-500">
-        Priced against what these players really hold, one street at a time, in big blinds
-        relative to folding. It only tells you to bet when your hand is ahead of what would
-        call — it will not talk you into a bluff, because a bluff is won on the next street
-        and this model cannot see the next street. That is half of poker it is not teaching.
+        {bigBlindsExplained(bigBlind)} These are priced against what these players really
+        hold, one street at a time, relative to folding. It only tells you to bet when your
+        hand is ahead of what would call — it will not talk you into a bluff, because a bluff
+        is won on the next street and this model cannot see the next street. That is half of
+        poker it is not teaching.
       </p>
     </div>
   )

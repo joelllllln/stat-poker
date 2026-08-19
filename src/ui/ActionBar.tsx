@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { legalActions } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
-import { blindPosted, madeHandInWords, postedInWords, priceInWords } from './plain'
+import { blindPosted, madeHandInWords, postedInWords, priceInWords, seatInWords } from './plain'
 import { useStore } from './store'
 
 /**
@@ -177,6 +177,7 @@ export function ActionBar({
         {/* The price is said once, in words. Quoting "36 to call into a pot
             of 93" beside "it costs 36 to win 129" is the same fact twice in
             two notations, and the felt already shows the pot. */}
+        <span className="text-slate-400">· you are {seatInWords(heroSeat, state.buttonSeat, state.seats.length)}</span>
         <span className="w-full text-[11px] leading-snug text-slate-400">
           {priceInWords(toCall, pot + toCall)}
         </span>

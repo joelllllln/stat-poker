@@ -207,17 +207,26 @@ for (const [name, width, height] of [
 await page.setViewportSize({ width: 390, height: 844 })
 await page.waitForTimeout(300)
 const tabs = await page.getByRole('tab').count()
-check(`the coaching panels are tabs on a phone (${tabs})`, tabs >= 3)
-if (tabs >= 3) {
-  await press(page.getByRole('tab', { name: /^Hand/ }))
-  await page.waitForTimeout(250)
-  const onHand = (await page.locator('body').innerText()).toLowerCase()
-  check('a phone tab shows its own panel', onHand.includes('what happened'))
-  check(
-    'and only its own panel',
-    !onHand.includes('priced against what they are modelled to hold'),
-  )
-}
+// Two, not four. Everything needed to make the decision belongs on one of
+// them; the record of what has happened belongs on the other.
+check(`the coaching panels are two tabs on a phone (${tabs})`, tabs === 2)
+
+// The deciding tab has to carry the whole argument — what the hand is worth,
+// what the price is, and what to do — so that none of it needs a second tap.
+await press(page.getByRole('tab', { name: /^What to do/ }))
+await page.waitForTimeout(300)
+const deciding = (await page.locator('body').innerText()).toLowerCase()
+check('the deciding tab says what to do', deciding.includes('what to do'))
+check('and what the hand is worth, without another tap', deciding.includes('your hand is worth'))
+check('and what the unit means', deciding.includes('bb means big blinds'))
+
+await press(page.getByRole('tab', { name: /^The record/ }))
+await page.waitForTimeout(250)
+const onHand = (await page.locator('body').innerText()).toLowerCase()
+check('the other tab shows the record of the hand', onHand.includes('what happened'))
+check('and only its own panel', !onHand.includes('bb means big blinds'))
+await press(page.getByRole('tab', { name: /^What to do/ }))
+await page.waitForTimeout(250)
 
 for (const [name, width, height] of [
   ['phone', 390, 844],
@@ -280,9 +289,18 @@ check('calling needs a number of its own', body.includes('calling needs'))
 // The rest is deliberately folded away: two numbers answer the question being
 // asked, and the working is one click behind them.
 check('the detail is closed until asked for', !body.includes('what they might hold'))
-const more = page.getByText('Show the rest', { exact: false })
+// On a phone the odds live behind a tab; open it before reaching for what is
+// inside it, and look the control up again afterwards — the panel is remounted
+// by the switch, so a locator resolved before it points at nothing.
+await press(page.getByRole('tab', { name: /^What to do/ }))
+await page.waitForTimeout(300)
+// Visible only: both layouts are in the document at every width and the
+// desktop one is merely hidden by CSS here, so an unfiltered match can resolve
+// to a control that is not on the screen and never becomes clickable.
+const more = page.locator('text=Show the rest >> visible=true')
 if (await more.count()) {
-  await more.first().click()
+  await more.first().scrollIntoViewIfNeeded().catch(() => {})
+  await more.first().click({ timeout: 10_000 })
   await page.waitForTimeout(200)
   const opened = (await page.locator('body').innerText()).toLowerCase()
   check('outs are there when asked for', opened.includes('cards that put you ahead'))

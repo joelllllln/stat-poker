@@ -95,6 +95,41 @@ function Toggle<T extends string>({
   )
 }
 
+/**
+ * What the letters on the table mean.
+ *
+ * Every seat wears a two-letter code that the whole game is built around and
+ * that nobody arrives knowing. There is no room on a seat plate the width of a
+ * thumb to spell them out, so they are spelled out once, here, where there is
+ * room — and the seat you are in is named in full on the controls every time
+ * it is your turn, which is where the mapping actually gets learnt.
+ */
+function SeatKey() {
+  const seats: [string, string][] = [
+    ['BTN', 'the dealer — acts last after the flop, the best seat'],
+    ['SB', 'small blind — pays half a blind before the cards'],
+    ['BB', 'big blind — pays a full blind before the cards'],
+    ['UTG', 'first to act, with everybody still to come'],
+    ['HJ', 'two seats before the dealer'],
+    ['CO', 'one seat before the dealer'],
+  ]
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+      <div className="text-[11px] uppercase tracking-wide text-slate-500">
+        The letters on the table
+      </div>
+      <dl className="mt-1 space-y-0.5">
+        {seats.map(([code, meaning]) => (
+          <div key={code} className="flex gap-2 text-[11px] leading-snug">
+            <dt className="w-9 shrink-0 font-mono text-slate-300">{code}</dt>
+            <dd className="text-slate-400">{meaning}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
 export function App() {
   const session = useStore((s) => s.session)
   useStore((s) => s.version)
@@ -127,37 +162,49 @@ export function App() {
       : null,
   )
 
-  // One list of panels, shown side by side where there is room and one at a
-  // time where there is not.
+  // Two panels, not four.
+  //
+  // Everything needed to make the decision in front of you belongs together
+  // and in front of you: what your hand is worth, what the price is, what to
+  // do and why. Splitting those across a "Coach" tab and an "Odds" tab meant
+  // reading half the argument, tapping, and reading the other half — and the
+  // second half is the one that justifies the first. What is left is the
+  // record: what has happened in this hand, and how the session is going.
+  const acting = adviceLive && yourTurn && !adviceHidden
+  const showOdds = state !== null && !handOver && hudLevel !== 'off'
   const panels: InfoTab[] = []
-  if (adviceLive && yourTurn && !adviceHidden) {
-    panels.push({
-      id: 'coach',
-      label: 'Coach',
-      badge: advice?.options[0] ? 'best' : undefined,
-      content: (
-        <Advice advice={advice} pending={advicePending} bigBlind={session.config.bigBlind} />
-      ),
-    })
-  }
-  if (state) {
-    panels.push({
-      id: 'hand',
-      label: 'Hand',
-      content: <ActionLog state={state} heroSeat={heroSeat} />,
-    })
-  }
-  if (state && !handOver && hudLevel !== 'off') {
-    panels.push({
-      id: 'odds',
-      label: 'Odds',
-      content: <OddsPanel state={state} heroSeat={heroSeat} />,
-    })
-  }
+
   panels.push({
-    id: 'you',
-    label: 'You',
-    content: <SessionCard session={session} />,
+    id: 'do',
+    label: 'What to do',
+    badge: acting && advice?.options[0] ? 'best' : undefined,
+    content: (
+      <div className="space-y-2">
+        {acting && (
+          <Advice advice={advice} pending={advicePending} bigBlind={session.config.bigBlind} />
+        )}
+        {showOdds && state && <OddsPanel state={state} heroSeat={heroSeat} />}
+        {!acting && !showOdds && (
+          <p className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-500">
+            {state === null
+              ? 'Deal a hand and this is where the odds and the advice appear.'
+              : 'Nothing to decide right now.'}
+          </p>
+        )}
+      </div>
+    ),
+  })
+
+  panels.push({
+    id: 'hand',
+    label: 'The record',
+    content: (
+      <div className="space-y-2">
+        {state && <ActionLog state={state} heroSeat={heroSeat} />}
+        <SeatKey />
+        <SessionCard session={session} />
+      </div>
+    ),
   })
 
   return (
