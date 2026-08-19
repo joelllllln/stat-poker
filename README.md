@@ -118,6 +118,18 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   credited with folding more of them out, because it does not; and a bet is
   never credited with the whole field folding when one of them is already
   all-in and has nothing left to fold.
+- **The ranges hold the hands they are put on**: for every archetype, every
+  hand it opens with is checked to be inside the range the model then reads it
+  as holding — and the range is required not to be much wider than what it
+  really opens with, since one that contained everything would say nothing.
+  A seat that has not acted is put on everything, and a seat doing what its
+  style says it never does falls back to the general rule rather than being
+  read as holding the very best hands for making the loosest play it has.
+- **A price is only discounted where the hand can still cost something**: a bet
+  that puts the stack all in is priced with the same full realisation as a
+  river bet, because neither has a next street to be outplayed on. Checked by
+  pricing one bet twice over the same board and opponents, changing nothing but
+  whether it leaves anything behind.
 - **The advice survives the trip to the worker**: pricing runs off the
   interface thread, so the decision is packed, sent and replayed. The replayed
   position has to be the position it was packed from — board, seat to act, and
@@ -184,67 +196,108 @@ of them contradict what the app appears to claim.
 
 | Policy | Hands | bb/100 | Given up bb/100 | VPIP | PFR |
 |---|---|---|---|---|---|
-| Follow the coach | 1,000 | **−544** | 0.0 | 78% | 78% |
-| A plain tight-aggressive rule | 2,500 | −115 | 309 | 25% | 11% |
-| Fold every hand | 2,500 | **−24** | 70 | 0% | 0% |
-| Never fold | 2,500 | −893 | 2,557 | 96% | 0% |
-| Raise everything | 2,500 | −2,920 | 1,434 | 99% | 98% |
-| At random | 2,500 | −297 | 497 | 66% | 37% |
+| Follow the coach | 1,000 | **−590** | 0.0 | 70% | 68% |
+| A plain tight-aggressive rule | 2,500 | −129 | 299 | 25% | 11% |
+| Fold every hand | 2,500 | **−22** | 92 | 0% | 0% |
+| Never fold | 2,500 | −1,081 | 2,358 | 98% | 0% |
+| Raise everything | 2,500 | −2,732 | 1,681 | 99% | 99% |
+| At random | 2,500 | −346 | 692 | 66% | 36% |
 
 **Following the coach loses more than folding every hand.** Its 95% interval
-(−886 to −201) is entirely below zero, so that is not variance. It plays 78% of
-hands and raises nearly all of them.
+(−1,112 to −67) is entirely below zero, so that is not variance.
 
 **And it grades itself perfect while doing it** — 0.0bb/100 given up, "Elite",
 100% of decisions optimal. That number is not a lie so much as a tautology: the
 live coach and the grader are the same model on the same seed, so agreeing with
 it exactly is worth zero by construction. The dashboard now says as much.
 
-### What the model claims about the table, and what the table does
+Three faults were found by measurement and fixed. None of them was the one that
+matters, and finding that out is what the measurements were for.
+
+### The opponents were not these opponents
 
 For every bet the coach recommends, the simulation records the fold-through
-probability the model predicted and then watches what happened. Split by
-street, because the two halves of the model are separate claims:
+probability the model predicted and then watches what happened, street by
+street. The model used to price everybody by one rule about poker in general —
+a hand continues when its equity clears the price — while the app dealt five
+players whose rules it wrote itself. By the turn it expected **55.7%** of
+fields to fold and got **27.9%**.
 
-| Street | Expected to fold | Folded | | Expected to fold | Folded |
-|---|---|---|---|---|---|
-| | *before* | | | *now* | |
-| preflop | 31.2% | 27.1% | | 19.1% | 24.2% |
-| flop | 45.1% | 26.3% | | 25.3% | 29.1% |
-| turn | 55.7% | 27.9% | | 32.3% | 28.3% |
-| river | 52.5% | 24.5% | | 37.7% | 29.5% |
-| **all** | **38.9%** | **26.9%** | | **22.8%** | **25.8%** |
+Each seat now carries its style on the hand, and every range is split by the
+rule that seat actually plays by: postflop its own discipline about the price,
+preflop the slice of its range it defends, which does not widen when the bet
+does. Per opponent that prediction is now close — the rock folds 93% where the
+model says 93%, the fish 48% where it says 45%.
 
-*1,000 hands and ~1,500 bets on each side, same decks, same opponents.*
-
-The model used to price everybody by one rule about poker in general: a hand
-continues when its equity clears the price, discounted for the equity it will
-not realise. The app deals five players whose rules it wrote itself, and by the
-turn it was expecting twice as many folds as it got.
-
-It now prices those players. Each seat carries its style on the hand, and every
-range is split by the rule that seat actually plays by — postflop its own
-discipline about the price, preflop the slice of its range it defends, which
-does not widen when the bet does. A seat with no style recorded still gets the
-general rule: not knowing who is sitting there is a reason to fall back on
-poker, not to guess.
-
-Measuring that turned up a second, older fault. How often nobody calls was read
+Measuring it turned up a second, older fault. How often nobody calls was read
 out of the enumeration of who *might* call, which skips outcomes with no chance
 of happening — and "everybody folds" is exactly the outcome that goes to zero
 the moment one opponent has nothing left to fold. Where it was skipped the bet
 kept the initial value of 1, and was credited with the whole field folding
 precisely when the whole field could not.
 
-**And it changed almost nothing about what following the coach earns**: −424
-before, −544 after, on intervals that overlap across most of their length. The
-difference is 120bb/100 against a standard error of about 280 — not a result.
+### The ranges did not hold the hands they were put on
 
-That is the useful part. The model's most conspicuous falsehood is fixed, the
-losses are still there, and so the losses were never mainly about fold equity.
-What is left is the horizon: this is a **one-street** model, and it prices the
-called branch as though the hand went straight to showdown. Bet into a field
-that calls, and the money you lose is on the streets the model never looked at.
+Every equity the app shows runs through one estimate: this seat holds a hand in
+the top w% of starting hands. Replaying the hands checks it for nothing, and
+nothing ever had.
+
+| Seat and posture | Put on | Really held | Inside the range |
+|---|---|---|---|
+| maniac · raised | 15% → **45%** | 47–50% | 34% → **100%** |
+| hawk · raised | 15% → **32%** | 33% | 44% → **100%** |
+| fish · called | 35% → **49%** | 58–63% | 63% → **100%** |
+| eagle · raised | 15% → **22%** | 20–21% | 75% → **100%** |
+| anyone · not yet acted | 90% → **100%** | 100% | 90% → **100%** |
+
+A seat that raises with anything and a seat that raises with aces were being
+read the same way. The width now comes from that player's own thresholds, with
+the positional tightening worked out from the players it really had to get
+through — and every bucket now holds every hand it is put on.
+
+### And it was pricing the next street as though it were already won
+
+Neither fix helped. Pricing the real opponents changed what following the coach
+earns by 120bb/100 against a standard error near 280 — not a result. Reading
+the ranges right made it **worse**, because a model that is more accurate about
+opponents is more confident about betting into them, and it went from playing
+78% of hands to 92%.
+
+So the question moved to what a price is actually worth. Every price says an
+action is worth so many chips more than folding; folding is worth exactly
+nothing more, so what it returned is the stack at the end of the hand less the
+stack at the decision — no model, just the chips. Settled that way, over a
+thousand hands:
+
+| Action | Decisions | Said it was worth | Returned |
+|---|---|---|---|
+| betting | 1,217 | 14.97bb | **−11.45bb** |
+| checking | 460 | 7.38bb | 0.69bb |
+
+That difference is the whole story. Checking does not build a pot. Betting and
+being called does, and the model then handed the hero the whole of that pot at
+showdown as though there were no more betting to come — with a range the bet
+had already announced.
+
+A called bet now realises less than its raw equity, by more the further the
+hand still has to travel. Two cases keep all of it, because the model is exact
+in both and has to stay exact: the river, where there is nothing left to play,
+and a bet that puts the stack all in, where there is nothing left to play it
+with. On two independent sets of decks that took the coach from −859 to −305
+and from −650 to −430, and stopped it recommending a bet in nine hands out of
+ten.
+
+What it did not do is make a price right. A bet is still worth about 20bb less
+than it is quoted at. What changed is how often one is recommended, not what
+one is thought to be worth, and no discount on this street can price the
+streets the model cannot see.
+
+Two known biases remain, both measured rather than suspected. The model treats
+the opponents' decisions as independent when they are drawing from one deck, so
+the chance that *all* of them fold comes out about five points high — 31.6%
+predicted against 26.5% seen. And the coach only bets where it likes the price,
+which selects the spots where that error runs in its favour: across the bets it
+chooses to make, it expects 38.6% folds and gets 31.2%.
 
 So: **the coach is a good guide to the arithmetic of a decision and a bad guide
 to a strategy.** Pot odds, equity against a modelled range, and which of two
@@ -252,12 +305,13 @@ lines is obviously worse — those it gets right, and they are what the overlay
 is for. "Play what it says on every street" is not supported by the evidence,
 and the app should not be read as claiming it.
 
-An earlier attempted fix, made before the opponents were modelled — charging
-the hero the same realisation discount the villains got — moved the winrate of
-the day from −424 to −233 and the style from 76% to 63% of hands, which was the
-right direction but not a rescue, and it made verdicts depend on the sampling
-seed. It was reverted rather than shipped: a bias that can be stated is better
-than an instability that cannot.
+An earlier attempt at that last fix, made before any of this was measured,
+charged the hero the realisation discount on every branch rather than only on
+the one where the bet is called. It moved the winrate of the day in the right
+direction and made verdicts depend on the sampling seed, so it was reverted
+rather than shipped: a bias that can be stated is better than an instability
+that cannot. The version that shipped is held to the same standard — the same
+hands, graded under four different sampling seeds, still come out the same.
 
 ## Keeping score across sessions
 
