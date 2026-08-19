@@ -11,6 +11,7 @@
  * the solver phases replace it for heads-up postflop rather than patching it.
  */
 
+import { ARCHETYPES, positionalOpenWidth, type Archetype } from '../bots/archetypes'
 import type { HandState, Street } from '../engine/types'
 import { topPercentRange, type PreflopStrength } from './preflop'
 import { parseRange, type Range } from './range'
@@ -58,10 +59,71 @@ function strongestAction(state: HandState, seat: number, street: Street): Streng
   return 'checked'
 }
 
+/**
+ * Preflop width for a seat whose style the table knows.
+ *
+ * The widths above are one guess for everybody, and replaying a few hundred
+ * hands showed what that costs: a maniac's raise was being put on the top 15%
+ * of hands when it really meant the top 47%, and two thirds of the hands it
+ * held were not even inside the range it had been assigned. A seat that raises
+ * with anything and a seat that raises with aces are not holding the same
+ * range, and the app knows which is which.
+ *
+ * So where the style is on the hand, the width comes from that player's own
+ * thresholds — the same numbers the policy opens, defends and reraises by.
+ * Returns null where nothing better than the general guess can be said.
+ */
+function styledPreflopWidth(state: HandState, seat: number, style: Archetype): number | null {
+  const preflop = state.actions.filter((entry) => entry.street === 'preflop')
+  const mine = preflop.filter((entry) => entry.seat === seat)
+  // Posted a blind and not acted: it has done nothing to narrow anything.
+  if (mine.length === 0) return 1
+
+  // The strongest thing it did is what its range is read from, and the price
+  // it faced is the price at the moment it did it.
+  const strongest =
+    mine.find((entry) => entry.action.type === 'raise') ??
+    mine.find((entry) => entry.action.type === 'call') ??
+    mine[0]!
+  const at = preflop.indexOf(strongest)
+  const before = preflop.slice(0, at)
+  const raisesBefore = before.filter((entry) => entry.action.type === 'raise').length
+
+  if (strongest.action.type === 'raise') {
+    if (raisesBefore > 0) return style.reraiseWidth / raisesBefore
+    // Opening. A seat that has to get through more players opens tighter, and
+    // the players it had to get through are the ones that had not yet acted.
+    const behind = state.seats.filter(
+      (other) =>
+        other.index !== seat && !before.some((entry) => entry.seat === other.index),
+    ).length
+    return positionalOpenWidth(style.openWidth, behind)
+  }
+
+  if (strongest.action.type === 'call') {
+    // A width of zero is the style saying this never happens — the rock does
+    // not limp. It just did, so the style does not explain the seat here, and
+    // the honest reading is the general one rather than "it must have aces".
+    const width = raisesBefore > 0 ? style.defendWidth / raisesBefore : style.limpWidth
+    return width > 0 ? width : null
+  }
+
+  // Checked its option in the big blind: it declined to open, which rules out
+  // almost nothing. The ranges here are always "the top w%", so there is no
+  // way to say "everything but the best hands" — and claiming to know more
+  // than that would be worse than admitting it does not.
+  return 1
+}
+
 /** Fraction of starting hands this seat is estimated to hold. */
 export function modelledWidth(state: HandState, seat: number): number {
+  const style = state.seats[seat]?.style
+  const known = style ? ARCHETYPES[style] : undefined
+  const styled = known ? styledPreflopWidth(state, seat, known) : null
+
   const preflop = strongestAction(state, seat, 'preflop')
-  let width: number = preflop === null ? PREFLOP_WIDTH.posted : PREFLOP_WIDTH[preflop]
+  let width: number =
+    styled ?? (preflop === null ? PREFLOP_WIDTH.posted : PREFLOP_WIDTH[preflop])
 
   for (const street of ['flop', 'turn', 'river'] as const) {
     const action = strongestAction(state, seat, street)

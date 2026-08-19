@@ -32,7 +32,8 @@ import {
 import { adviseOn, decisionsTaken } from '../src/coach/advise'
 import { evaluate, categoryOf, HandCategory } from '../src/engine/evaluator'
 import { preflopStrength } from '../src/equity/preflop'
-import { gradeHand } from '../src/coach/grade'
+import { modelledWidth } from '../src/equity/opponent'
+import { gradeHand, replayHand } from '../src/coach/grade'
 import { aggregate } from '../src/stats/hand-stats'
 import { buildProfile, winrateInterval } from '../src/stats/profile'
 import { luckCurve } from '../src/stats/all-in-adjusted'
@@ -248,7 +249,13 @@ interface Outcome {
     byStreet: Map<Street, Promised>
     /** Decisions after which the hero never acted again: the hand ended there. */
     settled: Promised
-    /** Decisions the hero had to follow up on, which is where a horizon bites. */
+    /**
+     * Decisions the hero had to follow up on.
+     *
+     * Descriptive only: whether the hand carried on is settled after the
+     * decision, so splitting on it selects on the outcome and neither half can
+     * be compared with a price quoted before it.
+     */
     playedOn: Promised
     /** By what the hero did, which separates a bad equity from a bad bluff. */
     byAction: Map<string, Promised>
@@ -267,9 +274,8 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
     ...blank(),
     byStreet: new Map<Street, Promised>(),
     // Where the hero never acted again — the field folded, or the chips were
-    // all in — the hand ended on the street the model priced, and the model is
-    // exact there. Holding those apart is what separates "the price is wrong"
-    // from "the price is right and the hand that follows it is not".
+    // all in — the hand ended on the street the model priced. Worth seeing, but
+    // not worth testing against: it is a split on how the hand turned out.
     settled: blank(),
     playedOn: blank(),
     byAction: new Map<string, Promised>(),
@@ -440,6 +446,69 @@ function report(outcome: Outcome) {
   }
 }
 
+/**
+ * Do the modelled ranges describe the hands they are actually holding?
+ *
+ * Every equity the app shows, every price the coach quotes and every bot
+ * decision runs through one estimate: this seat holds a hand in the top w% of
+ * starting hands. It is a heuristic keyed on how hard the seat has played, and
+ * nothing has ever checked it against the cards those seats really had.
+ *
+ * Replaying the hands makes that free. A seat modelled at width w is being
+ * claimed to hold something uniform in the top w, whose average rank is
+ * 1 - w/2; the hands it really held have an average rank of their own, and the
+ * width that implies is 2(1 - mean). Where the two disagree the model is
+ * putting an opponent on the wrong hand — too tight, and every bluff looks
+ * hopeless; too loose, and every value bet does.
+ */
+interface RangeCheck {
+  seats: number
+  modelled: number
+  /** Sum of the actual rank of the hands held, 1 being the best hand. */
+  rank: number
+  /** How many of them were actually inside the range they were put on. */
+  inside: number
+}
+
+/** The strongest thing a seat did before the flop, which is what widths key on. */
+function preflopPosture(state: HandState, seat: number): string {
+  const acted = state.actions.filter((a) => a.seat === seat && a.street === 'preflop')
+  if (acted.length === 0) return 'posted'
+  if (acted.some((a) => a.action.type === 'raise')) return 'raised'
+  if (acted.some((a) => a.action.type === 'call')) return 'called'
+  return 'checked'
+}
+
+function checkRanges(records: HandRecord[]): Map<string, RangeCheck> {
+  const found = new Map<string, RangeCheck>()
+
+  for (const record of records) {
+    for (const { state } of replayHand(record)) {
+      if (state.toAct !== record.heroSeat || state.street !== 'preflop') continue
+      for (const seat of state.seats) {
+        if (seat.index === record.heroSeat || seat.status === 'folded') continue
+        const cards = record.state.seats[seat.index]!.holeCards
+        if (!cards) continue
+
+        const width = modelledWidth(state, seat.index)
+        const key = `${seat.style ?? 'unknown'} · ${preflopPosture(state, seat.index)}`
+        const row = found.get(key) ?? { seats: 0, modelled: 0, rank: 0, inside: 0 }
+        row.seats += 1
+        row.modelled += width
+        const rank = preflopStrength(cards).percentile
+        row.rank += rank
+        row.inside += rank >= 1 - width ? 1 : 0
+        found.set(key, row)
+      }
+      // One reading per hand is enough, and the first is the one every later
+      // width is derived from.
+      break
+    }
+  }
+
+  return found
+}
+
 /** Chips in must equal chips out, hand after hand, however they were played. */
 function conservationFaults(records: HandRecord[]): number {
   let faults = 0
@@ -528,8 +597,10 @@ for (const result of results) {
   )
 }
 
-const coachCalibration = outcomes.find((outcome) => outcome.policy.name === 'Coach')!.calibration
-if (coachCalibration.bets > 0) {
+// Only the coach knows what it predicted, so the sections that score a
+// prediction only appear when the coach played.
+const coachCalibration = outcomes.find((outcome) => outcome.policy.name === 'Coach')?.calibration
+if (coachCalibration && coachCalibration.bets > 0) {
   say()
   say('## Are the coach\'s opponents the opponents?')
   say()
@@ -562,8 +633,9 @@ if (coachCalibration.bets > 0) {
   // Fold equity is only half of what a price claims. The other half is what
   // the hand pays once the bet is called, and that is a claim about streets
   // this model does not look at.
-  const coachPromised = outcomes.find((outcome) => outcome.policy.name === 'Coach')!.promised
-  const bb = results.find((r) => r.outcome.policy.name === 'Coach')!.outcome.records[0]?.bigBlind ?? 2
+  const played = outcomes.find((outcome) => outcome.policy.name === 'Coach')!
+  const coachPromised = played.promised
+  const bb = played.records[0]?.bigBlind ?? 2
   if (coachPromised.decisions > 0) {
     say()
     say('## Is an action worth what the coach says it is worth?')
@@ -601,8 +673,9 @@ if (coachCalibration.bets > 0) {
     say()
     say(
       'And split by whether the hand carried on past the street the price was quoted for. ' +
-        'Where it did not — the field folded, or the chips were already in — this model is ' +
-        'exact, so a gap there is the price being wrong rather than the hand that follows it.',
+        'This one describes where the money went; it does not test a price. Whether the hand ' +
+        'carried on is decided after the decision, so both halves are selected on the outcome ' +
+        'and neither mean can be held against a price quoted before it.',
     )
     say()
     say('| | Decisions | Said it was worth | Returned | Gap |')
@@ -621,6 +694,28 @@ if (coachCalibration.bets > 0) {
       line(kind, row)
     }
   }
+}
+
+say()
+say('## Do the modelled ranges hold the hands they are put on?')
+say()
+say(
+  'A seat put on the top w% of starting hands is being claimed to hold something whose ' +
+    'average rank is 1 - w/2. The hands it really held have an average rank of their own, ' +
+    'and the width that implies is 2(1 - mean). Read before the flop, where the widths are ' +
+    'set, across every hand every policy played.',
+)
+say()
+say('| Seat and posture | Times | Put on | Really held | Inside the range |')
+say('|---|---|---|---|---|')
+const ranges = checkRanges(outcomes.flatMap((outcome) => outcome.records))
+for (const [key, row] of [...ranges].sort((a, b) => b[1].seats - a[1].seats)) {
+  const modelled = row.modelled / row.seats
+  const implied = Math.min(1, Math.max(0, 2 * (1 - row.rank / row.seats)))
+  say(
+    `| ${key} | ${row.seats} | ${(modelled * 100).toFixed(0)}% | ${(implied * 100).toFixed(0)}% | ` +
+      `${((row.inside / row.seats) * 100).toFixed(0)}% |`,
+  )
 }
 
 say()
