@@ -14,8 +14,8 @@ import { defendWidthOf, preflopRaises, styleAt } from './opponents'
  * The pricing model earns its keep by predicting what the table will do with a
  * bet, and for a long time it did not: it priced everyone by a general rule
  * about poker while the app dealt five players with rules of their own. Over a
- * few thousand hands it expected the field to fold 43.4% of the time and the
- * field folded 24.6%.
+ * thousand hands it expected the field to fold 38.9% of the time and the field
+ * folded 26.9% — and on the turn, 55.7% against 27.9%.
  *
  * These tests hold the model to the players. They read the same thresholds the
  * policy reads, from the same place, so the two cannot drift apart quietly —

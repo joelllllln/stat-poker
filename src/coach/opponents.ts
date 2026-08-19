@@ -5,8 +5,11 @@
  * continues when its equity clears the price it is being laid, discounted for
  * the equity it will not get to realise. That is a defensible rule about poker
  * in general. It is not a description of the five players sitting at this
- * table, and thirteen thousand simulated hands said so — across 268 bets the
- * coach expected the field to fold 43.4% of the time and it folded 24.6%.
+ * table, and a thousand simulated hands said so: across 1,552 bets the coach
+ * expected the field to fold 38.9% of the time and it folded 26.9%, and by the
+ * turn it was expecting 55.7% against 27.9%. Pricing them by their own rules
+ * brings that to 22.8% expected against 25.8% seen, and 32.3% against 28.3%
+ * on the turn.
  *
  * So this is the other half of the model: the app deals opponents whose rules
  * it wrote, and it can price them by those rules rather than by a generic one.

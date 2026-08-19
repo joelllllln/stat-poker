@@ -112,14 +112,17 @@ export function Advice({
         })}
       </div>
 
-      {/* Measured, not hedged: over a thousand hands the table folded to these
-          bets 24.6% of the time where the model expected 43.4%. Somebody
-          following this on every street loses more than somebody folding every
-          hand, and they should hear that from the panel giving the advice. */}
+      {/* Measured, not hedged. Over a thousand hands the model now expects the
+          field to fold to these bets 22.8% of the time and it folds 25.8% —
+          it reads this table. What it does not do is look past this street,
+          and somebody following it bet after bet still loses more than
+          somebody folding every hand. They should hear that from the panel
+          giving the advice, not find it out. */}
       <p className="text-[11px] text-slate-500">
-        Priced against what they are modelled to hold, one street at a time, in big blinds
-        relative to folding. It reads the arithmetic of this decision well; it over-values
-        betting, because these opponents call more often than it expects.
+        Priced against what they are modelled to hold — including how each of these players
+        actually folds — one street at a time, in big blinds relative to folding. It reads
+        this decision well. It does not look at the betting still to come, so a line followed
+        street after street costs more than these numbers say.
       </p>
     </div>
   )
