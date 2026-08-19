@@ -1,6 +1,7 @@
 import { describe as describeHand } from '../engine/evaluator'
 import { potSize, positionName, type HandState, type Street } from '../engine/types'
 import type { SessionState } from '../game/session'
+import { tableName } from '../game/table'
 import { CardBack, CardRow, CardSlot, PlayingCard } from './Cards'
 
 /**
@@ -388,7 +389,7 @@ export function Table({ session }: { session: SessionState }) {
     return (
       <div className="rail rounded-[12%/22%] p-2 sm:rounded-[46%/32%] sm:p-3">
         <div className="felt flex aspect-[16/10] items-center justify-center rounded-[10%/20%] px-6 text-center text-sm text-emerald-200/60 sm:aspect-[16/9] sm:rounded-[46%/32%]">
-          Six-max no-limit hold’em. Press Deal to play a hand.
+          {tableName(numSeats)} no-limit hold’em. Press Deal to play a hand.
         </div>
       </div>
     )

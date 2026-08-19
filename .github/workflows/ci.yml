@@ -59,6 +59,13 @@ jobs:
         run: node scripts/smoke.mjs
         env:
           SMOKE_URL: http://localhost:4180/stat-poker/
+      # Playing badly at four different tables, which is where the faults the
+      # smoke test cannot reach live: changing tables, busting a short stack,
+      # nine seats on a phone.
+      - name: Play badly at every table
+        run: node scripts/tilt.mjs
+        env:
+          TILT_URL: http://localhost:4180/stat-poker/
       - name: Screenshot from a failed smoke test
         if: failure()
         uses: actions/upload-artifact@v4

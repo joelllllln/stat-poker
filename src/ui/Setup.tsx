@@ -8,6 +8,7 @@ import {
   MIN_STACK_BB,
   faultsIn,
   seatsFor,
+  tableName,
   type TableConfig,
 } from '../game/table'
 import { seatSpots, seatWidthFor } from './Table'
@@ -40,14 +41,6 @@ const STACKS: { label: string; bb: number }[] = [
   { label: 'Normal', bb: 100 },
   { label: 'Deep', bb: 200 },
 ]
-
-/** What a table of this size is called, which is how players talk about it. */
-function tableName(seats: number): string {
-  if (seats === 2) return 'Heads-up'
-  if (seats <= 4) return 'Short-handed'
-  if (seats <= 6) return 'Six-max'
-  return 'Full ring'
-}
 
 function Choice({
   label,

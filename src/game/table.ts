@@ -156,3 +156,17 @@ export function sessionConfigFor(table: TableConfig, seed: number): SessionConfi
     seed,
   }
 }
+
+/**
+ * What a table of this size is called, which is how players talk about it.
+ *
+ * Lives here rather than on the setup screen because the game itself has to
+ * name the table it is dealing: everything used to be six-max, and now the
+ * only place that is true is a table with six seats at it.
+ */
+export function tableName(seats: number): string {
+  if (seats === 2) return 'Heads-up'
+  if (seats <= 4) return 'Short-handed'
+  if (seats <= 6) return 'Six-max'
+  return 'Full ring'
+}

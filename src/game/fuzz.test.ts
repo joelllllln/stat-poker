@@ -165,7 +165,8 @@ describe('playing badly at random tables', () => {
 
 describe('the spots that are meant to be hard', () => {
   it('deals a table where the blinds put people all in', () => {
-    // Ten big blinds is the shortest table the app offers. Nine-handed, that
+    // Ten big blinds is the shortest stack the config allows — shorter than
+    // anything the setup screen offers, which is the point. Nine-handed that
     // is a lot of stacks and a lot of forced all-ins.
     const config: TableConfig = {
       seats: 9,

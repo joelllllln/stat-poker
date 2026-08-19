@@ -335,14 +335,25 @@ export const useStore = create<Store>((set, get) => {
     seated: preferences.seated,
     sitDown: (table) => {
       // A fresh table is a fresh session: stacks, button and hand number all
-      // start again. The history is not touched — those hands were played and
-      // remain played, at whatever table they were played at.
-      set({
+      // start again. What was played at the last table is not lost with it —
+      // the session that held those hands is about to be thrown away, so they
+      // move into the archive on the way out, exactly as a reload would have
+      // read them back from storage. Without this, changing tables makes the
+      // hands you just played disappear from your statistics.
+      const { session, archive } = get()
+      const known = new Set(archive.map((hand) => hand.key))
+      const carried: ArchivedHand[] = session.history
+        .filter((record) => record.playedAt !== undefined)
+        .map((record) => ({ record, playedAt: record.playedAt!, key: handKey(record) }))
+        .filter((hand) => !known.has(hand.key))
+
+      set((s) => ({
         session: createSession(sessionConfigFor(table, Date.now() >>> 0)),
+        archive: [...s.archive, ...carried].sort((a, b) => a.playedAt - b.playedAt),
         table,
         seated: true,
         guess: null,
-      })
+      }))
       remember()
       bump()
     },

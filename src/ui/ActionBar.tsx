@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { legalActions } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
+import { tableName } from '../game/table'
 import { blindPosted, madeHandInWords, postedInWords, priceInWords, seatInWords } from './plain'
 import { useStore } from './store'
 
@@ -38,6 +39,7 @@ export function ActionBar({
 }) {
   const act = useStore((s) => s.act)
   const deal = useStore((s) => s.deal)
+  const seats = useStore((s) => s.table.seats)
   const [custom, setCustom] = useState<number | null>(null)
 
   const yourTurn = state !== null && state.result === null && state.toAct === heroSeat
@@ -78,7 +80,15 @@ export function ActionBar({
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
 
       if (!yourTurn) {
-        if (event.key === ' ' || event.key === 'Enter') {
+        // Space and Enter are how the browser presses whatever has focus, and
+        // how it scrolls. Dealing on them from anywhere means somebody opening
+        // a panel with the keyboard deals a hand they did not ask for, so the
+        // shortcut only applies when nothing in particular is focused.
+        const onSomething =
+          target !== null &&
+          target !== document.body &&
+          target.closest('a, button, summary, [role="button"], [tabindex], [contenteditable]') !== null
+        if (!onSomething && (event.key === ' ' || event.key === 'Enter')) {
           event.preventDefault()
           deal()
         }
@@ -112,7 +122,7 @@ export function ActionBar({
       <div className="plate flex items-center justify-between gap-3 px-3 py-3">
         <span className="text-xs text-[color:var(--color-bone-faint)]">
           {state === null
-            ? 'Six-max, no-limit hold’em. You are at the bottom of the table.'
+            ? `${tableName(seats)}, no-limit hold’em. You are at the bottom of the table.`
             : waiting
               ? 'Waiting for the others…'
               : 'Hand over.'}
@@ -216,11 +226,12 @@ export function ActionBar({
               )
             })}
             <button
+              data-size="allin"
               onClick={() => setCustom(raise.max!)}
               className={`min-h-11 flex-1 touch-manipulation whitespace-nowrap rounded-md border text-sm transition sm:min-h-9 sm:flex-none sm:px-3 sm:text-xs ${
                 amount === raise.max
-                  ? 'border-rose-500 bg-rose-600/20 text-rose-200'
-                  : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                  ? 'border-[color:var(--color-oxblood)] bg-[color:var(--color-oxblood)]/25 text-[color:var(--color-bone)]'
+                  : 'border-[color:var(--color-ink-4)] text-[color:var(--color-bone-dim)] hover:bg-black/45'
               }`}
             >
               All in <span aria-hidden className="opacity-60">a</span>
@@ -269,6 +280,7 @@ export function ActionBar({
 
       <div className="flex gap-2">
         <button
+          data-action="fold"
           className={`${button} plaque-oxblood${recommended('fold')}`}
           disabled={!canFold}
           onClick={() => act({ type: 'fold' })}
@@ -279,6 +291,7 @@ export function ActionBar({
 
         {canCheck ? (
           <button
+            data-action="check"
             className={`${button}${recommended('check')}`}
             onClick={() => act({ type: 'check' })}
           >
@@ -287,6 +300,7 @@ export function ActionBar({
           </button>
         ) : (
           <button
+            data-action="call"
             className={`${button}${recommended('call')}`}
             disabled={!canCall}
             onClick={() => act({ type: 'call' })}
@@ -297,6 +311,7 @@ export function ActionBar({
         )}
 
         <button
+          data-action="raise"
           className={`${button} plaque-jade${recommended('raise')}`}
           disabled={!raise}
           onClick={() => raise && act({ type: 'raise', to: amount })}
