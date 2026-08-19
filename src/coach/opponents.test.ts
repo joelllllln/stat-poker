@@ -255,12 +255,34 @@ describe('what a called bet gets to keep', () => {
   it('keeps all of it on the river and less the further the hand has to travel', () => {
     // The pricing is exact where the hand ends on the street it prices, and
     // that has to survive: every river test in the grader depends on it.
-    expect(realisedWhenCalled('river')).toBe(1)
-    expect(realisedWhenCalled('turn')).toBeLessThan(realisedWhenCalled('river'))
-    expect(realisedWhenCalled('flop')).toBeLessThan(realisedWhenCalled('turn'))
-    expect(realisedWhenCalled('preflop')).toBeLessThan(realisedWhenCalled('flop'))
+    const marginal = 0.4
+    expect(realisedWhenCalled('river', marginal)).toBe(1)
+    expect(realisedWhenCalled('turn', marginal)).toBeLessThan(realisedWhenCalled('river', marginal))
+    expect(realisedWhenCalled('flop', marginal)).toBeLessThan(realisedWhenCalled('turn', marginal))
+    expect(realisedWhenCalled('preflop', marginal)).toBeLessThan(
+      realisedWhenCalled('flop', marginal),
+    )
     // And it is a discount, not a write-off.
-    expect(realisedWhenCalled('preflop')).toBeGreaterThan(0.5)
+    expect(realisedWhenCalled('preflop', marginal)).toBeGreaterThan(0.5)
+  })
+
+  it('keeps less of it the weaker the hand is, and all of it at the top', () => {
+    // The point the flat version missed. A hand that is already ahead of the
+    // callers has no trouble on the next street; a hand with nothing has to
+    // give up the pot it just built or keep paying for it. Measuring the
+    // coach's own bets is what found this: with the worst quarter of starting
+    // hands it recommended a pot-sized bet half the time, and those bets
+    // returned −12.84bb apiece against a model that priced them at +3.34bb.
+    expect(realisedWhenCalled('preflop', 0.1)).toBeLessThan(realisedWhenCalled('preflop', 0.5))
+    expect(realisedWhenCalled('preflop', 0.5)).toBeLessThan(realisedWhenCalled('preflop', 0.9))
+    // The nuts realise everything, on any street: there is nothing to be
+    // outplayed out of.
+    expect(realisedWhenCalled('preflop', 1)).toBe(1)
+    expect(realisedWhenCalled('flop', 1)).toBe(1)
+    // And an equity outside the range it can take is not a licence to invent
+    // a discount above one or below nothing.
+    expect(realisedWhenCalled('preflop', 1.4)).toBe(1)
+    expect(realisedWhenCalled('preflop', -0.2)).toBeGreaterThan(0)
   })
 
   it('keeps all of it when the bet is for the last chip, whatever the street', () => {

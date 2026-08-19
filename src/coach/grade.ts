@@ -28,7 +28,7 @@ import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
  * whenever a change here would give a hand a different verdict: every cached
  * verdict below it is discarded and worked out again.
  */
-export const GRADER_VERSION = 3
+export const GRADER_VERSION = 4
 
 export type Verdict = 'optimal' | 'fine' | 'mistake' | 'blunder'
 

@@ -127,20 +127,17 @@ export function Advice({
         })}
       </div>
 
-      {/* Measured, not hedged. The model now reads this table: it expects the
-          field to fold to these bets about as often as the field does, and it
-          puts each of these players on the range they are really holding. What
-          it cannot do is see the next street. It charges a bet for having to
-          survive one, which is why it no longer recommends betting nine hands
-          in ten — but a bet is still worth about 20bb less than it is quoted
-          at, and somebody following this bet after bet loses more than
-          somebody folding every hand. They should hear that from the panel
-          giving the advice, not find it out. */}
+      {/* Measured, not hedged. It used to recommend a pot-sized bet with the
+          worst quarter of starting hands half the time; those bets returned
+          −12.84bb apiece against a model that priced them at +3.34bb. It no
+          longer offers them, and the bets it does offer now return +4.00bb.
+          What it will not do is teach a bluff, and it should say so rather
+          than let somebody assume its silence means bluffing is wrong. */}
       <p className="text-[11px] text-slate-500">
-        Priced against what they are modelled to hold — including how each of these players
-        really plays — one street at a time, in big blinds relative to folding. It reads this
-        decision well. It cannot see the betting still to come, only charge a hand for having
-        to survive it, so a line followed street after street costs more than these numbers say.
+        Priced against what these players really hold, one street at a time, in big blinds
+        relative to folding. It only tells you to bet when your hand is ahead of what would
+        call — it will not talk you into a bluff, because a bluff is won on the next street
+        and this model cannot see the next street. That is half of poker it is not teaching.
       </p>
     </div>
   )

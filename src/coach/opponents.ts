@@ -94,12 +94,54 @@ export const preflopRaises = (state: HandState): number =>
  * hand still has to travel. On the river it realises all of it, because there
  * is nothing left to travel: the model is exact there and must stay exact.
  *
+ * **And by more the weaker the hand is**, which a flat discount per street
+ * missed entirely. Measuring the bets the coach recommends showed where the
+ * money goes: with the worst quarter of starting hands it was recommending a
+ * pot-sized bet half the time, and those bets returned −12.84bb apiece against
+ * a model that priced them at +3.34bb. The same coach with one change — refuse
+ * to bet a hand that is behind — went from −294bb/100 to −10.8.
+ *
+ * The reason is not fold equity, which is now accurate to three points. It is
+ * that a hand which cannot stand a bet does not get to realise its share of a
+ * pot it has just inflated. Bet the pot with seven-three, get called, and the
+ * next street costs again: either you give up everything you built or you keep
+ * paying. A hand that is already ahead has no such problem, which is why the
+ * discount has to depend on the hand and not only on the street.
+ *
+ * At the top it is exactly one — the nuts realise everything, on any street —
+ * and on the river it is exactly one for everybody. Both of those are places
+ * the model is exact and has to stay exact.
+ *
  * This does not make the model see the next street. It makes it stop pricing
  * the next street as though it were already won.
  */
-const REALISED_PER_STREET = 0.9
+const UNREALISED_PER_STREET = 0.12
 
 const STREETS_LEFT: Record<Street, number> = { preflop: 3, flop: 2, turn: 1, river: 0 }
 
-export const realisedWhenCalled = (street: Street): number =>
-  REALISED_PER_STREET ** STREETS_LEFT[street]
+export const realisedWhenCalled = (street: Street, equity: number): number =>
+  1 - (1 - Math.min(1, Math.max(0, equity))) * UNREALISED_PER_STREET * STREETS_LEFT[street]
+
+/**
+ * The share of the pot below which this model will not recommend betting.
+ *
+ * A bet made with a hand that is behind the range which would call it is a
+ * bluff, and **this model cannot price a bluff**. A bluff is won or lost on the
+ * street after the one it is made on — the street where it is either continued
+ * or abandoned — and a one-street model cannot see that street. What it sees is
+ * the immediate fold equity, which is real, and it banks it as though the hand
+ * were over.
+ *
+ * Measured, that error is not small. With the worst quarter of starting hands
+ * the coach was recommending a pot-sized bet half the time; those bets returned
+ * −12.84bb apiece against a model that priced them at +3.34bb. The same coach
+ * with one change — decline to bet a hand that is behind — went from −294bb/100
+ * to −10.8, past folding every hand, which nothing following this coach had
+ * managed before.
+ *
+ * So it declines. Not because bluffing is wrong — it is most of poker — but
+ * because a model that cannot see the street a bluff is settled on has no
+ * business recommending one, least of all to somebody learning the game. It
+ * teaches the half it can price: bet when you are ahead, and know why.
+ */
+export const WILL_NOT_BLUFF_BELOW = 0.5

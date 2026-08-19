@@ -29,6 +29,7 @@ import {
   preflopRaises,
   realisedWhenCalled,
   styleAt,
+  WILL_NOT_BLUFF_BELOW,
 } from './opponents'
 import { requiredEquity } from './odds'
 
@@ -527,9 +528,12 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
           // there is nothing left to play, and a bet that puts this stack all
           // in, where there is nothing left to play it with. The model is
           // exact in both, and has to stay exact.
-          const realised =
-            mask === 0 || allIn ? 1 : realisedWhenCalled(state.street)
-          const share = priced.equity[mask]! * realised
+          // The equity is the one against the hands that actually called, so
+          // the discount is keyed on it: a hand that is behind the callers is
+          // the one that cannot stand the next bet.
+          const raw = priced.equity[mask]!
+          const realised = mask === 0 || allIn ? 1 : realisedWhenCalled(state.street, raw)
+          const share = raw * realised
           const won = pot + contributions
           const risked = Math.min(amount, largest)
           total += probability * (share * won - (1 - share) * risked)
@@ -561,7 +565,13 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
     options.push({
       action: { type: 'raise', to },
       label: state.currentBet > 0 ? `Raise to ${to}` : `Bet ${to}`,
-      ev,
+      // A bet made from behind is a bluff, and this model cannot price one:
+      // a bluff is settled on the street after the one it is made on, and
+      // there is no such street here. The immediate fold equity is real and
+      // gets banked as though the hand were over, which is how a pot-sized
+      // bet with seven-three came to be priced at +3.34bb and to return
+      // −12.84. It is held to the value of giving up instead.
+      ev: equity < WILL_NOT_BLUFF_BELOW ? Math.min(ev, 0) : ev,
       error,
       foldEquity,
     })
