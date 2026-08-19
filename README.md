@@ -161,6 +161,57 @@ leave the text too small to read, the oval is dropped for a plain stacked
 layout — a small screen is a reason to change the arrangement, not to shrink it
 until it collides.
 
+## What playing it for a few thousand hands showed
+
+`scripts/simulate.ts` plays the game rather than testing its parts: six hero
+policies against the same bots, each measured the way the app measures a
+person. The results are the most useful thing in this repository, because two
+of them contradict what the app appears to claim.
+
+| Policy | Hands | bb/100 | Given up bb/100 | VPIP | PFR |
+|---|---|---|---|---|---|
+| Follow the coach | 1,000 | **−424** | 0.0 | 76% | 76% |
+| A plain tight-aggressive rule | 2,500 | −111 | 287 | 27% | 12% |
+| Fold every hand | 2,500 | **−23** | 65 | 0% | 0% |
+| Never fold | 2,500 | −1,084 | 2,358 | 98% | 0% |
+| Raise everything | 2,500 | −2,972 | 907 | 99% | 99% |
+| At random | 2,500 | −324 | 457 | 66% | 37% |
+
+**Following the coach loses more than folding every hand.** Its 95% interval
+(−843 to −4) is entirely below zero, so that is not variance. It plays 76% of
+hands and raises nearly all of them.
+
+**And it grades itself perfect while doing it** — 0.0bb/100 given up, "Elite",
+100% of decisions optimal. That number is not a lie so much as a tautology: the
+live coach and the grader are the same model on the same seed, so agreeing with
+it exactly is worth zero by construction. The dashboard now says as much.
+
+The cause is measured rather than guessed. For every bet the coach recommends,
+the simulation records the fold-through probability the model predicted and
+then watches what the table did:
+
+> Across 268 bets the coach expected the field to fold **43.4%** of the time.
+> It actually folded **24.6%**.
+
+The model prices opponents who continue when their hand clears the price,
+discounted for the equity they will not realise. The bots at this table decide
+by their archetype's widths and their own heuristics, and they call almost twice
+as often as the model expects. Every bluff the coach recommends is therefore
+priced against opponents who do not exist, and the one-street model then credits
+the called branch with a showdown it has not reached.
+
+So: **the coach is a good guide to the arithmetic of a decision and a bad guide
+to a strategy.** Pot odds, equity against a modelled range, and which of two
+lines is obviously worse — those it gets right, and they are what the overlay
+is for. "Play what it says on every street" is not supported by the evidence,
+and the app should not be read as claiming it.
+
+An attempted fix — charging the hero the same realisation discount the villains
+get — moved the winrate from −424 to −233 and the style from 76% to 63% of
+hands, which is the right direction but not a rescue, and it made verdicts
+depend on the sampling seed. It was reverted rather than shipped: a bias that
+can be stated is better than an instability that cannot.
+
 ## Keeping score across sessions
 
 Every hand is stored, and the statistics are built from all of them rather than
