@@ -10,7 +10,7 @@ import {
 import type { HandRecord } from '../game/session'
 import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
-import { madeHandInWords } from './plain'
+import { blindPosted, madeHandInWords } from './plain'
 import { useStore } from './store'
 
 const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; bar: string }> = {
@@ -200,6 +200,19 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
 
   if (!showReview || grade.decisions.length === 0) return null
 
+  // Folded, having put in nothing but a blind: the one case where the review's
+  // own figures — "nothing given up", and a stack that went down anyway — read
+  // as a contradiction to anybody who has not met the idea of a sunk cost.
+  const blind = blindPosted(heroSeat, record.state.buttonSeat, record.state.seats.length)
+  const foldedTheBlind =
+    blind !== null &&
+    record.state.seats[heroSeat]!.status === 'folded' &&
+    record.state.actions.every(
+      (entry) => entry.seat !== heroSeat || entry.action.type === 'fold',
+    )
+      ? blind
+      : null
+
   return (
     <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
       <div className="flex items-baseline justify-between">
@@ -234,6 +247,18 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
             ? `lost ${-grade.net} chips.`
             : 'broke even.'}
       </p>
+
+      {/* "Nothing given up" beside a stack that just went down by one is how
+          an app loses somebody's trust. The blind is not a mistake and it is
+          not free — it is the rent everybody pays in turn, and the review has
+          to say so rather than leave the arithmetic looking wrong. */}
+      {foldedTheBlind && (
+        <p className="text-xs text-slate-400">
+          You folded the {foldedTheBlind} blind, so it stayed in the middle. That is not a
+          mistake and it is not free: everybody pays it in turn, and it is already spent by
+          the time you look at your cards.
+        </p>
+      )}
 
       <Summary grade={grade} record={record} heroSeat={heroSeat} />
 

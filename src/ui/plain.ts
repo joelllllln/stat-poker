@@ -301,3 +301,34 @@ export function evLostInWords(bbPer100: number): string {
   if (perHand < 1) return `The coach would have made about ${perHand.toFixed(1)} big blinds a hand more than you did.`
   return `The coach would have made about ${perHand.toFixed(0)} big blinds a hand more than you did — there is a lot on the table.`
 }
+
+/**
+ * The blind you already posted, and why it is not a reason to play.
+ *
+ * A third of the hands you are dealt, you have paid before you have seen a
+ * card, and folding hands that money over. Somebody new watches their stack go
+ * from 200 to 199 while the app calls folding "worth nothing" and reasonably
+ * concludes the app is lying to them.
+ *
+ * It is not, and the difference is the first real idea in poker: those chips
+ * stopped being yours when they went in. Every action from here is measured
+ * against what happens next, and "but I already put money in" is the thought
+ * that costs beginners the most money there is. Saying it once, in the moment
+ * it applies, is worth more than any amount of correct arithmetic elsewhere.
+ */
+export function postedInWords(committed: number, blind: 'small' | 'big'): string {
+  return (
+    `You have ${committed} in already — the ${blind} blind, which you pay in turn like ` +
+    `everyone else. It is spent whatever you do now, so it is not a reason to play the hand.`
+  )
+}
+
+/** Which blind this seat posted, if it posted one and has done nothing else. */
+export function blindPosted(
+  seat: number,
+  buttonSeat: number,
+  numSeats: number,
+): 'small' | 'big' | null {
+  const name = positionName(seat, buttonSeat, numSeats)
+  return name === 'SB' ? 'small' : name === 'BB' ? 'big' : null
+}

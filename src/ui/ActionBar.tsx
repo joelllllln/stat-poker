@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { legalActions } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
-import { madeHandInWords, priceInWords } from './plain'
+import { blindPosted, madeHandInWords, postedInWords, priceInWords } from './plain'
 import { useStore } from './store'
 
 /**
@@ -128,6 +128,13 @@ export function ActionBar({
     )
   }
 
+  // Posting a blind is not playing a hand: a third of the time the stack has
+  // already moved before the player has seen a card, and folding hands that
+  // money over. Saying so is the difference between "this app is lying to me"
+  // and the first real idea in poker.
+  const blind = blindPosted(heroSeat, state.buttonSeat, state.seats.length)
+  const actedVoluntarily = state.actions.some((entry) => entry.seat === heroSeat)
+
   const button =
     'relative min-h-14 flex-1 touch-manipulation whitespace-nowrap rounded-lg px-3 text-base font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed sm:min-h-12 sm:px-4 sm:text-sm'
 
@@ -174,6 +181,15 @@ export function ActionBar({
           {priceInWords(toCall, pot + toCall)}
         </span>
       </div>
+
+      {/* Only while the blind is the only thing this seat has put in. After
+          that the player chose to be here and knows it; before it, they are
+          watching a stack shrink on a hand they never agreed to play. */}
+      {blind !== null && !actedVoluntarily && (
+        <p className="rounded-md bg-slate-900/70 px-2 py-1 text-[11px] leading-snug text-slate-400">
+          {postedInWords(hero.totalCommitted, blind)}
+        </p>
+      )}
 
       {raise && (
         // Two rows, always: the fractions, then the slider with the amount and

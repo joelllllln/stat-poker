@@ -7,7 +7,9 @@ import {
   positionInWords,
   sizeInWords,
   aggressionInWords,
+  blindPosted,
   evLostInWords,
+  postedInWords,
   pfrInWords,
   reasonInWords,
   strengthInWords,
@@ -190,5 +192,25 @@ group('the statistics, read out loud', () => {
   it('says what the coach being ahead of you amounts to', () => {
     expect(evLostInWords(5)).toContain('almost exactly as you did')
     expect(evLostInWords(800)).toContain('a lot on the table')
+  })
+})
+
+group('the blind you already posted', () => {
+  it('names which blind it was, from the seat', () => {
+    // Six-handed, button on seat 0: seat 1 is the small blind, seat 2 the big.
+    expect(blindPosted(1, 0, 6)).toBe('small')
+    expect(blindPosted(2, 0, 6)).toBe('big')
+    // Everybody else has paid nothing, so there is nothing to explain.
+    expect(blindPosted(0, 0, 6)).toBeNull()
+    expect(blindPosted(3, 0, 6)).toBeNull()
+  })
+
+  it('says the money is gone rather than that folding is free', () => {
+    const said = postedInWords(1, 'small')
+    expect(said).toContain('1 in already')
+    expect(said).toContain('small blind')
+    // The whole point: it is spent, and it is not an argument for playing on.
+    expect(said).toContain('spent whatever you do')
+    expect(said).toContain('not a reason to play')
   })
 })
