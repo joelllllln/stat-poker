@@ -10,6 +10,7 @@ import {
 import type { HandRecord } from '../game/session'
 import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
+import { madeHandInWords } from './plain'
 import { useStore } from './store'
 
 const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; bar: string }> = {
@@ -211,6 +212,28 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
             : 'nothing given up'}
         </span>
       </div>
+
+      {/* What happened, before what to make of it.
+          Reflecting on a hand starts with remembering it, and by the time the
+          review appears the cards have gone from the felt. A beginner cannot
+          reconstruct "the flop came and I had two pair" from a list of graded
+          decisions — and every sentence under this one begins by assuming
+          they can. */}
+      <p className="text-sm text-slate-300">
+        You had{' '}
+        <span className="font-medium text-amber-100">
+          {madeHandInWords(
+            record.state.seats[heroSeat]!.holeCards!,
+            record.state.board.slice(0, record.state.result?.runoutFrom ?? record.state.board.length),
+          )}
+        </span>{' '}
+        when the betting finished, and{' '}
+        {grade.net > 0
+          ? `won ${grade.net} chips.`
+          : grade.net < 0
+            ? `lost ${-grade.net} chips.`
+            : 'broke even.'}
+      </p>
 
       <Summary grade={grade} record={record} heroSeat={heroSeat} />
 

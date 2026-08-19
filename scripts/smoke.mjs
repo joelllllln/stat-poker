@@ -346,6 +346,11 @@ if (acrossHands.length) console.log('   ', [...new Set(acrossHands)].slice(0, 6)
 await page.setViewportSize({ width: 1100, height: 1000 })
 await page.waitForTimeout(300)
 check('the running record is beside the table', after.includes('this sitting'))
+check(
+  'the review says what you had and what it cost',
+  /you had .*(pair|high|two pair|three|straight|flush|full house|four)/.test(after) &&
+    /(won|lost) \d+ chips|broke even/.test(after),
+)
 check('the post-hand review appeared', after.includes('review'))
 check('the run-it-again spread appeared', /run it [\d,]+ times/.test(after))
 
