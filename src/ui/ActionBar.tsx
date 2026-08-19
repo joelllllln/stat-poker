@@ -109,8 +109,8 @@ export function ActionBar({
   if (!yourTurn || hero === undefined || state === null) {
     const waiting = state !== null && state.result === null
     return (
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 shadow-lg shadow-black/40 sm:bg-slate-950/80 sm:shadow-none">
-        <span className="text-xs text-slate-500">
+      <div className="plate flex items-center justify-between gap-3 px-3 py-3">
+        <span className="text-xs text-[color:var(--color-bone-faint)]">
           {state === null
             ? 'Six-max, no-limit hold’em. You are at the bottom of the table.'
             : waiting
@@ -120,7 +120,7 @@ export function ActionBar({
         <button
           onClick={deal}
           disabled={waiting}
-          className="min-h-12 touch-manipulation rounded-lg bg-emerald-600 px-6 text-base font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-30 sm:min-h-10 sm:text-sm"
+          className="plaque plaque-brass min-h-12 touch-manipulation px-7 text-base disabled:opacity-30 sm:min-h-10 sm:text-sm"
         >
           Deal <span aria-hidden className="ml-1 text-[10px] opacity-70">space</span>
         </button>
@@ -136,7 +136,7 @@ export function ActionBar({
   const actedVoluntarily = state.actions.some((entry) => entry.seat === heroSeat)
 
   const button =
-    'relative min-h-14 flex-1 touch-manipulation whitespace-nowrap rounded-lg px-3 text-base font-semibold text-white transition disabled:opacity-30 disabled:cursor-not-allowed sm:min-h-12 sm:px-4 sm:text-sm'
+    'plaque relative min-h-[52px] flex-1 touch-manipulation whitespace-nowrap px-3 text-base disabled:opacity-30 disabled:cursor-not-allowed sm:min-h-12 sm:px-4 sm:text-sm'
 
   // The recommendation is marked on the control it recommends, because that is
   // where somebody is looking when they need it. A recommended raise marks the
@@ -144,20 +144,20 @@ export function ActionBar({
   // advice is "raise, and this much", and hiding it until the slider happens to
   // agree would mark nothing most of the time.
   const recommended = (type: Action['type']) =>
-    best?.type === type ? ' ring-2 ring-emerald-300 ring-offset-2 ring-offset-slate-950' : ''
+    best?.type === type ? ' ring-2 ring-[color:var(--color-brass-bright)] ring-offset-2 ring-offset-[color:var(--color-ink)]' : ''
 
   const bestBadge = (type: Action['type']) =>
     best?.type === type ? (
       <span
         aria-hidden
-        className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-300 px-2 text-[10px] font-bold text-emerald-950"
+        className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[color:var(--color-brass-bright)] px-2 text-[10px] font-bold tracking-wide text-[#26200c]"
       >
         {best.type === 'raise' && best.to !== amount ? `best: ${best.to}` : 'best'}
       </span>
     ) : null
 
   return (
-    <div className="space-y-1 rounded-xl border border-slate-800 bg-slate-950 p-2 shadow-lg shadow-black/40 sm:space-y-2 sm:bg-slate-950/80 sm:p-3 sm:shadow-none">
+    <div className="plate space-y-1 p-2 sm:space-y-2 sm:p-3">
       {/* What the situation is, before what to do about it: what you are
           holding, whose turn it is, and what the price is — said in words,
           because "19 to call into a pot of 32" is only a sentence if you
@@ -168,17 +168,17 @@ export function ActionBar({
           separate card for one line of text costs its own border, padding and
           gap and pushed them off the bottom. */}
       <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
-        <span className="font-medium text-amber-300">Your turn</span>
+        <span className="stamp !text-[color:var(--color-brass-bright)]">Your turn</span>
         {hero.holeCards && (
-          <span className="font-medium text-amber-100">
+          <span className="font-semibold text-[color:var(--color-bone)]">
             · you have {madeHandInWords(hero.holeCards, state.board)}
           </span>
         )}
         {/* The price is said once, in words. Quoting "36 to call into a pot
             of 93" beside "it costs 36 to win 129" is the same fact twice in
             two notations, and the felt already shows the pot. */}
-        <span className="text-slate-400">· you are {seatInWords(heroSeat, state.buttonSeat, state.seats.length)}</span>
-        <span className="w-full text-[11px] leading-snug text-slate-400">
+        <span className="text-[color:var(--color-bone-dim)]">· you are {seatInWords(heroSeat, state.buttonSeat, state.seats.length)}</span>
+        <span className="w-full text-xs leading-snug text-[color:var(--color-bone-dim)]">
           {priceInWords(toCall, pot + toCall)}
         </span>
       </div>
@@ -187,7 +187,7 @@ export function ActionBar({
           that the player chose to be here and knows it; before it, they are
           watching a stack shrink on a hand they never agreed to play. */}
       {blind !== null && !actedVoluntarily && (
-        <p className="rounded-md bg-slate-900/70 px-2 py-1 text-[11px] leading-snug text-slate-400">
+        <p className="rounded-md bg-black/30 px-2 py-1 text-xs leading-snug text-[color:var(--color-bone-dim)]">
           {postedInWords(hero.totalCommitted, blind)}
         </p>
       )}
@@ -207,8 +207,8 @@ export function ActionBar({
                   disabled={size <= raise.min! && s.fraction < 1 && size === amount}
                   className={`min-h-11 flex-1 touch-manipulation rounded-md border text-sm transition sm:min-h-9 sm:flex-none sm:px-3 sm:text-xs ${
                     amount === size
-                      ? 'border-emerald-500 bg-emerald-600/20 text-emerald-200'
-                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                      ? 'border-[color:var(--color-brass)] bg-[color:var(--color-brass)]/15 text-[color:var(--color-brass-bright)]'
+                      : 'border-[color:var(--color-ink-4)] text-[color:var(--color-bone-dim)]'
                   }`}
                 >
                   {s.label}
@@ -237,7 +237,7 @@ export function ActionBar({
               className="h-11 min-w-16 flex-1 touch-manipulation accent-emerald-500 sm:h-auto"
               aria-label="Bet size"
             />
-            <span className="w-10 shrink-0 text-right font-mono text-sm text-slate-200 sm:hidden">
+            <span className="w-10 shrink-0 text-right font-mono text-sm text-[color:var(--color-bone)] sm:hidden">
               {amount}
             </span>
             <input
@@ -250,7 +250,7 @@ export function ActionBar({
                   Math.max(raise.min!, Math.min(raise.max!, Math.round(Number(e.target.value)))),
                 )
               }
-              className="hidden min-h-9 w-20 rounded-md border border-slate-700 bg-slate-900 px-2 text-right font-mono text-xs sm:block"
+              className="hidden min-h-9 w-20 rounded-md border border-[color:var(--color-ink-4)] bg-black/40 px-2 text-right font-mono text-xs sm:block"
               aria-label="Bet amount"
             />
 
@@ -258,7 +258,7 @@ export function ActionBar({
             {best?.type === 'raise' && best.to !== amount && (
               <button
                 onClick={() => setCustom(best.to)}
-                className="min-h-11 shrink-0 touch-manipulation whitespace-nowrap rounded-md border border-emerald-500 px-3 text-sm text-emerald-200 transition hover:bg-emerald-900/40 sm:min-h-9 sm:text-xs"
+                className="min-h-11 shrink-0 touch-manipulation whitespace-nowrap rounded-md border border-[color:var(--color-brass)] px-3 text-sm text-[color:var(--color-brass-bright)] transition sm:min-h-9 sm:text-xs"
               >
                 Best {best.to}
               </button>
@@ -269,7 +269,7 @@ export function ActionBar({
 
       <div className="flex gap-2">
         <button
-          className={`${button} bg-slate-700 hover:bg-slate-600${recommended('fold')}`}
+          className={`${button} plaque-oxblood${recommended('fold')}`}
           disabled={!canFold}
           onClick={() => act({ type: 'fold' })}
         >
@@ -279,7 +279,7 @@ export function ActionBar({
 
         {canCheck ? (
           <button
-            className={`${button} bg-sky-700 hover:bg-sky-600${recommended('check')}`}
+            className={`${button}${recommended('check')}`}
             onClick={() => act({ type: 'check' })}
           >
             {bestBadge('check')}
@@ -287,7 +287,7 @@ export function ActionBar({
           </button>
         ) : (
           <button
-            className={`${button} bg-sky-700 hover:bg-sky-600${recommended('call')}`}
+            className={`${button}${recommended('call')}`}
             disabled={!canCall}
             onClick={() => act({ type: 'call' })}
           >
@@ -297,7 +297,7 @@ export function ActionBar({
         )}
 
         <button
-          className={`${button} bg-emerald-600 hover:bg-emerald-500${recommended('raise')}`}
+          className={`${button} plaque-jade${recommended('raise')}`}
           disabled={!raise}
           onClick={() => raise && act({ type: 'raise', to: amount })}
         >

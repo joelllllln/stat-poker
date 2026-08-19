@@ -77,7 +77,7 @@ async function press(locator, timeout = 4_000) {
 const dealNextHand = () =>
   press(page.getByRole('button', { name: 'Deal', exact: true }), 10_000)
 
-check('app renders', (await page.locator('h1').innerText()) === 'stat-poker')
+check('app renders', /stat\s*poker/i.test(await page.locator('h1').innerText()))
 
 // Bots act with a pause between them, the way a client deals. The test does
 // not need the pauses and every wait below would have to allow for them.
@@ -257,7 +257,7 @@ check(
 // The advice is worked out off the interface thread, so it lands a moment
 // after the decision does.
 const marked = await page
-  .locator('.ring-emerald-300')
+  .locator('[class*="ring-2"]')
   .first()
   .waitFor({ timeout: 15_000 })
   .then(() => true)

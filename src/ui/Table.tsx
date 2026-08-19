@@ -128,12 +128,12 @@ function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
       data-seat={s.name}
       className={`flex flex-col items-center rounded-xl border backdrop-blur-sm transition ${
         folded
-          ? 'border-white/5 bg-black/40 opacity-50'
+          ? 'border-white/5 bg-black/45 opacity-45'
           : won > 0
-            ? 'seat-won border-emerald-400/70 bg-emerald-950/80'
+            ? 'seat-won border-[color:var(--color-jade)]/70 bg-[#0e2a20]/90'
             : toAct
-              ? 'to-act border-amber-300/80 bg-slate-900/90'
-              : 'border-white/10 bg-slate-900/85'
+              ? 'to-act border-[color:var(--color-brass)]/80 bg-[color:var(--color-ink-3)]/95'
+              : 'border-[color:var(--color-bone)]/10 bg-[color:var(--color-ink-2)]/88'
       }`}
       style={{ width: scale.plate, padding: `calc(${scale.plate} * 0.045)`, gap: '2px' }}
     >
@@ -166,7 +166,7 @@ function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
       </div>
 
       <div
-        className="font-mono text-emerald-200/90"
+        className="font-mono text-[color:var(--color-brass-bright)]/90"
         style={{ fontSize: scale.text }}
       >
         {s.status === 'allin' ? 'all in' : s.stack}

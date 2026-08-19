@@ -114,8 +114,8 @@ function SeatKey() {
     ['CO', 'one seat before the dealer'],
   ]
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">
+    <div className="plate p-3">
+      <div className="stamp">
         The letters on the table
       </div>
       <dl className="mt-1 space-y-0.5">
@@ -185,7 +185,7 @@ export function App() {
         )}
         {showOdds && state && <OddsPanel state={state} heroSeat={heroSeat} />}
         {!acting && !showOdds && (
-          <p className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-500">
+          <p className="plate px-3 py-3 text-sm text-[color:var(--color-bone-faint)]">
             {state === null
               ? 'Deal a hand and this is where the odds and the advice appear.'
               : 'Nothing to decide right now.'}
@@ -208,14 +208,12 @@ export function App() {
   })
 
   return (
-    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-2 p-2 sm:gap-3 sm:p-4">
+    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-1.5 p-2 sm:gap-3 sm:p-4">
       <header className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-          <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
-            stat-poker
-          </h1>
+          <h1 className="wordmark shrink-0 text-base sm:text-xl">STAT&thinsp;POKER</h1>
           {/* Three facts fit a phone header; the words around them do not. */}
-          <p className="truncate text-[11px] leading-tight text-slate-500 sm:text-xs">
+          <p className="truncate text-[11px] leading-tight text-[color:var(--color-bone-faint)]">
             Hand {session.handNumber} ·<span className="hidden sm:inline"> blinds</span>{' '}
             {session.config.smallBlind}/{session.config.bigBlind} ·
             <span className="hidden sm:inline"> stack</span> {session.stacks[heroSeat]}
@@ -230,10 +228,7 @@ export function App() {
         {/* The two screens are a choice about where you are; the rest are
             settings for the table. Kept apart so they do not read as one row
             of six equal buttons. */}
-        <nav
-          className="flex shrink-0 rounded-lg border border-slate-800 p-0.5 text-sm"
-          aria-label="Screen"
-        >
+        <nav className="plate flex shrink-0 p-0.5 text-sm" aria-label="Screen">
           {(
             [
               { value: 'table', label: 'Table' },
@@ -244,10 +239,10 @@ export function App() {
               key={tab.value}
               onClick={() => setScreen(tab.value)}
               aria-current={screen === tab.value ? 'page' : undefined}
-              className={`min-h-11 touch-manipulation rounded px-5 transition sm:min-h-9 ${
+              className={`min-h-11 touch-manipulation rounded-md px-3 text-[11px] uppercase tracking-[0.1em] transition sm:min-h-9 sm:px-5 sm:text-xs sm:tracking-[0.14em] ${
                 screen === tab.value
-                  ? 'bg-slate-700 font-medium text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'plaque-brass font-bold'
+                  : 'text-[color:var(--color-bone-dim)] hover:text-[color:var(--color-bone)]'
               }`}
             >
               {tab.label}
@@ -259,8 +254,8 @@ export function App() {
           <button
             onClick={() => setSettingsOpen((open) => !open)}
             aria-expanded={settingsOpen}
-            className={`min-h-11 min-w-11 shrink-0 touch-manipulation rounded-lg border border-slate-800 text-slate-400 transition sm:hidden ${
-              settingsOpen ? 'bg-slate-800 text-white' : ''
+            className={`plate min-h-11 min-w-11 shrink-0 touch-manipulation transition sm:hidden ${
+              settingsOpen ? 'text-[color:var(--color-brass-bright)]' : 'text-[color:var(--color-bone-dim)]'
             }`}
             aria-label="Settings"
           >
@@ -273,7 +268,7 @@ export function App() {
         // Folded away on a phone, where six settings buttons would cost a
         // third of the screen the game is played on.
         <div
-          className={`${settingsOpen ? '' : 'hidden'} rounded-xl border border-slate-800 sm:block sm:border-0`}
+          className={`${settingsOpen ? 'plate p-2' : 'hidden'} sm:block sm:bg-none sm:p-0 sm:shadow-none`}
         >
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-3 sm:p-0">
             <Toggle
@@ -317,7 +312,7 @@ export function App() {
 
       {screen === 'table' ? (
         <div className="grid gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-2 sm:space-y-3">
+          <div className="space-y-1.5 sm:space-y-3">
             <Table session={session} />
             {/* Deliberately in the flow rather than floating: a bar that
                 hovers over the page covers whatever is under it, and the

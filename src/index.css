@@ -1,9 +1,52 @@
 @import 'tailwindcss';
 
+/*
+ * A card room, not a dashboard.
+ *
+ * The default of every dark web app is a blue-grey slate ground, a rounded
+ * rectangle every twelve pixels, and one saturated accent. It is fine and it
+ * is nobody's. This is a poker table at night, so the materials are the ones a
+ * card room is made of: warm black, worn felt, brass, bone, and oxblood.
+ *
+ * Three rules hold it together.
+ *
+ * **Warm, never blue.** Every neutral here carries red and yellow. A cool grey
+ * beside felt green reads as a screenshot of software; a warm one reads as a
+ * room with a lamp in it.
+ *
+ * **Brass is the only accent that draws the eye**, and it is spent sparingly —
+ * on the thing you are meant to do next and nothing else. Felt green confirms,
+ * oxblood refuses. Nothing else is allowed to be bright.
+ *
+ * **Edges are engraved, not drawn.** Surfaces get a hairline of light along
+ * the top and shadow beneath, the way a plate set into a table does. Borders
+ * are a last resort, and radii are small and consistent — a card room is built
+ * from straight-edged things.
+ */
+
 @theme {
+  /* Ground and surfaces: warm blacks, in four steps. */
+  --color-ink: #0e0c0a;
+  --color-ink-2: #16130f;
+  --color-ink-3: #1e1a15;
+  --color-ink-4: #2a241c;
+
+  /* Ink on it: bone rather than white, which is what print looks like. */
+  --color-bone: #ede6d6;
+  --color-bone-dim: #b3a894;
+  --color-bone-faint: #7d735f;
+
+  /* The one accent. */
+  --color-brass: #c9a227;
+  --color-brass-bright: #e8c65a;
+  --color-brass-deep: #7a5f14;
+
+  /* The table, and the two answers. */
   --color-felt: #14312a;
   --color-felt-dark: #0d211d;
-  --color-ink: #0b0f14;
+  --color-felt-lit: #1c4b3f;
+  --color-jade: #2f8f6b;
+  --color-oxblood: #8e2434;
   --color-rail: #3b2a20;
 }
 
@@ -14,10 +57,143 @@ body,
 }
 
 body {
-  background: var(--color-ink);
-  color: #e6edf3;
+  background-color: var(--color-ink);
+  /* A grain over the whole thing, so the black is a surface and not a void. */
+  background-image:
+    radial-gradient(ellipse at 50% -10%, rgba(201, 162, 39, 0.07), transparent 60%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.012) 0px,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  color: var(--color-bone);
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Engraved lettering.
+ *
+ * Every label in a card room is stamped into something: the rail, a plaque, a
+ * chip. Small, wide-tracked capitals do that job and, being unmistakably a
+ * label, they let the thing they label be the only thing that shouts.
+ */
+.stamp {
+  font-size: 0.6875rem;
+  line-height: 1.1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-bone-faint);
+}
+
+/*
+ * A plate: any panel set into the table.
+ *
+ * Light along the top edge, shadow under it, and a warm surface — so it reads
+ * as inlaid rather than as a div with a border.
+ */
+.plate {
+  background: linear-gradient(180deg, var(--color-ink-3) 0%, var(--color-ink-2) 100%);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(237, 230, 214, 0.07),
+    inset 0 0 0 1px rgba(237, 230, 214, 0.045),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* The same, in brass, for the one thing that matters most on the screen. */
+.plate-brass {
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.14) 0%, rgba(122, 95, 20, 0.1) 100%);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(232, 198, 90, 0.28),
+    inset 0 0 0 1px rgba(201, 162, 39, 0.3),
+    0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * Controls are plaques, not buttons.
+ *
+ * Bevelled, squarer than a web button, and lettered in tracked capitals. The
+ * bevel is what makes a thing feel pressable without a shadow the size of a
+ * card.
+ */
+.plaque {
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, var(--color-ink-4) 0%, var(--color-ink-2) 100%);
+  color: var(--color-bone);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 230, 214, 0.1),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+  transition: transform 80ms ease, filter 80ms ease;
+}
+
+.plaque:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(1.1);
+}
+
+.plaque-brass {
+  background: linear-gradient(180deg, var(--color-brass-bright) 0%, var(--color-brass) 60%, var(--color-brass-deep) 100%);
+  color: #26200c;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 200, 0.6),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 3px 10px rgba(201, 162, 39, 0.25);
+}
+
+.plaque-jade {
+  background: linear-gradient(180deg, #3aa87e 0%, var(--color-jade) 60%, #1d5c45 100%);
+  color: #04140e;
+  box-shadow:
+    inset 0 1px 0 rgba(210, 255, 236, 0.35),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    0 3px 10px rgba(47, 143, 107, 0.22);
+}
+
+.plaque-oxblood {
+  background: linear-gradient(180deg, #a8394a 0%, var(--color-oxblood) 60%, #55121e 100%);
+  color: #ffe9ec;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 200, 208, 0.28),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.45),
+    0 3px 10px rgba(142, 36, 52, 0.22);
+}
+
+/*
+ * The wordmark, stamped into the rail.
+ *
+ * Tight, heavy, and cut in brass — the one place the app is allowed to look
+ * like a sign rather than an interface.
+ */
+.wordmark {
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  background: linear-gradient(180deg, var(--color-brass-bright), var(--color-brass-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/*
+ * A figure worth reading across the room.
+ *
+ * Tight tracking and a heavy weight, in the same sans as everything else: a
+ * display face here would read as decoration stuck on top of the numbers,
+ * and the numbers are the point.
+ */
+.figure {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  color: var(--color-bone);
 }
 
 /*
@@ -28,19 +204,47 @@ body {
  */
 .felt {
   background:
-    radial-gradient(ellipse at 50% 38%, #1c4b3f 0%, #14312a 45%, #0d211d 100%);
+    /* The weave. Fine enough to be a texture rather than a pattern, and the
+       thing that separates cloth from a green rectangle. */
+    repeating-linear-gradient(
+        45deg,
+        rgba(0, 0, 0, 0.05) 0px,
+        rgba(0, 0, 0, 0.05) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+    repeating-linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.018) 0px,
+        rgba(255, 255, 255, 0.018) 1px,
+        transparent 1px,
+        transparent 3px
+      ),
+    radial-gradient(ellipse at 50% 34%, #1f5648 0%, #14312a 46%, #0b1c19 100%);
   box-shadow:
-    inset 0 0 60px rgba(0, 0, 0, 0.55),
-    0 20px 60px rgba(0, 0, 0, 0.5);
+    inset 0 0 70px rgba(0, 0, 0, 0.6),
+    inset 0 2px 0 rgba(0, 0, 0, 0.5),
+    0 20px 60px rgba(0, 0, 0, 0.55);
 }
 
 /* The rail: the wooden edge the felt sits inside. */
 .rail {
-  background: linear-gradient(160deg, #4a3527 0%, #2c1f17 55%, #3b2a20 100%);
+  background:
+    /* Grain, running around the rail rather than across it. */
+    repeating-linear-gradient(
+        92deg,
+        rgba(0, 0, 0, 0.16) 0px,
+        rgba(0, 0, 0, 0.16) 1px,
+        transparent 1px,
+        transparent 5px
+      ),
+    linear-gradient(160deg, #5a4130 0%, #2c1f17 55%, #43301f 100%);
   box-shadow:
-    inset 0 2px 6px rgba(255, 255, 255, 0.08),
-    inset 0 -3px 10px rgba(0, 0, 0, 0.6),
-    0 12px 40px rgba(0, 0, 0, 0.55);
+    /* A thread of brass where the rail meets the felt. */
+    inset 0 0 0 1px rgba(201, 162, 39, 0.16),
+    inset 0 2px 6px rgba(255, 235, 200, 0.1),
+    inset 0 -3px 12px rgba(0, 0, 0, 0.65),
+    0 14px 44px rgba(0, 0, 0, 0.6);
 }
 
 /*
@@ -85,10 +289,10 @@ body {
 @keyframes seat-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.9), 0 0 18px rgba(251, 191, 36, 0.35);
+    box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.95), 0 0 20px rgba(201, 162, 39, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5), 0 0 26px rgba(251, 191, 36, 0.2);
+    box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.5), 0 0 28px rgba(201, 162, 39, 0.18);
   }
 }
 
@@ -99,10 +303,10 @@ body {
 /* The seat that won, once the hand is over. */
 @keyframes seat-won {
   from {
-    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.9), 0 0 10px rgba(52, 211, 153, 0.2);
+    box-shadow: 0 0 0 2px rgba(47, 143, 107, 0.95), 0 0 10px rgba(47, 143, 107, 0.25);
   }
   to {
-    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.7), 0 0 34px rgba(52, 211, 153, 0.45);
+    box-shadow: 0 0 0 2px rgba(58, 168, 126, 0.8), 0 0 34px rgba(47, 143, 107, 0.5);
   }
 }
 

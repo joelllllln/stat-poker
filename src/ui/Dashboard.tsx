@@ -49,17 +49,17 @@ function StatTile({
   reliable: boolean
 }) {
   return (
-    <div className={`rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 ${reliable ? '' : 'opacity-60'}`}>
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+    <div className={`plate px-3 py-2 ${reliable ? '' : 'opacity-60'}`}>
+      <div className="stamp">{label}</div>
       <div className="font-mono text-lg">{value}</div>
       {interval && (
-        <div className="font-mono text-[10px] text-slate-500">
+        <div className="font-mono text-[10px] text-[color:var(--color-bone-faint)]">
           {interval[0].toFixed(0)}–{interval[1].toFixed(0)}%
         </div>
       )}
       {/* The number is the measurement; this is what it means. A dashboard of
           acronyms is an instrument panel for somebody who already flies. */}
-      <p className="mt-1 text-[11px] leading-snug text-slate-400">{says}</p>
+      <p className="mt-1 text-[11px] leading-snug text-[color:var(--color-bone-dim)]">{says}</p>
     </div>
   )
 }
@@ -185,9 +185,9 @@ export function Dashboard({ session }: { session: SessionState }) {
   // what will appear here and offer the one thing that is useful now.
   if (stats.hands === 0) {
     return (
-      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+      <div className="space-y-3 plate p-4">
         <h2 className="text-lg font-medium">Nothing to measure yet</h2>
-        <p className="max-w-prose text-sm text-slate-400">
+        <p className="max-w-prose text-sm text-[color:var(--color-bone-dim)]">
           Play some hands and this screen fills in: how you play, where the money goes, how
           both change over time, and how much of your result was the deck rather than you.
           Every hand is kept in this browser, so the record spans every session rather than
@@ -213,10 +213,10 @@ export function Dashboard({ session }: { session: SessionState }) {
   const handsNeeded = handsForPrecision(winrate.standardDeviation, 10)
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="space-y-3 plate p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">Your game</span>
-        <span className="text-[11px] text-slate-500">
+        <span className="stamp">Your game</span>
+        <span className="text-[11px] text-[color:var(--color-bone-faint)]">
           {stats.hands.toLocaleString('en-US')} hand{stats.hands === 1 ? '' : 's'}
           {session.history.length < stats.hands &&
             ` · ${session.history.length} this sitting`}
@@ -225,22 +225,22 @@ export function Dashboard({ session }: { session: SessionState }) {
       </div>
 
       {/* Style and mastery are separate questions: how you play, and how well. */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-3 plate px-3 py-2">
         <div>
           <div className="text-lg font-medium">{profile.label}</div>
-          <div className="text-xs text-slate-400">{profile.style.blurb}</div>
+          <div className="text-xs text-[color:var(--color-bone-dim)]">{profile.style.blurb}</div>
         </div>
         <div className="ml-auto text-right text-xs">
           {graded.length >= MASTERY_SAMPLE ? (
             <span
-              className="font-mono text-slate-300"
+              className="font-mono text-[color:var(--color-bone-dim)]"
               title="Measured against this app's own model of the spot, not against a solved answer. It says how far your decisions sit from what the coach would have done."
             >
               −{evLostPer100.toFixed(1)}bb/100 given up
             </span>
           ) : null}
           {graded.length >= MASTERY_SAMPLE ? (
-            <div className="mt-0.5 max-w-[22rem] text-[11px] leading-snug text-slate-400">
+            <div className="mt-0.5 max-w-[22rem] text-[11px] leading-snug text-[color:var(--color-bone-dim)]">
               {evLostInWords(evLostPer100)}
             </div>
           ) : (
@@ -258,7 +258,7 @@ export function Dashboard({ session }: { session: SessionState }) {
 
       {/* What the rating is, and is not. A player reading "Elite" deserves to
           know it is agreement with a model rather than a solved verdict. */}
-      <p className="px-1 text-[11px] text-slate-500">
+      <p className="px-1 text-[11px] text-[color:var(--color-bone-faint)]">
         Your rating measures how far your decisions sit from what this app's coach would
         have done, priced against the ranges it models. That is a yardstick, not the truth:
         the coach prices one street at a time, so it is a good guide to obvious errors and a
@@ -269,13 +269,13 @@ export function Dashboard({ session }: { session: SessionState }) {
           they have always been the same one, which is the opposite of what a
           trainer is for. */}
       {overTime.blocks.length >= 3 && (
-        <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
+        <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-[11px] uppercase tracking-wide text-slate-500">
+            <span className="stamp">
               Over time · blocks of {overTime.blockSize} hands
             </span>
             {overTime.sittings.length > 1 && (
-              <span className="text-[11px] text-slate-500">
+              <span className="text-[11px] text-[color:var(--color-bone-faint)]">
                 across {overTime.sittings.length} sittings
               </span>
             )}
@@ -283,7 +283,7 @@ export function Dashboard({ session }: { session: SessionState }) {
 
           <TrendChart series={overTime.series} blockSize={overTime.blockSize} />
 
-          <div className="text-[11px] text-slate-400">
+          <div className="text-[11px] text-[color:var(--color-bone-dim)]">
             {overTime.movement ??
               'Nothing has moved further than the noise yet — which is the usual and correct answer over a few hundred hands.'}
           </div>
@@ -291,21 +291,21 @@ export function Dashboard({ session }: { session: SessionState }) {
       )}
 
       {gradingLeft > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-400">
+        <div className="rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40 px-3 py-2 text-[11px] text-[color:var(--color-bone-dim)]">
           Grading {gradingLeft} hand{gradingLeft === 1 ? '' : 's'} in the background. Each hand
           is graded once and remembered, so this only happens for hands the coach has not seen.
         </div>
       )}
 
       {leak && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
-          <div className="text-[11px] uppercase tracking-wide text-slate-500">
+        <div className="plate px-3 py-2">
+          <div className="stamp">
             Where it goes
           </div>
           {leak.leak ? (
             <div className="mt-0.5 text-sm text-amber-200">{describeLeak(leak.leak)}</div>
           ) : (
-            <div className="mt-0.5 text-xs text-slate-400">
+            <div className="mt-0.5 text-xs text-[color:var(--color-bone-dim)]">
               {leak.decisions < MIN_SAMPLE
                 ? `${leak.decisions} graded decisions so far — a leak needs at least ${MIN_SAMPLE} in one kind of spot before it is a habit rather than a bad afternoon.`
                 : 'No single spot stands out yet: what you give up is spread evenly rather than concentrated anywhere.'}
@@ -315,13 +315,13 @@ export function Dashboard({ session }: { session: SessionState }) {
       )}
 
       {leak && leak.streets.length > 0 && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+        <div className="plate px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-[11px] uppercase tracking-wide text-slate-500">
+            <span className="stamp">
               Street by street
             </span>
             {styleContradiction(leak.streets) && (
-              <span className="text-[11px] text-amber-300">
+              <span className="text-[11px] text-[color:var(--color-brass-bright)]">
                 {styleContradiction(leak.streets)}
               </span>
             )}
@@ -329,9 +329,9 @@ export function Dashboard({ session }: { session: SessionState }) {
           <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {leak.streets.map((street) => (
               <div key={street.street} className={street.decisions >= STREET_SAMPLE ? '' : 'opacity-50'}>
-                <div className="text-[11px] capitalize text-slate-500">{street.street}</div>
+                <div className="text-[11px] capitalize text-[color:var(--color-bone-faint)]">{street.street}</div>
                 <div className="text-sm capitalize">{street.label}</div>
-                <div className="font-mono text-[10px] text-slate-500">
+                <div className="font-mono text-[10px] text-[color:var(--color-bone-faint)]">
                   {(street.aggression * 100).toFixed(0)}% aggressive · {street.decisions}
                 </div>
               </div>
@@ -370,16 +370,16 @@ export function Dashboard({ session }: { session: SessionState }) {
       </div>
 
       {estimates.count > 0 && (
-        <div className="rounded-lg border border-sky-900/60 bg-sky-950/20 px-3 py-2">
+        <div className="plate px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-[11px] uppercase tracking-wide text-sky-300/70">
+            <span className="stamp">
               Reading equity
             </span>
-            <span className="font-mono text-sm text-sky-100">
+            <span className="font-mono text-sm text-[color:var(--color-bone)]">
               {estimates.meanError.toFixed(1)} points out — {describeAccuracy(estimates.meanError)}
             </span>
           </div>
-          <div className="mt-1 text-[11px] text-sky-200/60">
+          <div className="mt-1 text-[11px] text-[color:var(--color-bone-faint)]">
             {estimates.count} guess{estimates.count === 1 ? '' : 'es'};{' '}
             {(estimates.withinFive * 100).toFixed(0)}% within five points.
             {Math.abs(estimates.bias) > 3 &&
@@ -390,9 +390,9 @@ export function Dashboard({ session }: { session: SessionState }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+      <div className="plate px-3 py-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-slate-500">Winrate</span>
+          <span className="stamp">Winrate</span>
           <span className="font-mono text-sm">
             {winrate.bbPer100 >= 0 ? '+' : ''}
             {winrate.bbPer100.toFixed(1)} bb/100
@@ -400,10 +400,10 @@ export function Dashboard({ session }: { session: SessionState }) {
         </div>
         {/* What it means, then how far it can be trusted. Both matter and
             only one of them is a number anybody new can picture. */}
-        <p className="mt-1 text-xs text-slate-300">
+        <p className="mt-1 text-xs text-[color:var(--color-bone-dim)]">
           {winrateInWords(winrate.bbPer100, session.config.bigBlind)}
         </p>
-        <div className="mt-1 text-[11px] text-slate-500">
+        <div className="mt-1 text-[11px] text-[color:var(--color-bone-faint)]">
           {/* The bound, said as a range rather than as a confidence level —
               and the "not sure yet" only where it is true, which is when the
               range still contains both winning and losing. */}
@@ -419,10 +419,10 @@ export function Dashboard({ session }: { session: SessionState }) {
 
       <div className="space-y-1">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-slate-500">
+          <span className="stamp">
             Actual against what the hands were worth
           </span>
-          <span className="font-mono text-[11px] text-slate-400">
+          <span className="font-mono text-[11px] text-[color:var(--color-bone-dim)]">
             {curve.allInHands > 0
               ? `${curve.luckBB >= 0 ? '+' : ''}${curve.luckBB.toFixed(1)}bb of luck over ${curve.allInHands} all-in${curve.allInHands === 1 ? '' : 's'}`
               : 'no all-ins yet'}
@@ -430,7 +430,7 @@ export function Dashboard({ session }: { session: SessionState }) {
         </div>
         {/* A chart of two lines with no scale anybody knows. What separates
             them is the whole point of it, and it takes one sentence. */}
-        <p className="text-[11px] leading-snug text-slate-400">
+        <p className="text-[11px] leading-snug text-[color:var(--color-bone-dim)]">
           The blue line is what you actually won. The orange line is what you would have won if
           every hand you got all-in had been paid out at what it was worth, instead of however
           the cards happened to fall. Orange above blue means the cards have been unkind.

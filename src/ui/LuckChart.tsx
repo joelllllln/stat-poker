@@ -9,9 +9,15 @@ import { useMemo, useState } from 'react'
  * y-scale would let the gap be drawn at any size.
  */
 
+/*
+ * Two lines in the room's own colours: bone for what happened, brass for what
+ * the hands were worth. They sit on opposite sides of the ground's warmth
+ * rather than being a blue and an orange borrowed from a dashboard, and both
+ * are direct-labelled at the end of the line, so neither depends on hue alone.
+ */
 const SERIES = {
-  actual: { colour: '#3987e5', label: 'Actual' },
-  adjusted: { colour: '#d95926', label: 'All-in adjusted' },
+  actual: { colour: '#ede6d6', label: 'Actual' },
+  adjusted: { colour: '#c9a227', label: 'All-in adjusted' },
 }
 
 const WIDTH = 720
@@ -96,7 +102,7 @@ export function LuckChart({ actual, adjusted }: Props) {
               x2={WIDTH - PADDING.right}
               y1={geometry.y(value)}
               y2={geometry.y(value)}
-              stroke={value === 0 ? '#475569' : '#1e293b'}
+              stroke={value === 0 ? '#4a4034' : '#241f18'}
               strokeWidth={1}
             />
             <text
@@ -137,13 +143,13 @@ export function LuckChart({ actual, adjusted }: Props) {
               x2={geometry.x(hover)}
               y1={PADDING.top}
               y2={HEIGHT - PADDING.bottom}
-              stroke="#475569"
+              stroke="#4a4034"
               strokeWidth={1}
               strokeDasharray="2 2"
             />
             {/* A 2px surface ring keeps the markers legible where lines cross. */}
-            <circle cx={geometry.x(hover)} cy={geometry.y(adjusted[hover]!)} r={4} fill={SERIES.adjusted.colour} stroke="#0b0f14" strokeWidth={2} />
-            <circle cx={geometry.x(hover)} cy={geometry.y(actual[hover]!)} r={4} fill={SERIES.actual.colour} stroke="#0b0f14" strokeWidth={2} />
+            <circle cx={geometry.x(hover)} cy={geometry.y(adjusted[hover]!)} r={4} fill={SERIES.adjusted.colour} stroke="#0e0c0a" strokeWidth={2} />
+            <circle cx={geometry.x(hover)} cy={geometry.y(actual[hover]!)} r={4} fill={SERIES.actual.colour} stroke="#0e0c0a" strokeWidth={2} />
           </g>
         )}
 

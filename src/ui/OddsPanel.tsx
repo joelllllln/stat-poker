@@ -38,23 +38,23 @@ function Tile({
   tone?: 'default' | 'good' | 'bad'
 }) {
   const colour =
-    tone === 'good' ? 'text-emerald-300' : tone === 'bad' ? 'text-rose-300' : 'text-slate-100'
+    tone === 'good' ? 'text-[color:var(--color-brass-bright)]' : tone === 'bad' ? 'text-rose-300' : 'text-[color:var(--color-bone)]'
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+    <div className="plate px-3 py-2">
+      <div className="stamp">{label}</div>
       <div className={`font-mono text-xl ${colour}`}>{value}</div>
-      {hint && <div className="text-[11px] text-slate-500">{hint}</div>}
+      {hint && <div className="text-[11px] text-[color:var(--color-bone-faint)]">{hint}</div>}
     </div>
   )
 }
 
 function Detail({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 border-b border-slate-800/70 py-1.5 last:border-0">
-      <span className="text-xs text-slate-400">{label}</span>
+    <div className="flex items-baseline justify-between gap-2 border-b border-[color:var(--color-ink-4)]/70 py-1.5 last:border-0">
+      <span className="text-xs text-[color:var(--color-bone-dim)]">{label}</span>
       <span className="text-right">
-        <span className="font-mono text-sm text-slate-200">{value}</span>
-        <span className="ml-2 text-[11px] text-slate-500">{hint}</span>
+        <span className="font-mono text-sm text-[color:var(--color-bone)]">{value}</span>
+        <span className="ml-2 text-[11px] text-[color:var(--color-bone-faint)]">{hint}</span>
       </span>
     </div>
   )
@@ -97,7 +97,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
   if (!equity) {
     return pending ? (
-      <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-500">
+      <div className="plate px-3 py-2 text-xs text-[color:var(--color-bone-faint)]">
         Working out the odds…
       </div>
     ) : null
@@ -113,17 +113,17 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
   const hidden = hudLevel === 'predict' && guess === null
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="space-y-3 plate p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">
+        <span className="stamp">
           This decision
         </span>
         {pending && <span className="text-[11px] text-slate-600">updating…</span>}
       </div>
 
       {hudLevel === 'predict' && (
-        <div className="rounded-lg border border-sky-900 bg-sky-950/40 px-3 py-2">
-          <div className="text-xs text-sky-200">
+        <div className="plate px-3 py-2">
+          <div className="text-xs text-[color:var(--color-bone-dim)]">
             {guess === null
               ? 'Estimate your equity before the numbers appear.'
               : `You guessed ${guess}% — actual ${pct(equity.equity)} (off by ${Math.abs(guess - equity.equity * 100).toFixed(1)} points).`}
@@ -134,7 +134,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
                 <button
                   key={value}
                   onClick={() => submitGuess(value, equity.equity, state.street, state.board.length)}
-                  className="rounded bg-sky-900/60 px-2 py-1 text-xs hover:bg-sky-800"
+                  className="rounded bg-black/40 px-2 py-1 text-xs"
                 >
                   {value}%
                 </button>
@@ -150,9 +150,9 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
           <div
             className={`rounded-lg border px-3 py-2 text-sm ${
               toCall === 0
-                ? 'border-slate-800 bg-slate-900/50 text-slate-300'
+                ? 'border-[color:var(--color-ink-4)] bg-black/25 text-[color:var(--color-bone-dim)]'
                 : callIsCorrect
-                  ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200'
+                  ? 'border-emerald-800 bg-emerald-950/40 text-[color:var(--color-brass-bright)]'
                   : 'border-rose-900 bg-rose-950/40 text-rose-200'
             }`}
           >
@@ -189,8 +189,8 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
           {/* Everything else, for when somebody wants it. Closed by default:
               the two numbers above answer the question being asked. */}
-          <details className="group rounded-lg border border-slate-800 bg-slate-900/40">
-            <summary className="cursor-pointer list-none px-3 py-2 text-xs text-slate-400 hover:text-slate-200">
+          <details className="group rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs text-[color:var(--color-bone-dim)] hover:text-[color:var(--color-bone)]">
               <span className="group-open:hidden">Show the rest ▸</span>
               <span className="hidden group-open:inline">Hide the rest ▾</span>
             </summary>
@@ -231,20 +231,20 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
               </div>
 
               <div>
-                <div className="text-[11px] uppercase tracking-wide text-slate-500">
+                <div className="stamp">
                   What they might hold
                 </div>
                 <div className="mt-1 space-y-1">
                   {widths.map((w) => (
                     <div key={w.name} className="flex items-center gap-2 text-xs">
-                      <span className="w-14 shrink-0 truncate text-slate-400">{w.name}</span>
-                      <div className="h-1.5 flex-1 overflow-hidden rounded bg-slate-800">
+                      <span className="w-14 shrink-0 truncate text-[color:var(--color-bone-dim)]">{w.name}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded bg-black/45">
                         <div
                           className="h-full bg-slate-500"
                           style={{ width: `${Math.min(100, w.width * 100)}%` }}
                         />
                       </div>
-                      <span className="w-16 shrink-0 text-right font-mono text-slate-400">
+                      <span className="w-16 shrink-0 text-right font-mono text-[color:var(--color-bone-dim)]">
                         top {(w.width * 100).toFixed(0)}%
                       </span>
                     </div>

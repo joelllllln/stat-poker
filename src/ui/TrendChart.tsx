@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react'
  * the last value is labelled where the line ends.
  */
 
-const LINE = '#3987e5'
+const LINE = '#c9a227'
 const BAND = '#d95926'
 
 export interface Series {
@@ -99,7 +99,7 @@ function Panel({ series, blockSize }: { series: Series; blockSize: number }) {
           x2={WIDTH - PADDING.right}
           y1={geometry.y(geometry.min)}
           y2={geometry.y(geometry.min)}
-          stroke="#1e293b"
+          stroke="#241f18"
           strokeWidth={1}
         />
         <path d={path} fill="none" stroke={LINE} strokeWidth={2} strokeLinejoin="round" />

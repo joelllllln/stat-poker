@@ -42,7 +42,7 @@ export function SessionCard({ session }: { session: SessionState }) {
 
   if (numbers.lifetime.hands === 0) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-500">
+      <div className="plate p-3 text-xs text-[color:var(--color-bone-faint)]">
         Your first hands will start the record. Everything is kept on this
         machine and nothing is sent anywhere.
       </div>
@@ -56,10 +56,10 @@ export function SessionCard({ session }: { session: SessionState }) {
   )
 
   return (
-    <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+    <div className="space-y-2 plate p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">This sitting</span>
-        <span className="font-mono text-[11px] text-slate-500">
+        <span className="stamp">This sitting</span>
+        <span className="font-mono text-[11px] text-[color:var(--color-bone-faint)]">
           {numbers.sitting.hands} hand{numbers.sitting.hands === 1 ? '' : 's'}
         </span>
       </div>
@@ -68,31 +68,31 @@ export function SessionCard({ session }: { session: SessionState }) {
         <span
           className={`font-mono text-2xl ${
             netThisSitting > 0
-              ? 'text-emerald-300'
+              ? 'text-[color:var(--color-brass-bright)]'
               : netThisSitting < 0
                 ? 'text-rose-300'
-                : 'text-slate-300'
+                : 'text-[color:var(--color-bone-dim)]'
           }`}
         >
           {netThisSitting >= 0 ? '+' : ''}
           {(netThisSitting / bigBlind).toFixed(1)}bb
         </span>
-        <span className="text-[11px] text-slate-500">
+        <span className="text-[11px] text-[color:var(--color-bone-faint)]">
           {numbers.sitting.hands > 0 &&
             `${numbers.sitting.bbPer100 >= 0 ? '+' : ''}${numbers.sitting.bbPer100.toFixed(0)} bb/100 · noise at this length`}
         </span>
       </div>
 
-      <div className="border-t border-slate-800 pt-2">
+      <div className="border-t border-[color:var(--color-ink-4)] pt-2">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-slate-500">All time</span>
-          <span className="font-mono text-[11px] text-slate-500">
+          <span className="stamp">All time</span>
+          <span className="font-mono text-[11px] text-[color:var(--color-bone-faint)]">
             {numbers.lifetime.hands.toLocaleString('en-US')} hand
             {numbers.lifetime.hands === 1 ? '' : 's'}
           </span>
         </div>
         <div className="mt-1 text-sm">{profile.label}</div>
-        <div className="mt-0.5 font-mono text-[11px] text-slate-400">
+        <div className="mt-0.5 font-mono text-[11px] text-[color:var(--color-bone-dim)]">
           {numbers.evLostPer100 === null
             ? 'no hands graded yet'
             : `−${numbers.evLostPer100.toFixed(1)}bb/100 given up${
@@ -100,7 +100,7 @@ export function SessionCard({ session }: { session: SessionState }) {
               }`}
         </div>
         {gradingLeft > 0 && (
-          <div className="mt-1 text-[11px] text-slate-500">
+          <div className="mt-1 text-[11px] text-[color:var(--color-bone-faint)]">
             grading {gradingLeft} more in the background
           </div>
         )}

@@ -41,35 +41,35 @@ function ShareMeter({ equity, needed, chips }: { equity: number; needed: number;
 
   return (
     <div className="space-y-1.5">
-      <div className="relative h-7 overflow-hidden rounded-lg bg-sky-950">
+      <div className="relative h-7 overflow-hidden rounded-md bg-black/50 shadow-[inset_0_1px_0_rgba(0,0,0,.6)]">
         <div
-          className={`h-full rounded-lg ${clears ? 'bg-sky-400' : 'bg-sky-700'}`}
+          className={`h-full rounded-md ${clears ? 'bg-[color:var(--color-jade)]' : 'bg-[color:var(--color-oxblood)]'}`}
           style={{ width: `${bar}%` }}
         />
         {needed > 0 && (
           // Where the price sits. A 2px rule against the surface, so it reads
           // over both the filled and the empty part of the track.
           <div
-            className="absolute inset-y-0 w-0.5 bg-slate-100"
+            className="absolute inset-y-0 w-0.5 bg-[color:var(--color-brass-bright)]"
             style={{ left: `${Math.min(99, needed * 100)}%` }}
             aria-hidden
           />
         )}
       </div>
-      <div className="flex justify-between text-xs text-slate-400">
+      <div className="flex justify-between text-xs text-[color:var(--color-bone-dim)]">
         <span>
-          <span className="font-semibold text-sky-300">{(share * 100).toFixed(0)}%</span> yours
+          <span className="font-semibold text-[color:var(--color-bone)]">{(share * 100).toFixed(0)}%</span> yours
         </span>
         {needed > 0 && (
           <span>
-            price asks <span className="font-semibold text-slate-200">{(needed * 100).toFixed(0)}%</span>
+            price asks <span className="font-semibold text-[color:var(--color-brass-bright)]">{(needed * 100).toFixed(0)}%</span>
           </span>
         )}
       </div>
       {/* Visible, not behind a disclosure: a unit somebody cannot read makes
           every number wearing it unreadable, and they will not open a panel to
           find out what a word they have not noticed means. */}
-      <p className="text-xs text-slate-500">bb means big blinds — one is {chips} chips here.</p>
+      <p className="text-xs text-[color:var(--color-bone-faint)]">bb means big blinds — one is {chips} chips here.</p>
     </div>
   )
 }
@@ -85,7 +85,7 @@ export function Advice({
 }) {
   if (!advice || advice.options.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3 text-sm text-slate-500">
+      <div className="plate px-3 py-3 text-sm text-[color:var(--color-bone-faint)]">
         {pending ? 'Working out the odds…' : 'No odds for this spot.'}
       </div>
     )
@@ -103,19 +103,19 @@ export function Advice({
   const clears = advice.toCall > 0 && advice.equity >= advice.requiredEquity
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+    <div className="plate space-y-4 p-4">
       {/* The hero figure: the one number this whole panel is about. */}
       <div>
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs uppercase tracking-wide text-slate-500">
+          <span className="stamp">
             If this goes all the way
           </span>
           {pending && <span className="text-xs text-slate-600">updating…</span>}
         </div>
-        <div className="mt-0.5 text-5xl font-semibold leading-none text-sky-200">
+        <div className="figure mt-1 text-5xl text-[color:var(--color-brass-bright)]">
           {timesInTen(advice.equity)}
         </div>
-        <p className="mt-1.5 text-base text-slate-300">
+        <p className="mt-2 text-base text-[color:var(--color-bone-dim)]">
           You are {strengthInWords(advice.equity)}.
         </p>
       </div>
@@ -123,7 +123,7 @@ export function Advice({
       <ShareMeter equity={advice.equity} needed={advice.requiredEquity} chips={bigBlind} />
 
       {advice.toCall > 0 && (
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-[color:var(--color-bone-dim)]">
           {clears
             ? 'Your share is bigger than the price is asking for, so calling makes money over time.'
             : 'Your share is smaller than the price is asking for, so calling loses money over time.'}
@@ -132,21 +132,21 @@ export function Advice({
 
       {/* The statistically best play, labelled as exactly that. Icon and words
           both, never colour alone. */}
-      <div className="rounded-xl border border-emerald-800/70 bg-emerald-950/40 p-3">
-        <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-emerald-300/80">
+      <div className="plate-brass p-3">
+        <div className="stamp flex items-center gap-1.5 !text-[color:var(--color-brass-bright)]">
           <span aria-hidden>◆</span>
           <span>Statistically the best play</span>
         </div>
-        <div className="mt-1 text-3xl font-bold leading-tight text-emerald-200">
+        <div className="figure mt-1.5 text-3xl text-[color:var(--color-bone)]">
           {best.label}
           {tooClose && runnerUp && (
-            <span className="text-lg font-normal text-emerald-200/60">
+            <span className="text-lg font-normal text-[color:var(--color-bone-dim)]">
               {' '}
               or {runnerUp.label.toLowerCase()}
             </span>
           )}
         </div>
-        <p className="mt-1.5 text-sm leading-snug text-emerald-50/90">
+        <p className="mt-2 text-sm leading-snug text-[color:var(--color-bone)]">
           {reasonInWords({
             action: best.action.type,
             equity: advice.equity,
@@ -157,14 +157,14 @@ export function Advice({
             requiredEquity: advice.requiredEquity,
           })}
         </p>
-        <p className="mt-2 text-xs text-emerald-200/50">
+        <p className="mt-2 text-xs text-[color:var(--color-bone-faint)]">
           It is not the only way to play it — this is the arithmetic, not the whole game.
         </p>
       </div>
 
       {/* Every option priced. Detail, so it is quieter and smaller. */}
       <details className="group">
-        <summary className="cursor-pointer list-none text-sm text-slate-400">
+        <summary className="stamp cursor-pointer list-none">
           <span className="group-open:hidden">What every option is worth ▸</span>
           <span className="hidden group-open:inline">What every option is worth ▾</span>
         </summary>
@@ -177,24 +177,24 @@ export function Advice({
             return (
               <div key={option.label} className="flex items-center gap-2 text-xs">
                 <span
-                  className={`w-24 shrink-0 truncate ${isBest ? 'text-emerald-200' : 'text-slate-400'}`}
+                  className={`w-24 shrink-0 truncate ${isBest ? 'text-[color:var(--color-brass-bright)]' : 'text-[color:var(--color-bone-dim)]'}`}
                 >
                   {option.label}
                 </span>
-                <div className="h-2 flex-1 overflow-hidden rounded bg-slate-800">
+                <div className="h-2 flex-1 overflow-hidden rounded bg-black/50">
                   <div
-                    className={`h-full rounded ${isBest ? 'bg-emerald-400' : 'bg-slate-600'}`}
+                    className={`h-full rounded ${isBest ? 'bg-[color:var(--color-brass)]' : 'bg-[color:var(--color-ink-4)]'}`}
                     style={{ width: `${Math.max(2, share)}%` }}
                   />
                 </div>
-                <span className="w-14 shrink-0 text-right font-mono text-slate-400">
+                <span className="w-14 shrink-0 text-right font-mono text-[color:var(--color-bone-dim)]">
                   {bb(option.ev, bigBlind)}
                 </span>
               </div>
             )
           })}
         </div>
-        <p className="mt-2 text-xs leading-snug text-slate-500">
+        <p className="mt-2 text-xs leading-snug text-[color:var(--color-bone-faint)]">
           {bigBlindsExplained(bigBlind)} These are priced against what these players really
           hold, one street at a time, relative to folding. It only calls a bet best when your
           hand is ahead of what would call it — it will not talk you into a bluff, because a

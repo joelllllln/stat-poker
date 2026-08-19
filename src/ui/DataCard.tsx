@@ -46,10 +46,10 @@ export function DataCard() {
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">Your hands</div>
+    <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40 px-3 py-2">
+      <div className="stamp">Your hands</div>
 
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-[color:var(--color-bone-dim)]">
         {storageBroken
           ? 'This browser will not let the app store anything — in a private window, or with site data blocked. You can still play, but nothing will be kept after you close the tab.'
           : `${storedHands.toLocaleString('en-US')} hand${storedHands === 1 ? '' : 's'} are stored in this browser and nowhere else.`}
@@ -63,13 +63,13 @@ export function DataCard() {
         <button
           onClick={() => void save()}
           disabled={storedHands === 0}
-          className="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 disabled:opacity-40"
+          className="rounded-md border border-[color:var(--color-ink-4)] px-3 py-1.5 text-xs text-[color:var(--color-bone)] transition hover:bg-black/45 disabled:opacity-40"
         >
           Save a copy
         </button>
         <button
           onClick={() => fileInput.current?.click()}
-          className="rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800"
+          className="rounded-md border border-[color:var(--color-ink-4)] px-3 py-1.5 text-xs text-[color:var(--color-bone)] transition hover:bg-black/45"
         >
           Load a copy
         </button>
@@ -84,7 +84,7 @@ export function DataCard() {
             event.target.value = ''
           }}
         />
-        {message && <span className="text-[11px] text-slate-400">{message}</span>}
+        {message && <span className="text-[11px] text-[color:var(--color-bone-dim)]">{message}</span>}
       </div>
     </div>
   )

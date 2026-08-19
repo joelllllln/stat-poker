@@ -12,7 +12,7 @@ import type { HandState, Street } from '../engine/types'
  */
 
 const GLYPHS = ['♣', '♦', '♥', '♠']
-const SUIT_INK = ['text-emerald-400', 'text-sky-400', 'text-rose-400', 'text-slate-200']
+const SUIT_INK = ['text-[#4a9c78]', 'text-[#5b8fc9]', 'text-[#c2455a]', 'text-[color:var(--color-bone)]']
 
 const STREET_LABEL: Record<Street, string> = {
   preflop: 'Preflop',
@@ -129,12 +129,12 @@ export function ActionLog({ state, heroSeat }: { state: HandState; heroSeat: num
   }, [lines.length])
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-slate-500">What happened</div>
+    <div className="plate p-3">
+      <div className="stamp">What happened</div>
       <div className="mt-1 max-h-44 space-y-0.5 overflow-y-auto pr-1 text-xs">
         {lines.map((line) =>
           line.deal ? (
-            <div key={line.key} className="flex items-center gap-1.5 pt-1 text-slate-500">
+            <div key={line.key} className="flex items-center gap-1.5 pt-1 text-[color:var(--color-bone-faint)]">
               <span className="uppercase tracking-wide">{STREET_LABEL[line.street]}</span>
               <span className="flex gap-1">
                 {line.deal.map((card) => (
@@ -144,10 +144,10 @@ export function ActionLog({ state, heroSeat }: { state: HandState; heroSeat: num
             </div>
           ) : (
             <div key={line.key} className="flex gap-1.5">
-              <span className={line.isHero ? 'font-medium text-sky-300' : 'text-slate-400'}>
+              <span className={line.isHero ? 'font-medium text-[color:var(--color-brass-bright)]' : 'text-[color:var(--color-bone-dim)]'}>
                 {line.isHero ? 'You' : line.seat}
               </span>
-              <span className="text-slate-300">{line.text}</span>
+              <span className="text-[color:var(--color-bone-dim)]">{line.text}</span>
             </div>
           ),
         )}

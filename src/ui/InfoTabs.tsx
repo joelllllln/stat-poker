@@ -29,23 +29,23 @@ export function InfoTabs({ tabs, initial }: { tabs: InfoTab[]; initial?: string 
   if (!current) return null
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/60">
-      <div className="flex gap-1 border-b border-slate-800 p-1" role="tablist">
+    <div className="plate">
+      <div className="flex gap-1 border-b border-[color:var(--color-ink-4)] p-1" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             role="tab"
             aria-selected={tab.id === current.id}
             onClick={() => setChosen(tab.id)}
-            className={`flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-sm transition ${
+            className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs uppercase tracking-[0.14em] transition ${
               tab.id === current.id
-                ? 'bg-slate-800 font-medium text-white'
-                : 'text-slate-400 active:bg-slate-900'
+                ? 'plaque-brass font-bold'
+                : 'text-[color:var(--color-bone-faint)]'
             }`}
           >
             {tab.label}
             {tab.badge && (
-              <span className="rounded-full bg-emerald-400/20 px-1.5 text-[10px] text-emerald-300">
+              <span className="rounded-full bg-black/25 px-1.5 text-[10px] font-bold tracking-normal">
                 {tab.badge}
               </span>
             )}
