@@ -20,9 +20,9 @@ import { writeFileSync } from 'node:fs'
 import { Rng } from '../src/engine/cards'
 import { legalActions } from '../src/engine/hand'
 import { potSize, type Action, type HandState, type Street } from '../src/engine/types'
+import { DEFAULT_TABLE, sessionConfigFor } from '../src/game/table'
 import {
   createSession,
-  defaultSessionConfig,
   heroAct,
   runBotsUntilHero,
   startNextHand,
@@ -288,7 +288,9 @@ interface Outcome {
 }
 
 function play(policy: Policy, hands: number, seed: number): Outcome {
-  const session: SessionState = createSession(defaultSessionConfig(seed))
+  const session: SessionState = createSession(
+    sessionConfigFor({ ...DEFAULT_TABLE, seats: SEATS }, seed),
+  )
   const rng = new Rng(seed + 7)
   const started = Date.now()
   let decisions = 0
@@ -557,6 +559,10 @@ const HANDS = handsArg >= 0 ? Number(argv[handsArg + 1]) : 1_000
 // only helps on one shuffle has not helped.
 const seedArg = argv.indexOf('--seed')
 const SEED = seedArg >= 0 ? Number(argv[seedArg + 1]) : 1234
+// `--seats` plays the same policies at a different sized table, which is the
+// other thing that changed when the table became a choice.
+const seatsArg = argv.indexOf('--seats')
+const SEATS = seatsArg >= 0 ? Number(argv[seatsArg + 1]) : 6
 const onlyArg = argv.indexOf('--only')
 const ONLY = onlyArg >= 0 ? argv[onlyArg + 1] : null
 const PLAYING = ONLY ? POLICIES.filter((policy) => policy.name === ONLY) : POLICIES

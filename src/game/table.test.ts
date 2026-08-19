@@ -189,3 +189,71 @@ describe('every table it offers deals a real game', () => {
     }
   })
 })
+
+describe('a record made of many different tables', () => {
+  /**
+   * Somebody who changes tables has one history, not one per table.
+   *
+   * Every statistic, every stored hand and every verdict has to survive a
+   * record whose hands were dealt at different sizes, stakes and stacks —
+   * which is a thing that could not happen until the table became a choice,
+   * and is now the ordinary case for anybody who tries the setup screen.
+   */
+  const tables: TableConfig[] = [
+    table({ seats: 2, smallBlind: 5, bigBlind: 10, buyIn: 1_000, opponents: ['lag'] }),
+    table({ seats: 6 }),
+    table({ seats: 9, smallBlind: 1, bigBlind: 2, buyIn: 60, opponents: ['station', 'maniac'] }),
+    table({ seats: 3, smallBlind: 25, bigBlind: 50, buyIn: 5_000, opponents: ['nit'] }),
+  ]
+
+  const mixedHistory = () =>
+    tables.flatMap((config, i) => play(config, 6, 500 + i).session.history)
+
+  it('stores and replays every hand, whatever table it came from', async () => {
+    const { toStored } = await import('../stats/serialize')
+    const { hydrate } = await import('../stats/archive')
+
+    const history = mixedHistory()
+    expect(history).toHaveLength(24)
+
+    const stored = history.map((record, i) => toStored(record, 1_700_000_000_000 + i * 60_000))
+    const { hands, unreadable } = hydrate(stored)
+    expect(unreadable, 'no hand is unreadable').toBe(0)
+    expect(hands).toHaveLength(stored.length)
+
+    for (const [i, rebuilt] of hands.entries()) {
+      const original = history[i]!
+      expect(rebuilt.record.state.seats).toHaveLength(original.state.seats.length)
+      expect(rebuilt.record.bigBlind).toBe(original.bigBlind)
+      // The statistics are recomputed on read, so they have to come out the
+      // same as the ones derived while it was being played.
+      expect(rebuilt.record.stats).toEqual(original.stats)
+    }
+  })
+
+  it('aggregates statistics across tables in big blinds, not chips', async () => {
+    const { aggregate } = await import('../stats/hand-stats')
+    const history = mixedHistory()
+
+    // One aggregate over a mixed record has to pick a unit, and the unit is
+    // big blinds: a 25/50 hand and a 1/2 hand are the same size of win at ten
+    // big blinds, and totalling their chips would say otherwise.
+    const stats = aggregate(
+      history.map((record) => record.stats[record.heroSeat]!),
+      2,
+    )
+    expect(stats.hands).toBe(history.length)
+    expect(Number.isFinite(stats.vpip)).toBe(true)
+    expect(stats.vpip).toBeGreaterThanOrEqual(0)
+    expect(stats.vpip).toBeLessThanOrEqual(100)
+  })
+
+  it('grades a hand from any of them without failing', async () => {
+    const { gradeHand } = await import('../coach/grade')
+    for (const record of mixedHistory()) {
+      const graded = gradeHand(record, record.heroSeat)
+      expect(Number.isFinite(graded.totalEvLossBB), `${record.state.seats.length}-handed`).toBe(true)
+      expect(graded.totalEvLossBB).toBeGreaterThanOrEqual(0)
+    }
+  })
+})
