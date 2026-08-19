@@ -110,6 +110,20 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   something to fold or nothing at all — a correct call grades correct whatever
   the runout did, every action the rules allow comes back with a price, and no
   decision is offered a bet size that was not legal at the time.
+- **The coach's opponents are the opponents**: the slice of its range each
+  archetype defends preflop is compared against what the bot actually does with
+  all 1,326 holdings, one archetype at a time, so the model and the players
+  cannot drift apart quietly. On top of that: a loose table has to fold less
+  than a tight one to the same bet; a bigger preflop raise must *not* be
+  credited with folding more of them out, because it does not; and a bet is
+  never credited with the whole field folding when one of them is already
+  all-in and has nothing left to fold.
+- **The advice survives the trip to the worker**: pricing runs off the
+  interface thread, so the decision is packed, sent and replayed. The replayed
+  position has to be the position it was packed from — board, seat to act, and
+  who is sitting there — and has to price to the same numbers, because a field
+  left behind on the way out is how the live coach came to model a table of
+  strangers while the verdict modelled the players who were really there.
 - **Verdicts do not depend on the seed**: the same hands are graded under four
   different sampling seeds and every verdict has to come out the same. This is
   the acceptance test for the whole expected-value model, and the reason for
