@@ -227,3 +227,77 @@ export function reasonInWords(reason: {
     }
   }
 }
+
+/**
+ * The statistics, read out loud.
+ *
+ * A dashboard of VPIP, PFR, WTSD, AF and bb/100 is a professional's
+ * instrument panel. To a beginner it is five numbers with no scale: 97% of
+ * what, compared to whom, and is a bigger one better? Each of these says what
+ * the number means and where it sits against how a solid player plays, because
+ * a number without a comparison is not a fact anybody can act on.
+ *
+ * The comparisons are the ordinary ranges quoted for six-handed games. They
+ * are a signpost, not a target, and they are worded as one.
+ */
+
+/** How often you put money in before the flop. */
+export function vpipInWords(vpip: number): string {
+  const played = `You play ${vpip.toFixed(0)} hands in every 100.`
+  if (vpip >= 45) return `${played} A solid player plays about 25 — you are paying to see far too many flops.`
+  if (vpip >= 33) return `${played} A solid player plays about 25, so you are coming in a bit too wide.`
+  if (vpip >= 18) return `${played} That is about where a solid player sits.`
+  return `${played} A solid player plays about 25, so you are letting playable hands go.`
+}
+
+/** How often you come in raising rather than calling. */
+export function pfrInWords(pfr: number, vpip: number): string {
+  const raised = `You raise ${pfr.toFixed(0)} hands in every 100 before the flop.`
+  if (vpip <= 0) return raised
+  const share = pfr / vpip
+  if (share >= 0.7) return `${raised} Almost everything you play, you play aggressively.`
+  if (share >= 0.45) return `${raised} That is a healthy share of the hands you play.`
+  return `${raised} Most hands you play, you only call — the lead is worth taking more often.`
+}
+
+/** How often a flop you saw ends with your cards face up. */
+export function wtsdInWords(wtsd: number): string {
+  const shown = `When you see a flop, you end up showing your cards ${wtsd.toFixed(0)} times in 100.`
+  if (wtsd >= 40) return `${shown} About 27 is normal — you are paying to the end too often.`
+  if (wtsd >= 20) return `${shown} That is about normal.`
+  return `${shown} About 27 is normal — you may be letting go of hands that were still good.`
+}
+
+/** How much you bet and raise, against how much you call. */
+export function aggressionInWords(af: number): string {
+  if (af <= 0.05) return 'You almost never bet or raise — you are along for the ride in the pots you enter.'
+  const per = `For every call you make, you bet or raise ${af.toFixed(1)} times.`
+  if (af >= 6) return `${per} That is a lot — around 2 to 3 is the usual shape of a winning player.`
+  if (af >= 1.5) return `${per} That is about the shape of a winning player.`
+  return `${per} Winning players are nearer 2 to 3 — you are calling more than you are pushing.`
+}
+
+/**
+ * What a winrate means, per hand rather than per hundred.
+ *
+ * bb/100 is the unit the game is measured in and nobody new to it thinks in
+ * hundreds of hands. Per hand is a quantity a person can picture.
+ */
+export function winrateInWords(bbPer100: number, bigBlind: number): string {
+  const perHand = bbPer100 / 100
+  const chips = Math.abs(perHand * bigBlind)
+  const direction = perHand >= 0 ? 'winning' : 'losing'
+  if (Math.abs(perHand) < 0.05) return 'You are breaking about even.'
+  return (
+    `You are ${direction} about ${Math.abs(perHand).toFixed(1)} big blinds a hand ` +
+    `— ${chips.toFixed(0)} chips at this table.`
+  )
+}
+
+/** What the coach's mark on your play amounts to. */
+export function evLostInWords(bbPer100: number): string {
+  const perHand = bbPer100 / 100
+  if (perHand < 0.15) return 'The coach would have played these hands almost exactly as you did.'
+  if (perHand < 1) return `The coach would have made about ${perHand.toFixed(1)} big blinds a hand more than you did.`
+  return `The coach would have made about ${perHand.toFixed(0)} big blinds a hand more than you did — there is a lot on the table.`
+}

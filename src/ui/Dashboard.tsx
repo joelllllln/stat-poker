@@ -18,6 +18,14 @@ import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profi
 import { DataCard } from './DataCard'
 import { LuckChart } from './LuckChart'
 import { allHands } from '../stats/archive'
+import {
+  aggressionInWords,
+  evLostInWords,
+  pfrInWords,
+  vpipInWords,
+  winrateInWords,
+  wtsdInWords,
+} from './plain'
 import { ARCHIVE_LIMIT, useStore } from './store'
 
 /**
@@ -29,11 +37,14 @@ import { ARCHIVE_LIMIT, useStore } from './store'
 function StatTile({
   label,
   value,
+  says,
   interval,
   reliable,
 }: {
   label: string
   value: string
+  /** What the number means, for somebody who has never seen the acronym. */
+  says: string
   interval?: [number, number]
   reliable: boolean
 }) {
@@ -46,6 +57,9 @@ function StatTile({
           {interval[0].toFixed(0)}–{interval[1].toFixed(0)}%
         </div>
       )}
+      {/* The number is the measurement; this is what it means. A dashboard of
+          acronyms is an instrument panel for somebody who already flies. */}
+      <p className="mt-1 text-[11px] leading-snug text-slate-400">{says}</p>
     </div>
   )
 }
@@ -221,6 +235,11 @@ export function Dashboard({ session }: { session: SessionState }) {
             >
               −{evLostPer100.toFixed(1)}bb/100 given up
             </span>
+          ) : null}
+          {graded.length >= MASTERY_SAMPLE ? (
+            <div className="mt-0.5 max-w-[22rem] text-[11px] leading-snug text-slate-400">
+              {evLostInWords(evLostPer100)}
+            </div>
           ) : (
             <span className="text-amber-500/80">
               {graded.length}/{MASTERY_SAMPLE} graded hands — placement is provisional
@@ -322,23 +341,27 @@ export function Dashboard({ session }: { session: SessionState }) {
         <StatTile
           label="Hands played (VPIP)"
           value={`${stats.vpip.toFixed(0)}%`}
+          says={vpipInWords(stats.vpip)}
           interval={rateInterval(played, stats.hands)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
         <StatTile
           label="Hands raised (PFR)"
           value={`${stats.pfr.toFixed(0)}%`}
+          says={pfrInWords(stats.pfr, stats.vpip)}
           interval={rateInterval(raised, stats.hands)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
         <StatTile
           label="Flops taken to showdown (WTSD)"
           value={`${stats.wtsd.toFixed(0)}%`}
+          says={wtsdInWords(stats.wtsd)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
         <StatTile
           label="Bets and raises per call (AF)"
           value={stats.aggressionFactor.toFixed(2)}
+          says={aggressionInWords(stats.aggressionFactor)}
           reliable={stats.hands >= STYLE_SAMPLE}
         />
       </div>
@@ -372,10 +395,20 @@ export function Dashboard({ session }: { session: SessionState }) {
             {winrate.bbPer100.toFixed(1)} bb/100
           </span>
         </div>
+        {/* What it means, then how far it can be trusted. Both matter and
+            only one of them is a number anybody new can picture. */}
+        <p className="mt-1 text-xs text-slate-300">
+          {winrateInWords(winrate.bbPer100, session.config.bigBlind)}
+        </p>
         <div className="mt-1 text-[11px] text-slate-500">
-          {Number.isFinite(winrate.low)
-            ? `Anywhere from ${winrate.low.toFixed(0)} to ${winrate.high.toFixed(0)} bb/100 at 95% confidence. `
-            : 'Not enough hands to bound this at all. '}
+          {/* The bound, said as a range rather than as a confidence level —
+              and the "not sure yet" only where it is true, which is when the
+              range still contains both winning and losing. */}
+          {!Number.isFinite(winrate.low)
+            ? 'Not enough hands to bound this at all. '
+            : winrate.low < 0 && winrate.high > 0
+              ? `Not enough hands to be sure that is real: the true figure is somewhere between ${winrate.low.toFixed(0)} and ${winrate.high.toFixed(0)} bb/100. `
+              : `The true figure is somewhere between ${winrate.low.toFixed(0)} and ${winrate.high.toFixed(0)} bb/100. `}
           {handsNeeded > 0 &&
             `At your spread it takes about ${handsNeeded.toLocaleString('en-US')} hands to pin this down to ±5.`}
         </div>
@@ -392,6 +425,13 @@ export function Dashboard({ session }: { session: SessionState }) {
               : 'no all-ins yet'}
           </span>
         </div>
+        {/* A chart of two lines with no scale anybody knows. What separates
+            them is the whole point of it, and it takes one sentence. */}
+        <p className="text-[11px] leading-snug text-slate-400">
+          The blue line is what you actually won. The orange line is what you would have won if
+          every hand you got all-in had been paid out at what it was worth, instead of however
+          the cards happened to fall. Orange above blue means the cards have been unkind.
+        </p>
         <LuckChart actual={curve.actual} adjusted={curve.adjusted} />
       </div>
 

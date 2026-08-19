@@ -355,7 +355,17 @@ await page.getByRole('button', { name: 'Progress', exact: true }).click()
 await page.waitForTimeout(400)
 const progress = (await page.locator('body').innerText()).toLowerCase()
 check('the dashboard appeared', progress.includes('your game'))
-check('the winrate carries a confidence bound', /confidence|not enough hands/.test(progress))
+check(
+  'the winrate carries a bound, in words rather than a confidence level',
+  /somewhere between|not enough hands/.test(progress),
+)
+// And the whole page has to be readable by somebody who does not know the
+// acronyms it is built out of.
+check(
+  'the statistics say what they mean',
+  /hands in every 100/.test(progress) &&
+    /big blinds a hand|breaking about even/.test(progress),
+)
 check('the luck chart is present', progress.includes('all-in adjusted') || progress.includes('play a few hands'))
 check('the leak finder reports', progress.includes('where it goes'))
 await page.getByRole('button', { name: 'Table', exact: true }).click()

@@ -6,9 +6,15 @@ import {
   priceInWords,
   positionInWords,
   sizeInWords,
+  aggressionInWords,
+  evLostInWords,
+  pfrInWords,
   reasonInWords,
   strengthInWords,
   timesInTen,
+  vpipInWords,
+  winrateInWords,
+  wtsdInWords,
 } from './plain'
 
 /**
@@ -141,5 +147,48 @@ group('why the coach says what it says', () => {
     expect(reasonInWords({ ...spot, action: 'check', equity: 0.3, toCall: 0 })).toContain(
       'for nothing',
     )
+  })
+})
+
+group('the statistics, read out loud', () => {
+  it('says how many hands you play and against what', () => {
+    expect(vpipInWords(97)).toContain('97 hands in every 100')
+    expect(vpipInWords(97)).toContain('far too many')
+    expect(vpipInWords(25)).toContain('about where a solid player sits')
+    expect(vpipInWords(8)).toContain('letting playable hands go')
+  })
+
+  it('reads raising against playing, not on its own', () => {
+    // 20 raised out of 25 played is aggressive; 5 out of 25 is not, and the
+    // raw number alone cannot tell you which.
+    expect(pfrInWords(20, 25)).toContain('aggressively')
+    expect(pfrInWords(5, 25)).toContain('only call')
+  })
+
+  it('says what showing your cards that often means', () => {
+    expect(wtsdInWords(60)).toContain('too often')
+    expect(wtsdInWords(27)).toContain('about normal')
+  })
+
+  it('says what an aggression factor is a factor of', () => {
+    expect(aggressionInWords(0)).toContain('along for the ride')
+    expect(aggressionInWords(2.5)).toContain('For every call')
+    expect(aggressionInWords(2.5)).toContain('winning player')
+    expect(aggressionInWords(12)).toContain('a lot')
+  })
+
+  it('states a winrate per hand, which is a quantity a person can picture', () => {
+    // -1222bb/100 is 12 big blinds a hand, which at a 1/2 table is 24 chips.
+    const said = winrateInWords(-1222, 2)
+    expect(said).toContain('losing')
+    expect(said).toContain('12.2 big blinds a hand')
+    expect(said).toContain('24 chips')
+    expect(winrateInWords(2, 2)).toContain('breaking about even')
+    expect(winrateInWords(500, 2)).toContain('winning')
+  })
+
+  it('says what the coach being ahead of you amounts to', () => {
+    expect(evLostInWords(5)).toContain('almost exactly as you did')
+    expect(evLostInWords(800)).toContain('a lot on the table')
   })
 })
