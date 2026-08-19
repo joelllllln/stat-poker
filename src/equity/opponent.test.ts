@@ -109,3 +109,67 @@ describe('a seat doing what its style says it never does', () => {
     expect(width).toBeGreaterThan(0.2)
   })
 })
+
+describe('the range a seat that keeps raising is read as', () => {
+  /**
+   * A seat that opened, got reraised, and is now on the clock again.
+   *
+   * Two raises from the same seat is the spot the reading has to get right,
+   * and it is the spot it used to get most wrong.
+   */
+  function afterBeingReraised(style: string, seed: number): { state: HandState; seat: number } {
+    const start = table(style, seed)
+    const seat = start.toAct!
+    const open = legalActions(start).find((option) => option.type === 'raise')!
+    let live = applyAction(start, { type: 'raise', to: open.min! })
+
+    const threeBet = legalActions(live).find((option) => option.type === 'raise')!
+    live = applyAction(live, { type: 'raise', to: threeBet.min! })
+
+    // Everybody else out of the way, so the action comes back to the opener.
+    let guard = 0
+    while (live.toAct !== seat && live.result === null && guard++ < 8) {
+      live = applyAction(live, { type: 'fold' })
+    }
+    return { state: live, seat }
+  }
+
+  it('reads a four-bet as a four-bet, not as the range it opened with', () => {
+    for (const style of Object.values(ARCHETYPES)) {
+      const { state: start, seat } = afterBeingReraised(style.id, 6)
+      expect(start.toAct).toBe(seat)
+      const opened = start.actions.filter(
+        (entry) => entry.seat === seat && entry.action.type === 'raise',
+      )
+      expect(opened).toHaveLength(1)
+
+      let fourBet = 0
+      let widest = 0
+      for (const cards of everyHolding()) {
+        const dealt = holding(start, seat, cards)
+        const action = decide(dealt, seat, style, new Rng(3))
+        if (action.type !== 'raise') continue
+
+        fourBet += 1
+        const after = applyAction(dealt, action)
+        const width = modelledWidth(after, seat)
+        widest = Math.max(widest, width)
+        expect(
+          preflopStrength(cards).percentile,
+          `${style.id} four-bet ${preflopStrength(cards).hand} and was put on the top ${(width * 100).toFixed(0)}%`,
+        ).toBeGreaterThanOrEqual(1 - width)
+      }
+
+      if (fourBet === 0) continue
+      // Every action is taken knowing everything before it, so the latest one
+      // is the most informative. Reading these by the open put a four-bettor
+      // on the top 39% of hands while it was holding the top 20%, and had the
+      // model expecting it to fold six times in ten where it folded fewer than
+      // two.
+      expect(widest, `${style.id} still reads as its opening range`).toBeLessThan(
+        style.openWidth / 2,
+      )
+      expect(widest).toBeLessThan(fourBet / 1326 + 0.06)
+    }
+  })
+})

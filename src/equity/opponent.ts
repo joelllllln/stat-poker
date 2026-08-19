@@ -79,12 +79,13 @@ function styledPreflopWidth(state: HandState, seat: number, style: Archetype): n
   // Posted a blind and not acted: it has done nothing to narrow anything.
   if (mine.length === 0) return 1
 
-  // The strongest thing it did is what its range is read from, and the price
-  // it faced is the price at the moment it did it.
-  const strongest =
-    mine.find((entry) => entry.action.type === 'raise') ??
-    mine.find((entry) => entry.action.type === 'call') ??
-    mine[0]!
+  // Read it by the *last* thing it did, not the first. Every action is taken
+  // knowing everything before it, so the latest one is the most informative —
+  // and a seat that opened and has since put in three more raises is not still
+  // holding its opening range. Reading those by the open put a four-bettor on
+  // the top 39% of hands when it was holding the top 20%, and had the model
+  // expecting it to fold six times in ten where it folded fewer than two.
+  const strongest = mine[mine.length - 1]!
   const at = preflop.indexOf(strongest)
   const before = preflop.slice(0, at)
   const raisesBefore = before.filter((entry) => entry.action.type === 'raise').length
