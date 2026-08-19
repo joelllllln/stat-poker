@@ -125,6 +125,8 @@ scripts/      preflop, matchup and blueprint generators; browser smoke test
   A seat that has not acted is put on everything, and a seat doing what its
   style says it never does falls back to the general rule rather than being
   read as holding the very best hands for making the loosest play it has.
+  A seat that four-bets is required to read tighter than the range it opened
+  with, since the reading takes the last action rather than the first.
 - **A price is only discounted where the hand can still cost something**: a bet
   that puts the stack all in is priced with the same full realisation as a
   river bet, because neither has a next street to be outplayed on. Checked by
@@ -196,15 +198,17 @@ of them contradict what the app appears to claim.
 
 | Policy | Hands | bb/100 | Given up bb/100 | VPIP | PFR |
 |---|---|---|---|---|---|
-| Follow the coach | 1,000 | **−590** | 0.0 | 70% | 68% |
-| A plain tight-aggressive rule | 2,500 | −129 | 299 | 25% | 11% |
-| Fold every hand | 2,500 | **−22** | 92 | 0% | 0% |
-| Never fold | 2,500 | −1,081 | 2,358 | 98% | 0% |
-| Raise everything | 2,500 | −2,732 | 1,681 | 99% | 99% |
-| At random | 2,500 | −346 | 692 | 66% | 36% |
+| Follow the coach | 1,000 | **−294** | 0.0 | 68% | 66% |
+| A plain tight-aggressive rule | 2,500 | −74 | 144 | 26% | 12% |
+| Fold every hand | 2,500 | **−23** | 88 | 0% | 0% |
+| Never fold | 2,500 | −1,108 | 2,437 | 99% | 0% |
+| Raise everything | 2,500 | −2,703 | 1,995 | 99% | 99% |
+| At random | 2,500 | −341 | 729 | 66% | 36% |
 
-**Following the coach loses more than folding every hand.** Its 95% interval
-(−1,112 to −67) is entirely below zero, so that is not variance.
+**Following the coach still loses more than folding every hand** — −294
+against −23 — though after four rounds of fixing it, its 95% interval now runs
+from −623 to +35 and no longer excludes zero. That is a point estimate, not a
+demonstration, and it is quoted as one.
 
 **And it grades itself perfect while doing it** — 0.0bb/100 given up, "Elite",
 100% of decisions optimal. That number is not a lie so much as a tautology: the
@@ -257,11 +261,13 @@ through — and every bucket now holds every hand it is put on.
 
 ### And it was pricing the next street as though it were already won
 
-Neither fix helped. Pricing the real opponents changed what following the coach
-earns by 120bb/100 against a standard error near 280 — not a result. Reading
-the ranges right made it **worse**, because a model that is more accurate about
-opponents is more confident about betting into them, and it went from playing
-78% of hands to 92%.
+Neither fix helped on its own. Pricing the real opponents changed what
+following the coach earns by 120bb/100 against a standard error near 280 — not
+a result. Reading the ranges right made it **worse**, because a model that is
+more accurate about opponents is more confident about betting into them, and it
+went from playing 78% of hands to 92%. That is worth stating plainly: better
+inputs fed straight into a structural error, and finding that out is what
+pointed at the structure.
 
 So the question moved to what a price is actually worth. Every price says an
 action is worth so many chips more than folding; folding is worth exactly
@@ -287,22 +293,47 @@ with. On two independent sets of decks that took the coach from −859 to −305
 and from −650 to −430, and stopped it recommending a bet in nine hands out of
 ten.
 
-What it did not do is make a price right. A bet is still worth about 20bb less
-than it is quoted at. What changed is how often one is recommended, not what
-one is thought to be worth, and no discount on this street can price the
+What it did not do is make a price right. A bet was still worth about 20bb
+less than it was quoted at. What changed is how often one is recommended, not
+what one is thought to be worth, and no discount on this street can price the
 streets the model cannot see.
 
-One bias remains, measured and **not yet explained**. Opponent by opponent the
-fold prediction is close — the rock folds 93% where the model says 93%, the
-hawk 66% where it says 67% — but the chance that *all* of them fold comes out
-six to nine points high: 33.5% predicted against 24.7% seen. The obvious
-suspect was the model pricing their decisions independently when they are dealt
-from one deck. It is not that: dealing every opponent a hand from its own
-modelled range out of a single deck moves the answer from 33.5% to 33.3%. Their
-folds are less correlated than independence implies for some other reason, and
-until that reason is found the bets the coach chooses to make are the ones
-where the error runs in its favour — across those, it expects 38.6% and gets
-31.2%.
+### And it was reading opponents by the first thing they did
+
+That still left the chance of the *whole* field folding six to nine points
+high, while opponent by opponent the prediction was close. The obvious suspect
+was the model pricing their decisions independently when they are dealt from
+one deck; it was not that, and saying so is worth as much as any of the fixes.
+Dealing every opponent a hand from its own modelled range out of a single deck
+moves the prediction from 33.5% to 33.3%.
+
+Splitting the error by how many opponents were left found it. With one
+opponent — the hero reraising a lone raiser — the model expected a fold **61%**
+of the time and got **17%**. A seat that had raised was being read by its
+*opening* range for the rest of the hand, because the width was taken from the
+first raise it made: every three-bet, four-bet and shove after it was thrown
+away. Those opponents were put on the top 39% of hands while they held the top
+20%.
+
+Every action is taken knowing everything before it, so the latest one is the
+most informative. Read that way they are put on the top 21% against the 20%
+they hold, and the joint prediction tracks at every opponent count — five
+opponents 11.0% against 13.6%, four 20.5% against 22.1%, one 31.2% against
+20.9%. It corrects the other direction too: a seat that opened and then merely
+*called* a reraise is now read by the call, which is tighter than its opening
+range and used to be discarded.
+
+### Where that leaves it
+
+| | Expected to fold | Folded | | Said an action was worth | It returned |
+|---|---|---|---|---|---|
+| before any of this | 38.9% | 26.9% | | — | — |
+| now | **32.3%** | **31.4%** | | **8.94bb** | **0.01bb** |
+
+*A bet is still quoted about 11bb high and a check about 3bb high, so the
+horizon has not gone away — it has stopped dominating. Following the coach went
+from −859 to −294 across the four fixes, on two independent sets of decks that
+agree to within 15bb/100.*
 
 So: **the coach is a good guide to the arithmetic of a decision and a bad guide
 to a strategy.** Pot odds, equity against a modelled range, and which of two
