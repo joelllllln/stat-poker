@@ -292,12 +292,17 @@ than it is quoted at. What changed is how often one is recommended, not what
 one is thought to be worth, and no discount on this street can price the
 streets the model cannot see.
 
-Two known biases remain, both measured rather than suspected. The model treats
-the opponents' decisions as independent when they are drawing from one deck, so
-the chance that *all* of them fold comes out about five points high — 31.6%
-predicted against 26.5% seen. And the coach only bets where it likes the price,
-which selects the spots where that error runs in its favour: across the bets it
-chooses to make, it expects 38.6% folds and gets 31.2%.
+One bias remains, measured and **not yet explained**. Opponent by opponent the
+fold prediction is close — the rock folds 93% where the model says 93%, the
+hawk 66% where it says 67% — but the chance that *all* of them fold comes out
+six to nine points high: 33.5% predicted against 24.7% seen. The obvious
+suspect was the model pricing their decisions independently when they are dealt
+from one deck. It is not that: dealing every opponent a hand from its own
+modelled range out of a single deck moves the answer from 33.5% to 33.3%. Their
+folds are less correlated than independence implies for some other reason, and
+until that reason is found the bets the coach chooses to make are the ones
+where the error runs in its favour — across those, it expects 38.6% and gets
+31.2%.
 
 So: **the coach is a good guide to the arithmetic of a decision and a bad guide
 to a strategy.** Pot odds, equity against a modelled range, and which of two
