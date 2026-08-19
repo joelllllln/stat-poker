@@ -13,11 +13,11 @@
 import { NUM_CARDS, type Card } from '../engine/cards'
 import { applyAction, startHandWithDeck } from '../engine/hand'
 import type { Action, HandState } from '../engine/types'
-import type { HandRecord } from '../game/session'
+import { DEFAULT_SEAT_STYLES, type HandRecord } from '../game/session'
 import type { Estimate } from './estimates'
 import { deriveHandStats } from './hand-stats'
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface StoredHand {
   version: number
@@ -30,6 +30,14 @@ export interface StoredHand {
   /** Which seat the person was sitting in: whose statistics these are. */
   heroSeat: number
   seatNames: string[]
+  /**
+   * How each seat played, as an archetype id, or null for the person.
+   *
+   * The coach prices a bet against the opponents it is facing, so a hand that
+   * did not remember who was at the table would be regraded against a
+   * different one every time it was read back.
+   */
+  seatStyles: (string | null)[]
   startingStacks: number[]
   /** The shuffled deck, which is all replay needs to reproduce every card. */
   deck: number[]
@@ -48,6 +56,7 @@ export function toStored(record: HandRecord, playedAt: number): StoredHand {
     smallBlind: record.smallBlind,
     bigBlind: record.bigBlind,
     seatNames: record.state.seats.map((s) => s.name),
+    seatStyles: record.state.seats.map((s) => s.style),
     startingStacks: [...record.startingStacks],
     deck: [...record.state.deck],
     actions: record.state.actions.map((entry) =>
@@ -85,6 +94,7 @@ export function fromStored(stored: StoredHand): HandRecord {
     {
       seats: migrated.seatNames.map((name, i) => ({
         name,
+        style: migrated.seatStyles[i] ?? null,
         stack: migrated.startingStacks[i]!,
       })),
       buttonSeat: migrated.buttonSeat,
@@ -122,6 +132,12 @@ export function fromStored(stored: StoredHand): HandRecord {
  * there was only ever one table and they always sat in the first seat. Filling
  * that in is what lets a history recorded then still be read as somebody's
  * statistics rather than as six anonymous players.
+ *
+ * Version two did not record how each seat played, because nothing read it.
+ * The coach does now — it prices its bets against the opponents it is actually
+ * facing — so an older hand is matched back to the table it was dealt at by
+ * name. Every one of them was dealt at that table; a seat that does not match
+ * simply has no style, and grades by the generic rule.
  */
 export function migrate(stored: StoredHand): StoredHand {
   if (stored.version > SCHEMA_VERSION) {
@@ -130,7 +146,13 @@ export function migrate(stored: StoredHand): StoredHand {
     )
   }
   if (stored.version === SCHEMA_VERSION) return stored
-  return { ...stored, heroSeat: stored.heroSeat ?? 0, version: SCHEMA_VERSION }
+  return {
+    ...stored,
+    heroSeat: stored.heroSeat ?? 0,
+    seatStyles:
+      stored.seatStyles ?? stored.seatNames.map((name) => DEFAULT_SEAT_STYLES[name] ?? null),
+    version: SCHEMA_VERSION,
+  }
 }
 
 /** The whole record as a portable JSON document. */

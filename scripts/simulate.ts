@@ -19,7 +19,7 @@
 import { writeFileSync } from 'node:fs'
 import { Rng } from '../src/engine/cards'
 import { legalActions } from '../src/engine/hand'
-import { potSize, type Action, type HandState } from '../src/engine/types'
+import { potSize, type Action, type HandState, type Street } from '../src/engine/types'
 import {
   createSession,
   defaultSessionConfig,
@@ -146,16 +146,28 @@ const POLICIES: Policy[] = [
 /**
  * Does the field fold as often as the coach says it will?
  *
- * The coach prices a bet by assuming each opponent continues when its hand
- * clears the price, discounted for the equity it will not realise. The bots at
- * this table decide by something else entirely — their archetype's widths and
- * their own heuristics — so the model's opponents are not the opponents. This
- * counts the difference: what the model predicted, against what happened.
+ * This is the measurement the coach lives or dies by: it prices every bet by
+ * how often it expects the field to fold, so a model whose opponents are not
+ * the opponents will bet at prices that do not exist. Counting the difference
+ * is what caught it doing exactly that.
+ *
+ * Split by street, because the two halves of the model are different claims —
+ * postflop the opponents weigh a price, preflop they defend a slice of their
+ * range and the price does not enter into it — and a single average hides one
+ * being wrong behind the other being right.
  */
-interface Calibration {
+interface Tally {
   bets: number
   predicted: number
   observed: number
+}
+
+type Calibration = Tally & { byStreet: Map<Street, Tally> }
+
+const tally = (into: Map<Street, Tally>, street: Street): Tally => {
+  const found = into.get(street) ?? { bets: 0, predicted: 0, observed: 0 }
+  into.set(street, found)
+  return found
 }
 
 /** Did every villain still to act fold to the hero's bet? */
@@ -189,7 +201,7 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
   const started = Date.now()
   let decisions = 0
   let decisionMs = 0
-  const calibration: Calibration = { bets: 0, predicted: 0, observed: 0 }
+  const calibration: Calibration = { bets: 0, predicted: 0, observed: 0, byStreet: new Map() }
 
   for (let hand = 0; hand < hands; hand++) {
     startNextHand(session)
@@ -212,15 +224,19 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
         predicted = advice.options.find((option) => option.action.type === 'raise')?.foldEquity ?? null
       }
       const before = state.actions.length
+      const street = state.street
 
       heroAct(session, action)
       if (session.current!.result === null) runBotsUntilHero(session)
 
       if (predicted !== null) {
         const after = session.current ?? session.history[session.history.length - 1]!.state
-        calibration.bets += 1
-        calibration.predicted += predicted
-        calibration.observed += everyoneFolded(after, before, session.config.heroSeat) ? 1 : 0
+        const folded = everyoneFolded(after, before, session.config.heroSeat) ? 1 : 0
+        for (const row of [calibration, tally(calibration.byStreet, street)]) {
+          row.bets += 1
+          row.predicted += predicted
+          row.observed += folded
+        }
       }
     }
   }
@@ -311,10 +327,17 @@ function conservationFaults(records: HandRecord[]): number {
 const argv = process.argv.slice(2)
 const handsArg = argv.indexOf('--hands')
 const HANDS = handsArg >= 0 ? Number(argv[handsArg + 1]) : 1_000
+// `--only Coach` runs one policy at length, which is what answering "did that
+// change help?" needs: the coach is the slow one, and a comparison at a sample
+// size that could settle anything cannot afford the other five as well.
+const onlyArg = argv.indexOf('--only')
+const ONLY = onlyArg >= 0 ? argv[onlyArg + 1] : null
+const PLAYING = ONLY ? POLICIES.filter((policy) => policy.name === ONLY) : POLICIES
+if (PLAYING.length === 0) throw new Error(`No policy called ${ONLY}`)
 
 console.log(`Playing ${HANDS} hands per policy (the coach plays fewer; it thinks).\n`)
 
-const outcomes = POLICIES.map((policy) => {
+const outcomes = PLAYING.map((policy) => {
   const hands = Math.max(40, Math.round(HANDS * (policy.scale ?? 1)))
   process.stdout.write(`  ${policy.name}: ${hands} hands… `)
   const outcome = play(policy, hands, 1234)
@@ -388,6 +411,17 @@ if (coachCalibration.bets > 0) {
       `**${predicted.toFixed(1)}%** of the time. It actually folded **${observed.toFixed(1)}%**.`,
   )
   say()
+  say('| Street | Bets | Expected to fold | Folded |')
+  say('|---|---|---|---|')
+  for (const street of ['preflop', 'flop', 'turn', 'river'] as const) {
+    const row = coachCalibration.byStreet.get(street)
+    if (!row || row.bets === 0) continue
+    say(
+      `| ${street} | ${row.bets} | ${((row.predicted / row.bets) * 100).toFixed(1)}% | ` +
+        `${((row.observed / row.bets) * 100).toFixed(1)}% |`,
+    )
+  }
+  say()
   say(
     predicted > observed * 1.25
       ? 'The model credits its bets with fold equity the table does not give them.'
@@ -421,23 +455,28 @@ say(
     `${(bytes / 1024 / 1024).toFixed(1)}MB for ${stored.length}`,
 )
 
-const coach = results.find((result) => result.outcome.policy.name === 'Coach')!
+const coach = results.find((result) => result.outcome.policy.name === 'Coach')
 const others = results.filter((result) => result.outcome.policy.name !== 'Coach')
-say()
-say('## The claim the app makes')
-say()
-say(
-  `The coach gives up **${coach.evLostPer100.toFixed(1)}bb/100** and every other policy gives up ` +
-    `${Math.min(...others.map((o) => o.evLostPer100)).toFixed(1)}bb/100 or more.`,
-)
-say(
-  `Its winrate is ${coach.winrate.bbPer100.toFixed(1)}bb/100 ` +
-    `(${coach.winrate.low.toFixed(0)} to ${coach.winrate.high.toFixed(0)} at 95%), against ` +
-    others
-      .map((o) => `${o.outcome.policy.name} ${o.winrate.bbPer100.toFixed(0)}`)
-      .join(', ') +
-    '.',
-)
+if (coach) {
+  say()
+  say('## The claim the app makes')
+  say()
+  if (others.length > 0) {
+    say(
+      `The coach gives up **${coach.evLostPer100.toFixed(1)}bb/100** and every other policy gives ` +
+        `up ${Math.min(...others.map((o) => o.evLostPer100)).toFixed(1)}bb/100 or more.`,
+    )
+  }
+  say(
+    `Its winrate is ${coach.winrate.bbPer100.toFixed(1)}bb/100 ` +
+      `(${coach.winrate.low.toFixed(0)} to ${coach.winrate.high.toFixed(0)} at 95%)` +
+      (others.length === 0
+        ? '.'
+        : ', against ' +
+          others.map((o) => `${o.outcome.policy.name} ${o.winrate.bbPer100.toFixed(0)}`).join(', ') +
+          '.'),
+  )
+}
 
 // What the trend view would show about the longest run.
 const longest = results.reduce((a, b) => (b.outcome.hands > a.outcome.hands ? b : a))

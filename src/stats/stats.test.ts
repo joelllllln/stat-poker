@@ -222,6 +222,7 @@ describe('hand history storage', () => {
         'heroSeat',
         'playedAt',
         'seatNames',
+        'seatStyles',
         'seed',
         'smallBlind',
         'startingStacks',
@@ -244,6 +245,33 @@ describe('hand history storage', () => {
     expect(() =>
       fromStored({ ...stored, deck: [...stored.deck.slice(0, 51), stored.deck[0]!] }),
     ).toThrow(/duplicate/)
+  })
+
+  it('puts an older hand back at the table it was played at', async () => {
+    // Version two stored who was sitting there only by name. The coach now
+    // prices its bets against the opponents it is facing, so a hand read back
+    // without them would be graded against a table that never existed.
+    const session = await playSession(1)
+    const stored = toStored(session.history[0]!, 0)
+    const { seatStyles, ...withoutStyles } = stored
+    expect(seatStyles).toEqual([null, 'nit', 'tag', 'lag', 'station', 'maniac'])
+
+    const older = { ...withoutStyles, version: 2 } as typeof stored
+    expect(migrate(older).seatStyles).toEqual(seatStyles)
+    expect(fromStored(older).state.seats.map((seat) => seat.style)).toEqual(seatStyles)
+  })
+
+  it('leaves a seat it cannot place without a style, rather than guessing one', async () => {
+    const session = await playSession(1)
+    const stored = toStored(session.history[0]!, 0)
+    const { seatStyles: _dropped, ...withoutStyles } = stored
+    const older = {
+      ...withoutStyles,
+      version: 2,
+      seatNames: stored.seatNames.map((name, i) => (i === 1 ? 'Somebody else' : name)),
+    } as typeof stored
+
+    expect(migrate(older).seatStyles[1]).toBeNull()
   })
 
   it('refuses a hand written by a newer schema', async () => {

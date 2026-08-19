@@ -28,7 +28,7 @@ import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
  * whenever a change here would give a hand a different verdict: every cached
  * verdict below it is discarded and worked out again.
  */
-export const GRADER_VERSION = 2
+export const GRADER_VERSION = 3
 
 export type Verdict = 'optimal' | 'fine' | 'mistake' | 'blunder'
 
@@ -206,6 +206,10 @@ export function replayHand(record: HandRecord): { state: HandState; action: Acti
     {
       seats: record.state.seats.map((seat, i) => ({
         name: seat.name,
+        // Who was sitting there is part of the hand: the coach prices its bets
+        // against these opponents, so a replay that forgot them would grade
+        // the hand against a different table from the one it was played at.
+        style: seat.style,
         stack: record.startingStacks[i]!,
       })),
       buttonSeat: record.buttonSeat,

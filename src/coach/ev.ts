@@ -20,7 +20,10 @@ import { potSize, type Action, type HandState } from '../engine/types'
 import { handEquity, subsetEquity } from '../equity/equity'
 import { modelOpponentRange, perceivedRangeAfterAggression } from '../equity/opponent'
 import { removeBlocked, rangeWeight, type Combo, type Range } from '../equity/range'
+import { preflopStrength } from '../equity/preflop'
 import { normalCdf } from '../stats/inference'
+import type { Archetype } from '../bots/archetypes'
+import { callDisciplineOf, defendWidthOf, preflopRaises, styleAt } from './opponents'
 import { requiredEquity } from './odds'
 
 /** Rollouts when pricing a single villain combo. */
@@ -61,17 +64,6 @@ const TARGET_EV_ERROR_BB = 0.15
  */
 const COMBO_EXACT_BUDGET = 2_000
 const HERO_EXACT_BUDGET = 50_000
-
-/**
- * How much of its raw equity a calling hand actually gets to keep.
- *
- * Pot odds alone say to continue whenever equity beats the price, but a hand
- * that calls still has to play the rest of the hand — often out of position,
- * often facing more bets, and rarely able to see every card it was counting
- * on. Requiring a hand to clear the price with room to spare is what stops the
- * model concluding that nobody ever folds to anything.
- */
-const EQUITY_REALIZATION = 0.82
 
 /**
  * Villain combos priced per decision.
@@ -119,9 +111,11 @@ export interface DecisionEV {
 /**
  * How a villain's range splits against a bet.
  *
- * A combo continues when its equity beats the price the bet lays it. That is a
- * simplification — real players fold hands with the odds and call without them
- * — but it is a defensible, explainable rule, and it is the same rule the app
+ * The rule is the seat's own, taken from `./opponents`: postflop a hand
+ * continues when its equity clears the price by as much as that player insists
+ * on, and preflop it continues if it is in the slice of the range that player
+ * defends. Where the table says nothing about who is sitting there, a general
+ * rule about poker stands in. Whichever applies, it is the same rule the app
  * grades the player by.
  */
 export interface RangeSplit {
@@ -140,6 +134,14 @@ interface PricedCombo {
   equity: number
   /** Standard error on that equity; zero where it was enumerated. */
   error: number
+  /**
+   * Where this holding ranks among all starting hands, 1 being the best.
+   *
+   * Preflop the opponents do not compare equity with a price at all — they
+   * defend the top slice of their range — so this, not `equity`, is what
+   * decides whether they fold before the flop.
+   */
+  strength: number
 }
 
 /**
@@ -154,6 +156,7 @@ function priceRange(
   heroRange: Range,
   board: readonly Card[],
   seed: number,
+  withEquities: boolean,
 ): { priced: PricedCombo[]; total: number } {
   const stride = Math.max(1, Math.ceil(range.length / COMBO_SAMPLE))
   const scale = stride // each sampled combo stands in for `stride` of them
@@ -163,24 +166,28 @@ function priceRange(
   for (let i = 0; i < range.length; i += stride) {
     const source = range[i]!
     const combo: Combo = { cards: source.cards, weight: source.weight * scale }
+    // A seat that defends by width never consults an equity, so rolling one
+    // out for every combination it holds would be work nothing reads.
     let equity = 0.5
     let error = 0
-    try {
-      const result = handEquity(combo.cards, [heroRange], board, {
-        // Its own seed per combo, so a combo prices the same whatever else was
-        // asked first, and one unlucky stream cannot tilt the whole range.
-        rng: new Rng(seed * 977 + i),
-        iterations: COMBO_ITERATIONS,
-        exactBudget: COMBO_EXACT_BUDGET,
-      })
-      equity = result.equity
-      error = result.errorMargin / 2
-    } catch {
-      // Hero's modelled range can be entirely blocked by this combo; treat the
-      // spot as a coin flip rather than dropping the combo.
-      equity = 0.5
+    if (withEquities) {
+      try {
+        const result = handEquity(combo.cards, [heroRange], board, {
+          // Its own seed per combo, so a combo prices the same whatever else was
+          // asked first, and one unlucky stream cannot tilt the whole range.
+          rng: new Rng(seed * 977 + i),
+          iterations: COMBO_ITERATIONS,
+          exactBudget: COMBO_EXACT_BUDGET,
+        })
+        equity = result.equity
+        error = result.errorMargin / 2
+      } catch {
+        // Hero's modelled range can be entirely blocked by this combo; treat
+        // the spot as a coin flip rather than dropping the combo.
+        equity = 0.5
+      }
     }
-    priced.push({ combo, equity, error })
+    priced.push({ combo, equity, error, strength: preflopStrength(combo.cards).percentile })
     total += combo.weight
   }
 
@@ -188,26 +195,46 @@ function priceRange(
 }
 
 /**
- * Split a priced range at a price.
+ * Split a priced range at a price, by the rule the seat holding it plays by.
  *
- * A combo continues when its equity clears the price. Those equities are
- * mostly sampled, though, so for a combo sitting near the price the honest
- * answer is not which side it falls but how likely it is to fall on each —
- * which is what its own error bar says. That expectation is the split, it
- * converges to the plain comparison as the error goes to zero, and the
- * leftover uncertainty comes back as `foldError` rather than being dropped and
- * later mistaken for a difference in the play.
+ * **Postflop** a hand continues when its equity clears the price, scaled by
+ * how disciplined that seat is about the price: the fish continues on 60% of
+ * what the odds demand, the rock wants 135% of it. Those equities are mostly
+ * sampled, though, so for a combo sitting near the threshold the honest answer
+ * is not which side it falls but how likely it is to fall on each — which is
+ * what its own error bar says. That expectation is the split, it converges to
+ * the plain comparison as the error goes to zero, and the leftover uncertainty
+ * comes back as `foldError` rather than being dropped and later mistaken for a
+ * difference in the play.
+ *
+ * **Preflop** the price does not enter into it, because for these opponents it
+ * does not: they defend the top slice of their range and fold the rest,
+ * however much is being asked. Pricing them as though a bigger raise folded
+ * more of them out is precisely the error the simulation caught.
  */
-function splitAtPrice(priced: PricedCombo[], price: number): RangeSplit {
+function splitAtPrice(
+  priced: PricedCombo[],
+  price: number,
+  style: Archetype | null,
+  defendWidth: number | null,
+): RangeSplit {
   let folding = 0
   let continuing = 0
   let variance = 0
   const continuingRange: Combo[] = []
+  const discipline = callDisciplineOf(style)
 
   for (const entry of priced) {
-    const margin = entry.equity * EQUITY_REALIZATION - price
-    const spread = entry.error * EQUITY_REALIZATION
-    const continues = spread > 0 ? normalCdf(margin / spread) : margin >= 0 ? 1 : 0
+    let continues: number
+    if (defendWidth !== null) {
+      // A width, not a price: this is a lookup, so there is nothing uncertain
+      // about which side of it a hand falls.
+      continues = entry.strength >= 1 - defendWidth ? 1 : 0
+    } else {
+      const margin = entry.equity - price * discipline
+      const spread = entry.error
+      continues = spread > 0 ? normalCdf(margin / spread) : margin >= 0 ? 1 : 0
+    }
 
     continuing += entry.combo.weight * continues
     folding += entry.combo.weight * (1 - continues)
@@ -370,13 +397,32 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
   // this bet, not the wider one they see before it.
   const blockers = [...heroCards, ...state.board]
   const heroRange = removeBlocked(perceivedRangeAfterAggression(state, heroSeat), blockers)
+  // How wide each seat defends preflop once this bet has gone in. It does not
+  // depend on the size — that is the whole point of it — so it is worked out
+  // once rather than per sizing. It is null postflop, and null for a seat whose
+  // style the table does not record, which is what puts those back on the
+  // price-clearing rule.
+  const raisesAfter = preflopRaises(state) + 1
   const pricedVillains = villains
-    .map((seat) => ({
-      seat,
-      range: removeBlocked(modelOpponentRange(state, seat), blockers),
-    }))
+    .map((seat) => {
+      const style = styleAt(state, seat)
+      return {
+        seat,
+        style,
+        defendWidth:
+          state.street === 'preflop' && style !== null ? defendWidthOf(style, raisesAfter) : null,
+        range: removeBlocked(modelOpponentRange(state, seat), blockers),
+      }
+    })
     .filter(({ range }) => rangeWeight(range) > 0)
-    .map(({ seat, range }) => ({ seat, ...priceRange(range, heroRange, state.board, seed) }))
+    .map(({ seat, style, defendWidth, range }) => ({
+      seat,
+      style,
+      defendWidth,
+      // A seat defending by width never consults an equity, so there is no
+      // reason to roll one out for every combination it holds.
+      ...priceRange(range, heroRange, state.board, seed, defendWidth === null),
+    }))
 
   for (const to of sizings) {
     const amount = to - hero.committed
@@ -385,7 +431,7 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
     // Every villain faces its own price. What it owes is measured from what it
     // has already put in — the small blind owes more than the big blind to see
     // the same raise — and capped by what it has left.
-    const facing = pricedVillains.map(({ seat, priced, total }) => {
+    const facing = pricedVillains.map(({ seat, style, defendWidth, priced, total }) => {
       const villain = state.seats[seat]!
       const contribution = Math.min(villain.stack, Math.max(0, to - villain.committed))
       if (contribution === 0) {
@@ -393,7 +439,12 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
         // is in the pot whatever the hero does now.
         return { fold: 0, foldError: 0, range: priced.map((entry) => entry.combo), contribution }
       }
-      const split = splitAtPrice(priced, requiredEquity(contribution, pot + amount))
+      const split = splitAtPrice(
+        priced,
+        requiredEquity(contribution, pot + amount),
+        style,
+        defendWidth,
+      )
       return {
         fold: total > 0 ? split.folding / total : 1,
         foldError: split.foldError,
@@ -435,7 +486,14 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
       const valueAt = (folds: number[]): { ev: number; error: number; noCall: number } => {
         let total = 0
         let sampling = 0
-        let noCall = 1
+        // How often nobody calls is the product of their folding, and it is
+        // worked out here rather than read off the enumeration below: a subset
+        // with no chance of happening is skipped there, and "everybody folds"
+        // is exactly the subset that goes to zero the moment one opponent
+        // never folds. Taking it from the loop left the bet credited with
+        // every opponent folding precisely when one of them could not.
+        const noCall = folds.reduce((product, fold) => product * fold, 1)
+
         for (let mask = 0; mask < 1 << callers.length; mask++) {
           let probability = 1
           let contributions = 0
@@ -452,7 +510,6 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
             }
           }
           if (probability <= 0) continue
-          if (mask === 0) noCall = probability
 
           const share = priced.equity[mask]!
           const won = pot + contributions

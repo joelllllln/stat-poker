@@ -22,6 +22,17 @@ export interface LegalAction {
 export interface Seat {
   index: number
   name: string
+  /**
+   * How this seat plays, as an archetype id, or null for a person.
+   *
+   * The engine never reads it: a hand plays out identically whoever is sitting
+   * there. It rides along on the state because everything that prices a
+   * decision — the live coach, the grader, a replayed hand out of storage —
+   * gets a `HandState` and nothing else, and pricing a bet against opponents
+   * whose style you do not know is what makes a coach model a table it is not
+   * sitting at.
+   */
+  style: string | null
   /** Chips behind. */
   stack: number
   /** Chips put in on the current street. */
@@ -106,7 +117,7 @@ export interface HandState {
 }
 
 export interface HandConfig {
-  seats: readonly { name: string; stack: number }[]
+  seats: readonly { name: string; stack: number; style?: string | null }[]
   buttonSeat: number
   smallBlind: number
   bigBlind: number

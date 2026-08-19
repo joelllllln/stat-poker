@@ -9,7 +9,7 @@ import {
   startNextHand,
   type HandRecord,
 } from '../game/session'
-import { adviseOn, decisionsTaken } from './advise'
+import { adviseOn, decisionsTaken, fromAdviseInput, toAdviseInput } from './advise'
 import { gradeHand, replayHand } from './grade'
 
 /**
@@ -124,6 +124,37 @@ describe('the advice and the verdict', () => {
       expect(advice.toCall).toBeLessThanOrEqual(moment.state.seats[record.heroSeat]!.stack)
       expect(advice.requiredEquity).toBeGreaterThanOrEqual(0)
       expect(advice.requiredEquity).toBeLessThanOrEqual(1)
+    }
+  })
+})
+
+describe('the decision as the worker receives it', () => {
+  it('replays to the same position, opponents included', async () => {
+    const record = await playOneHand(19)
+
+    for (const [index, moment] of heroDecisions(record).entries()) {
+      const rebuilt = fromAdviseInput(
+        toAdviseInput(moment.state, record.startingStacks, record.heroSeat),
+      )
+
+      expect(rebuilt.toAct).toBe(moment.state.toAct)
+      expect(rebuilt.street).toBe(moment.state.street)
+      expect(rebuilt.board).toEqual(moment.state.board)
+      // Who is sitting there is part of the position, because it is part of
+      // the price: a table of strangers is a different table.
+      expect(rebuilt.seats.map((seat) => seat.style)).toEqual(
+        moment.state.seats.map((seat) => seat.style),
+      )
+      expect(rebuilt.seats.some((seat) => seat.style !== null)).toBe(true)
+
+      // And so the advice the worker sends back is the advice the position
+      // deserves, to the last decimal.
+      const here = adviseOn(moment.state, record.heroSeat, index)
+      const there = adviseOn(rebuilt, record.heroSeat, index)
+      expect(there.equity).toBe(here.equity)
+      expect(there.options.map((option) => [option.label, option.ev])).toEqual(
+        here.options.map((option) => [option.label, option.ev]),
+      )
     }
   })
 })

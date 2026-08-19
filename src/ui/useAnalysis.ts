@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Card } from '../engine/cards'
 import type { AdviseReply, EquityReply, SolveReply } from '../workers/analysis.worker'
 import type { HandState } from '../engine/types'
+import { toAdviseInput } from '../coach/advise'
 import { ask } from './analysis-client'
 
 export interface EquityQuery {
@@ -172,18 +173,7 @@ export function useAdvice(query: AdviceQuery | null): {
     setPending(true)
     ask<AdviseReply>({
       kind: 'advise',
-      deck: [...query.state.deck],
-      actions: query.state.actions.map((entry) =>
-        entry.action.type === 'raise'
-          ? { seat: entry.seat, type: entry.action.type, to: entry.action.to }
-          : { seat: entry.seat, type: entry.action.type },
-      ),
-      seatNames: query.state.seats.map((seat) => seat.name),
-      startingStacks: [...query.startingStacks],
-      buttonSeat: query.state.buttonSeat,
-      smallBlind: query.state.smallBlind,
-      bigBlind: query.state.bigBlind,
-      heroSeat: query.heroSeat,
+      ...toAdviseInput(query.state, query.startingStacks, query.heroSeat),
     })
       .then((reply) => {
         if (token !== latest.current) return

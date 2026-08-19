@@ -96,6 +96,17 @@ const DEFAULT_SEATS: SeatConfig[] = [
   { name: 'Maniac', bot: 'maniac' },
 ]
 
+/**
+ * The style each seat at the default table plays.
+ *
+ * Hands stored before styles were written down were all dealt at this table —
+ * it is the only one the app has ever had — so a history recorded then can be
+ * read back with its opponents intact rather than as five strangers.
+ */
+export const DEFAULT_SEAT_STYLES: Readonly<Record<string, string | null>> = Object.fromEntries(
+  DEFAULT_SEATS.map((seat) => [seat.name, seat.bot]),
+)
+
 export function defaultSessionConfig(seed = 1): SessionConfig {
   return {
     seats: DEFAULT_SEATS,
@@ -150,6 +161,10 @@ export function startNextHand(session: SessionState): SessionState {
     {
       seats: session.config.seats.map((seat, i) => ({
         name: seat.name,
+        // The style rides along on the hand so that anything holding the state
+        // — the coach, the grader, a hand replayed out of storage — knows who
+        // it is pricing a bet against.
+        style: seat.bot,
         stack: session.stacks[i]!,
       })),
       buttonSeat: session.buttonSeat,

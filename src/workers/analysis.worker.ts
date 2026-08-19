@@ -14,10 +14,13 @@
 import type { Card } from '../engine/cards'
 import { Rng } from '../engine/cards'
 import { gradeHand, type DecisionGrade } from '../coach/grade'
-import { adviseOn, decisionsTaken } from '../coach/advise'
+import {
+  adviseOn,
+  decisionsTaken,
+  fromAdviseInput,
+  type AdviseInput,
+} from '../coach/advise'
 import type { ActionEV } from '../coach/ev'
-import { applyAction, startHandWithDeck } from '../engine/hand'
-import type { Action } from '../engine/types'
 import { luckCurve } from '../stats/all-in-adjusted'
 import { hydrate } from '../stats/archive'
 import type { StoredHand } from '../stats/serialize'
@@ -90,17 +93,17 @@ export interface LuckRequest {
  * have — the same pricing the coach uses to grade the hand afterwards, so live
  * advice and the post-hand verdict can never disagree.
  */
-export interface AdviseRequest {
+/**
+ * A decision to price, sent whole because the worker shares no memory.
+ *
+ * What travels is defined once, next to the code that packs and unpacks it, so
+ * that a field the pricing reads cannot be left behind on the way out — which
+ * is exactly how the live coach came to model a table of strangers while the
+ * verdict after the hand modelled the players who were really sitting there.
+ */
+export type AdviseRequest = AdviseInput & {
   kind: 'advise'
   id: number
-  deck: number[]
-  actions: { seat: number; type: Action['type']; to?: number }[]
-  seatNames: string[]
-  startingStacks: number[]
-  buttonSeat: number
-  smallBlind: number
-  bigBlind: number
-  heroSeat: number
 }
 
 export type AnalysisRequest =
@@ -322,24 +325,7 @@ function runLuck(request: LuckRequest): LuckReply {
 }
 
 function runAdvise(request: AdviseRequest): AdviseReply {
-  let state = startHandWithDeck(
-    {
-      seats: request.seatNames.map((name, i) => ({
-        name,
-        stack: request.startingStacks[i]!,
-      })),
-      buttonSeat: request.buttonSeat,
-      smallBlind: request.smallBlind,
-      bigBlind: request.bigBlind,
-    },
-    request.deck as Card[],
-  )
-
-  for (const entry of request.actions) {
-    const action: Action =
-      entry.type === 'raise' ? { type: 'raise', to: entry.to! } : { type: entry.type }
-    state = applyAction(state, action)
-  }
+  const state = fromAdviseInput(request)
 
   if (state.result !== null || state.toAct !== request.heroSeat) {
     throw new Error('That decision has already been made')

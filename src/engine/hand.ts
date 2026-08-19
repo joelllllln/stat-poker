@@ -86,6 +86,7 @@ export function startHandWithDeck(config: HandConfig, deck: readonly Card[]): Ha
   const seats: Seat[] = seatConfigs.map((seat, index) => ({
     index,
     name: seat.name,
+    style: seat.style ?? null,
     stack: seat.stack,
     committed: 0,
     totalCommitted: 0,
