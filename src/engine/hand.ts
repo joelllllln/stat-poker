@@ -342,6 +342,13 @@ function returnUncalledChips(state: HandState): void {
   if (excess > 0) {
     leader.stack += excess
     leader.totalCommitted -= excess
+    // Take them off the felt too. `committed` is what is sitting in front of a
+    // seat this street, and it is what the table draws: leaving it behind
+    // shows the returned chips twice, once in the stack and once in front.
+    // It floors at zero because an earlier street's excess — a bet that only a
+    // shorter all-in could match — is returned after the round it was made in
+    // has already been swept into the pot.
+    leader.committed = Math.max(0, leader.committed - excess)
   }
 }
 

@@ -189,7 +189,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
 
           {/* Everything else, for when somebody wants it. Closed by default:
               the two numbers above answer the question being asked. */}
-          <details className="group rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40">
+          <details className="group rounded-lg border border-[color:var(--color-ink-4)] bg-black/40">
             <summary className="cursor-pointer list-none px-3 py-2 text-xs text-[color:var(--color-bone-dim)] hover:text-[color:var(--color-bone)]">
               <span className="group-open:hidden">Show the rest ▸</span>
               <span className="hidden group-open:inline">Hide the rest ▾</span>

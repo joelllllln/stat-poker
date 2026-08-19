@@ -160,7 +160,71 @@ export function exportHands(hands: StoredHand[], estimates: Estimate[] = []): st
   return JSON.stringify({ version: SCHEMA_VERSION, hands, estimates }, null, 0)
 }
 
-export function importHands(json: string): { hands: StoredHand[]; estimates: Estimate[] } {
+const numbers = (value: unknown): value is number[] =>
+  Array.isArray(value) && value.every((n) => typeof n === 'number' && Number.isFinite(n))
+
+/**
+ * One entry from a file, checked before it is believed.
+ *
+ * A file can be truncated, hand-edited, or written by a version that does not
+ * exist yet. Everything read here is checked against the shape replay needs,
+ * and anything that fails throws — so the damage stops at one hand.
+ */
+function readStored(value: unknown): StoredHand {
+  if (typeof value !== 'object' || value === null) throw new Error('Not a hand')
+  const hand = value as StoredHand
+  if (typeof hand.version !== 'number') throw new Error('Hand has no schema version')
+  if (!Array.isArray(hand.seatNames) || hand.seatNames.some((n) => typeof n !== 'string')) {
+    throw new Error('Hand has no seats')
+  }
+
+  const migrated = migrate(hand)
+  const fields = ['handNumber', 'buttonSeat', 'smallBlind', 'bigBlind', 'heroSeat'] as const
+  for (const field of fields) {
+    const at = migrated[field]
+    if (typeof at !== 'number' || !Number.isFinite(at)) throw new Error(`Hand has no ${field}`)
+  }
+  if (migrated.smallBlind <= 0 || migrated.bigBlind < migrated.smallBlind) {
+    throw new Error('Hand has impossible blinds')
+  }
+  if (migrated.seatNames.length < 2) throw new Error('Hand has fewer than two seats')
+  const seats = migrated.seatNames.length
+  if (migrated.buttonSeat < 0 || migrated.buttonSeat >= seats) throw new Error('Hand has no button')
+  if (migrated.heroSeat < 0 || migrated.heroSeat >= seats) throw new Error('Hand has no player')
+  if (!numbers(migrated.startingStacks)) throw new Error('Hand has no stacks')
+  if (!numbers(migrated.deck)) throw new Error('Hand has no deck')
+  if (!Array.isArray(migrated.actions)) throw new Error('Hand has no actions')
+
+  assertValid(migrated)
+  return migrated
+}
+
+const isEstimate = (value: unknown): value is Estimate => {
+  if (typeof value !== 'object' || value === null) return false
+  const estimate = value as Estimate
+  return (
+    typeof estimate.street === 'string' &&
+    [estimate.handNumber, estimate.guess, estimate.actual, estimate.boardSize].every(
+      (n) => typeof n === 'number' && Number.isFinite(n),
+    )
+  )
+}
+
+export interface ImportedHistory {
+  hands: StoredHand[]
+  estimates: Estimate[]
+  /**
+   * Entries in the file that could not be read.
+   *
+   * Reported rather than thrown. A history file is often the only copy of
+   * somebody's hands, and refusing all of it over one damaged entry loses
+   * everything that was still intact — so the broken ones are counted, left
+   * out, and said out loud.
+   */
+  unreadable: number
+}
+
+export function importHands(json: string): ImportedHistory {
   const parsed: unknown = JSON.parse(json)
   if (
     typeof parsed !== 'object' ||
@@ -169,10 +233,19 @@ export function importHands(json: string): { hands: StoredHand[]; estimates: Est
   ) {
     throw new Error('Not a stat-poker history file')
   }
-  const document = parsed as { hands: StoredHand[]; estimates?: Estimate[] }
-  return {
-    hands: document.hands.map(migrate),
-    // Files written before guesses were recorded simply have none.
-    estimates: Array.isArray(document.estimates) ? document.estimates : [],
+  const document = parsed as { hands: unknown[]; estimates?: unknown }
+
+  const hands: StoredHand[] = []
+  let unreadable = 0
+  for (const entry of document.hands) {
+    try {
+      hands.push(readStored(entry))
+    } catch {
+      unreadable += 1
+    }
   }
+
+  // Files written before guesses were recorded simply have none.
+  const estimates = Array.isArray(document.estimates) ? document.estimates.filter(isEstimate) : []
+  return { hands, estimates, unreadable }
 }

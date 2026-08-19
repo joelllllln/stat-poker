@@ -272,8 +272,8 @@ export async function exportStore(store: HandStore): Promise<string> {
 export async function importIntoStore(
   store: HandStore,
   json: string,
-): Promise<{ hands: StoredHand[]; estimates: Estimate[] }> {
-  const { hands, estimates } = importHands(json)
+): Promise<{ hands: StoredHand[]; estimates: Estimate[]; unreadable: number }> {
+  const { hands, estimates, unreadable } = importHands(json)
 
   // Loading the same backup twice is a thing people do, and doubling every
   // hand would quietly ruin the statistics it exists to protect. Hands carry
@@ -293,5 +293,5 @@ export async function importIntoStore(
 
   await store.putMany(freshHands)
   await store.putEstimates(freshEstimates)
-  return { hands: freshHands, estimates: freshEstimates }
+  return { hands: freshHands, estimates: freshEstimates, unreadable }
 }

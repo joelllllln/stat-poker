@@ -118,7 +118,7 @@ interface Store {
   loadHistory: () => Promise<void>
   exportHistory: () => Promise<string>
   /** Returns how many hands and guesses arrived. */
-  importHistory: (json: string) => Promise<{ hands: number; estimates: number }>
+  importHistory: (json: string) => Promise<{ hands: number; estimates: number; unreadable: number }>
   setHudLevel: (level: Store['hudLevel']) => void
   /** Record a guess against the equity it was guessing at. */
   submitGuess: (guess: number, actual: number, street: string, boardSize: number) => void
@@ -489,12 +489,16 @@ export const useStore = create<Store>((set, get) => {
       const { hands } = hydrate(added.hands)
       set((s) => ({
         archive: [...s.archive, ...hands].sort((a, b) => a.playedAt - b.playedAt),
-        storedHands: s.storedHands + added.hands.length,
+        storedHands: s.storedHands + hands.length,
         version: s.version + 1,
       }))
       void fillGrades()
 
-      return { hands: added.hands.length, estimates: added.estimates.length }
+      return {
+        hands: added.hands.length,
+        estimates: added.estimates.length,
+        unreadable: added.unreadable,
+      }
     },
 
     setHudLevel: (hudLevel) => {

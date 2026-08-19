@@ -38,7 +38,12 @@ export function DataCard() {
       const added = await importHistory(await file.text())
       setMessage(
         `Added ${added.hands.toLocaleString('en-US')} hand${added.hands === 1 ? '' : 's'}` +
-          (added.estimates > 0 ? ` and ${added.estimates} equity guesses.` : '.'),
+          (added.estimates > 0 ? ` and ${added.estimates} equity guesses.` : '.') +
+          // Said out loud rather than swallowed: a file that was half readable
+          // should not look like a file that imported cleanly.
+          (added.unreadable > 0
+            ? ` ${added.unreadable} hand${added.unreadable === 1 ? '' : 's'} in the file could not be read and ${added.unreadable === 1 ? 'was' : 'were'} left out.`
+            : ''),
       )
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'That file could not be read.')
@@ -46,7 +51,7 @@ export function DataCard() {
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40 px-3 py-2">
+    <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 px-3 py-2">
       <div className="stamp">Your hands</div>
 
       <p className="text-xs text-[color:var(--color-bone-dim)]">

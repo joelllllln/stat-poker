@@ -193,6 +193,22 @@ describe('pot resolution', () => {
     expect(state.seats[0]!.totalCommitted).toBe(50)
   })
 
+  it('takes the uncalled chips off the felt, not just out of the pot', () => {
+    // Seat 0 opens for 40 and everyone folds. The 39 nobody matched goes back
+    // to the stack, so it must stop being drawn in front of the seat as well —
+    // otherwise the table shows the same chips twice.
+    const state = play(startHand(table([200, 200, 200], 0), new Rng(14)), [
+      raiseTo(40),
+      fold,
+      fold,
+    ])
+    const winner = state.seats[0]!
+    expect(winner.stack).toBe(203) // 200, plus the two blinds
+    expect(winner.committed).toBe(2) // only what the big blind could match
+    const inFront = state.seats.reduce((sum, seat) => sum + seat.committed, 0)
+    expect(inFront).toBe(potSize(state))
+  })
+
   it('builds a side pot when a short stack is all-in', () => {
     // Totals: 100 / 50 / 100 → main pot 150 for all three, side pot 100 for two.
     const state = play(startHand(table([100, 50, 200], 0), new Rng(13)), [

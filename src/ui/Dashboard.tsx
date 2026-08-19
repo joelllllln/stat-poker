@@ -269,7 +269,7 @@ export function Dashboard({ session }: { session: SessionState }) {
           they have always been the same one, which is the opposite of what a
           trainer is for. */}
       {overTime.blocks.length >= 3 && (
-        <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40 px-3 py-2">
+        <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="stamp">
               Over time · blocks of {overTime.blockSize} hands
@@ -291,7 +291,7 @@ export function Dashboard({ session }: { session: SessionState }) {
       )}
 
       {gradingLeft > 0 && (
-        <div className="rounded-lg border border-[color:var(--color-ink-4)] bg-black/40/40 px-3 py-2 text-[11px] text-[color:var(--color-bone-dim)]">
+        <div className="rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 px-3 py-2 text-[11px] text-[color:var(--color-bone-dim)]">
           Grading {gradingLeft} hand{gradingLeft === 1 ? '' : 's'} in the background. Each hand
           is graded once and remembered, so this only happens for hands the coach has not seen.
         </div>
