@@ -33,9 +33,14 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # Without --with-deps. That flag shells out to apt-get to fetch system
+      # libraries, and apt against a slow mirror is what hung this step twice
+      # in a row for half an hour each time. The ubuntu-latest image already
+      # ships what Chromium needs; if it ever stops doing so the smoke test
+      # fails at launch and says so, which is a better failure than a stall.
       - name: Install a browser for the smoke test
         timeout-minutes: 8
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       # Served from a subdirectory rather than the root, because that is what
       # Pages does: a build with absolute asset paths passes at the root and
       # then loads nothing once published.
