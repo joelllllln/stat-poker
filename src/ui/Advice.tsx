@@ -1,5 +1,6 @@
 import type { Action } from '../engine/types'
 import type { AdviseReply } from '../workers/analysis.worker'
+import { reasonInWords } from './plain'
 
 /**
  * What to do, while you still have to do it.
@@ -67,6 +68,20 @@ export function Advice({
           <span className="text-sm font-normal text-emerald-200/60"> or {runnerUp.label.toLowerCase()}</span>
         )}
       </div>
+
+      {/* Why, before how much. Every option priced against every other is an
+          argument if you can read it and a wall of numbers if you cannot, and
+          the people this app is for cannot yet. */}
+      <p className="text-sm leading-snug text-emerald-50">
+        {reasonInWords({
+          action: best.action.type,
+          equity: advice.equity,
+          toCall: advice.toCall,
+          pot: advice.pot + advice.toCall,
+          foldEquity: best.foldEquity,
+          tooClose,
+        })}
+      </p>
 
       <p className="text-xs text-emerald-100/70">
         {!runnerUp

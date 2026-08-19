@@ -7,6 +7,7 @@ import { classOf } from '../solver/blueprint'
 import { RangeGrid } from './RangeGrid'
 import { useEquity } from './useAnalysis'
 import { inBigBlinds, potOddsRatio, requiredEquity, stackToPotRatio } from '../coach/odds'
+import { madeHandInWords, priceInWords, strengthInWords, timesInTen } from './plain'
 import { useStore } from './store'
 
 /**
@@ -155,18 +156,28 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
                   : 'border-rose-900 bg-rose-950/40 text-rose-200'
             }`}
           >
-            {toCall === 0
-              ? `Nobody has bet. Your hand is worth ${pct(equity.equity)} against the range still in.`
-              : callIsCorrect
-                ? `Calling ${toCall} needs ${pct(needed)} to break even and your hand is worth ${pct(equity.equity)} — the price is good.`
-                : `Calling ${toCall} needs ${pct(needed)} to break even and your hand is worth ${pct(equity.equity)} — the price is bad.`}
+            {/* Said in words first. A beginner reading "85.1%" does not know
+                what it is 85.1% of, whether that is good, or what to do about
+                it — and those are the only three things they need. */}
+            <p className="font-medium">
+              You have {madeHandInWords(hero.holeCards!, state.board)} —{' '}
+              {strengthInWords(equity.equity)}.
+            </p>
+            <p className="mt-1 text-[13px] leading-snug opacity-90">
+              You would win this {timesInTen(equity.equity)} if it went all the way.{' '}
+              {toCall === 0
+                ? 'Nobody has bet, so it costs nothing to see the next card.'
+                : `${priceInWords(toCall, winnable)} So the price is ${callIsCorrect ? 'good' : 'bad'}.`}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <Tile
               label="Your hand is worth"
               value={pct(equity.equity)}
-              hint={equity.exact ? 'exactly' : `give or take ${(equity.errorMargin * 100).toFixed(1)}`}
+              hint={`${timesInTen(equity.equity)}${
+                equity.exact ? '' : `, give or take ${(equity.errorMargin * 100).toFixed(1)} points`
+              }`}
             />
             <Tile
               label="Calling needs"

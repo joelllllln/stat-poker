@@ -259,7 +259,19 @@ check(
   'the other players\' actions are in the account',
   /(raises to|calls|folds|checks|bets)/.test(body),
 )
-check('the turn and the price are stated plainly', /your turn/.test(body) && /to call into a pot of|nothing to call/.test(body))
+check(
+  'the turn and the price are stated plainly',
+  /your turn/.test(body) &&
+    (/costs \d+ to win \d+/.test(body) || /free to see the next card/.test(body)),
+)
+// A beginner should never have to read two cards and a board to find out what
+// they are holding: the app says it.
+check(
+  'the hand you hold is named in words',
+  /you have (a pair of|two pair|three |a straight|a flush|a full house|four |royal|[a-z]+ high|[a-z]+-[a-z]+)/.test(
+    body,
+  ),
+)
 
 check('the odds panel says what the hand is worth', body.includes('your hand is worth'))
 check('the price is stated in plain words', /the price is (good|bad)|nobody has bet/.test(body))

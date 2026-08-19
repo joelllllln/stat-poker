@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { legalActions } from '../engine/hand'
 import { potSize, type Action, type HandState } from '../engine/types'
+import { madeHandInWords, priceInWords } from './plain'
 import { useStore } from './store'
 
 /**
@@ -149,12 +150,28 @@ export function ActionBar({
     ) : null
 
   return (
-    <div className="space-y-1.5 rounded-xl border border-slate-800 bg-slate-950 p-2 shadow-lg shadow-black/40 sm:space-y-2 sm:bg-slate-950/80 sm:p-3 sm:shadow-none">
-      {/* What the situation is, in one line, before what to do about it. */}
-      <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
+    <div className="space-y-1 rounded-xl border border-slate-800 bg-slate-950 p-2 shadow-lg shadow-black/40 sm:space-y-2 sm:bg-slate-950/80 sm:p-3 sm:shadow-none">
+      {/* What the situation is, before what to do about it: what you are
+          holding, whose turn it is, and what the price is — said in words,
+          because "19 to call into a pot of 32" is only a sentence if you
+          already know what it implies.
+
+          All of it in this block rather than in a panel of its own. The
+          controls have to stay above the fold on a 740-pixel phone, and a
+          separate card for one line of text costs its own border, padding and
+          gap and pushed them off the bottom. */}
+      <div className="flex flex-wrap items-baseline gap-x-2 text-xs">
         <span className="font-medium text-amber-300">Your turn</span>
-        <span className="text-slate-400">
-          {toCall > 0 ? `${toCall} to call into a pot of ${pot}` : `nothing to call · pot ${pot}`}
+        {hero.holeCards && (
+          <span className="font-medium text-amber-100">
+            · you have {madeHandInWords(hero.holeCards, state.board)}
+          </span>
+        )}
+        {/* The price is said once, in words. Quoting "36 to call into a pot
+            of 93" beside "it costs 36 to win 129" is the same fact twice in
+            two notations, and the felt already shows the pot. */}
+        <span className="w-full text-[11px] leading-snug text-slate-400">
+          {priceInWords(toCall, pot + toCall)}
         </span>
       </div>
 

@@ -19,8 +19,13 @@ export interface InfoTab {
 }
 
 export function InfoTabs({ tabs, initial }: { tabs: InfoTab[]; initial?: string }) {
-  const [open, setOpen] = useState(initial ?? tabs[0]?.id)
-  const current = tabs.find((tab) => tab.id === open) ?? tabs[0]
+  // Null until somebody actually picks one, rather than latched to whatever
+  // happened to be first on the very first render. The coach's panel only
+  // exists once its answer arrives, so latching left a beginner looking at the
+  // last tab in the list — their own statistics — at the moment they most
+  // needed the one that says what to do.
+  const [chosen, setChosen] = useState<string | null>(initial ?? null)
+  const current = (chosen === null ? undefined : tabs.find((tab) => tab.id === chosen)) ?? tabs[0]
   if (!current) return null
 
   return (
@@ -31,7 +36,7 @@ export function InfoTabs({ tabs, initial }: { tabs: InfoTab[]; initial?: string 
             key={tab.id}
             role="tab"
             aria-selected={tab.id === current.id}
-            onClick={() => setOpen(tab.id)}
+            onClick={() => setChosen(tab.id)}
             className={`flex min-h-11 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-sm transition ${
               tab.id === current.id
                 ? 'bg-slate-800 font-medium text-white'
