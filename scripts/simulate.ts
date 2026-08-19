@@ -52,6 +52,28 @@ interface Policy {
 
 const pick = <T,>(options: T[], rng: Rng): T => options[rng.nextInt(options.length)]!
 
+/**
+ * The coach's answer for a decision, worked out once.
+ *
+ * Pricing a decision costs about a tenth of a second, and the simulation wants
+ * the same answer twice — to play it, and to record what it predicted. Asking
+ * twice doubled the cost of every coach run for nothing; the position is a
+ * fresh object at every decision, so its identity is the cache key.
+ */
+let askedAbout: HandState | null = null
+let lastAnswer: ReturnType<typeof adviseOn> | null = null
+function coachOn(state: HandState, heroSeat: number) {
+  if (askedAbout !== state) {
+    askedAbout = state
+    lastAnswer = adviseOn(state, heroSeat, decisionsTaken(state, heroSeat))
+  }
+  return lastAnswer!
+}
+
+/** Two actions are the same decision only if they are the same size, too. */
+const sameAction = (a: Action, b: Action): boolean =>
+  a.type === b.type && (a.type !== 'raise' || b.type !== 'raise' || a.to === b.to)
+
 /** A raise to about `fraction` of the pot, clamped to what is legal. */
 function raiseTo(state: HandState, heroSeat: number, fraction: number): number | null {
   const option = legalActions(state).find((o) => o.type === 'raise')
@@ -67,8 +89,7 @@ const POLICIES: Policy[] = [
     name: 'Coach',
     blurb: 'plays whatever the live coach says is worth the most',
     scale: 0.4,
-    act: (state, heroSeat) =>
-      adviseOn(state, heroSeat, decisionsTaken(state, heroSeat)).options[0]!.action,
+    act: (state, heroSeat) => coachOn(state, heroSeat).options[0]!.action,
   },
   {
     name: 'Solid human',
@@ -164,6 +185,36 @@ interface Tally {
 
 type Calibration = Tally & { byStreet: Map<Street, Tally> }
 
+/**
+ * Is an action worth what the coach says it is worth?
+ *
+ * Every price the coach quotes is a prediction about the rest of the hand: it
+ * says this action is worth so many chips more than folding. Folding is worth
+ * exactly nothing more, so what the action actually returned is simply the
+ * stack at the end of the hand less the stack at the moment of the decision —
+ * no model, no assumption, just the chips.
+ *
+ * The gap between the two is the part of the model that is not the fold
+ * equity. This is a **one-street** model: it prices the branch where the bet is
+ * called as though the hand went straight to showdown, and everything that
+ * happens on the streets after it lands here.
+ */
+interface Promised {
+  decisions: number
+  /** Chips the model said these actions were worth, relative to folding. */
+  model: number
+  /** Chips they actually returned. */
+  realised: number
+  /** Sum of squared realised values, for the standard error on the gap. */
+  realisedSquares: number
+}
+
+const promise = (into: Map<Street, Promised>, street: Street): Promised => {
+  const found = into.get(street) ?? { decisions: 0, model: 0, realised: 0, realisedSquares: 0 }
+  into.set(street, found)
+  return found
+}
+
 const tally = (into: Map<Street, Tally>, street: Street): Tally => {
   const found = into.get(street) ?? { bets: 0, predicted: 0, observed: 0 }
   into.set(street, found)
@@ -193,6 +244,15 @@ interface Outcome {
   /** Milliseconds spent choosing, which is what a player would wait. */
   decisionMs: number
   calibration: Calibration
+  promised: Promised & {
+    byStreet: Map<Street, Promised>
+    /** Decisions after which the hero never acted again: the hand ended there. */
+    settled: Promised
+    /** Decisions the hero had to follow up on, which is where a horizon bites. */
+    playedOn: Promised
+    /** By what the hero did, which separates a bad equity from a bad bluff. */
+    byAction: Map<string, Promised>
+  }
 }
 
 function play(policy: Policy, hands: number, seed: number): Outcome {
@@ -202,6 +262,28 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
   let decisions = 0
   let decisionMs = 0
   const calibration: Calibration = { bets: 0, predicted: 0, observed: 0, byStreet: new Map() }
+  const blank = (): Promised => ({ decisions: 0, model: 0, realised: 0, realisedSquares: 0 })
+  const promised = {
+    ...blank(),
+    byStreet: new Map<Street, Promised>(),
+    // Where the hero never acted again — the field folded, or the chips were
+    // all in — the hand ended on the street the model priced, and the model is
+    // exact there. Holding those apart is what separates "the price is wrong"
+    // from "the price is right and the hand that follows it is not".
+    settled: blank(),
+    playedOn: blank(),
+    byAction: new Map<string, Promised>(),
+  }
+  /** Decisions in the hand being played, waiting for it to end and settle. */
+  const awaiting: {
+    street: Street
+    kind: Action['type']
+    ev: number
+    stackBefore: number
+    nth: number
+  }[] = []
+  /** How many decisions the hero has made in the hand, folds included. */
+  let heroDecisions = 0
 
   for (let hand = 0; hand < hands; hand++) {
     startNextHand(session)
@@ -219,9 +301,26 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
       // Only the coach knows what it predicted, so only the coach is scored on
       // it — and only for bets, which is where the prediction does the work.
       let predicted: number | null = null
-      if (policy.name === 'Coach' && action.type === 'raise') {
-        const advice = adviseOn(state, session.config.heroSeat, decisionsTaken(state, session.config.heroSeat))
-        predicted = advice.options.find((option) => option.action.type === 'raise')?.foldEquity ?? null
+      if (policy.name === 'Coach') {
+        const advice = coachOn(state, session.config.heroSeat)
+        if (action.type === 'raise') {
+          predicted =
+            advice.options.find((option) => option.action.type === 'raise')?.foldEquity ?? null
+        }
+        // What the coach says this action is worth, to be compared with what
+        // it returns once the hand is over. Folding is the zero point on both
+        // sides of that comparison, so it carries no information.
+        const priced = advice.options.find((option) => sameAction(option.action, action))
+        if (priced && action.type !== 'fold') {
+          awaiting.push({
+            street: state.street,
+            kind: action.type,
+            ev: priced.ev,
+            stackBefore: state.seats[session.config.heroSeat]!.stack,
+            nth: heroDecisions,
+          })
+        }
+        heroDecisions += 1
       }
       const before = state.actions.length
       const street = state.street
@@ -239,6 +338,35 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
         }
       }
     }
+
+    // The hand is over: every price quoted during it can now be settled
+    // against the chips it actually returned.
+    const finished = session.history[session.history.length - 1]
+    if (finished) {
+      const ended = finished.state.seats[session.config.heroSeat]!.stack
+      for (const quoted of awaiting) {
+        const returned = ended - quoted.stackBefore
+        // A later decision of any kind counts, folding included: the point is
+        // whether the hand carried on past the street the price was quoted for.
+        const followed = quoted.nth < heroDecisions - 1 ? promised.playedOn : promised.settled
+        const kind =
+          promised.byAction.get(quoted.kind) ??
+          (promised.byAction.set(quoted.kind, blank()), promised.byAction.get(quoted.kind)!)
+        for (const row of [
+          promised,
+          promise(promised.byStreet, quoted.street),
+          followed,
+          kind,
+        ]) {
+          row.decisions += 1
+          row.model += quoted.ev
+          row.realised += returned
+          row.realisedSquares += returned * returned
+        }
+      }
+    }
+    awaiting.length = 0
+    heroDecisions = 0
   }
 
   return {
@@ -249,6 +377,7 @@ function play(policy: Policy, hands: number, seed: number): Outcome {
     decisions,
     decisionMs,
     calibration,
+    promised,
   }
 }
 
@@ -429,6 +558,69 @@ if (coachCalibration.bets > 0) {
         ? 'The model expects to be called more than it is.'
         : 'The prediction and the table agree within a quarter.',
   )
+
+  // Fold equity is only half of what a price claims. The other half is what
+  // the hand pays once the bet is called, and that is a claim about streets
+  // this model does not look at.
+  const coachPromised = outcomes.find((outcome) => outcome.policy.name === 'Coach')!.promised
+  const bb = results.find((r) => r.outcome.policy.name === 'Coach')!.outcome.records[0]?.bigBlind ?? 2
+  if (coachPromised.decisions > 0) {
+    say()
+    say('## Is an action worth what the coach says it is worth?')
+    say()
+    say(
+      'Every price is a prediction about the rest of the hand: this action is worth so ' +
+        'many big blinds more than folding. Folding is worth exactly nothing more, so what ' +
+        'it actually returned is the stack at the end of the hand less the stack at the ' +
+        'decision — chips, no model. Folds are left out; they are the zero point on both sides.',
+    )
+    say()
+    say('| Street | Decisions | Said it was worth | Returned | Gap |')
+    say('|---|---|---|---|---|')
+    const line = (label: string, row: Promised) => {
+      const model = row.model / row.decisions / bb
+      const realised = row.realised / row.decisions / bb
+      // The realised values are chips from a poker hand — mostly small,
+      // occasionally enormous — so the gap is quoted with the spread behind it
+      // rather than as though one number settled anything.
+      const variance = Math.max(
+        0,
+        row.realisedSquares / row.decisions - (row.realised / row.decisions) ** 2,
+      )
+      const error = (1.96 * Math.sqrt(variance / row.decisions)) / bb
+      say(
+        `| ${label} | ${row.decisions} | ${model.toFixed(2)}bb | ${realised.toFixed(2)}bb | ` +
+          `${(realised - model).toFixed(2)} ± ${error.toFixed(2)}bb |`,
+      )
+    }
+    for (const street of ['preflop', 'flop', 'turn', 'river'] as const) {
+      const row = coachPromised.byStreet.get(street)
+      if (row && row.decisions > 0) line(street, row)
+    }
+    line('**all**', coachPromised)
+    say()
+    say(
+      'And split by whether the hand carried on past the street the price was quoted for. ' +
+        'Where it did not — the field folded, or the chips were already in — this model is ' +
+        'exact, so a gap there is the price being wrong rather than the hand that follows it.',
+    )
+    say()
+    say('| | Decisions | Said it was worth | Returned | Gap |')
+    say('|---|---|---|---|---|')
+    if (coachPromised.settled.decisions > 0) line('ended there', coachPromised.settled)
+    if (coachPromised.playedOn.decisions > 0) line('played on', coachPromised.playedOn)
+    say()
+    say(
+      'And by what the hero did. Checking is priced by equity alone, so a gap there is the ' +
+        'equity being wrong; betting adds a claim about what the field does with it.',
+    )
+    say()
+    say('| Action | Decisions | Said it was worth | Returned | Gap |')
+    say('|---|---|---|---|---|')
+    for (const [kind, row] of [...coachPromised.byAction].sort((a, b) => b[1].decisions - a[1].decisions)) {
+      line(kind, row)
+    }
+  }
 }
 
 say()
