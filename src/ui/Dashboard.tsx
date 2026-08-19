@@ -133,15 +133,18 @@ export function Dashboard({ session }: { session: SessionState }) {
         format: (v) => `${v.toFixed(0)}%`,
       },
       {
-        label: 'Given up',
+        // Per hand, like everything else on this page. A figure quoted per
+        // hundred hands is only readable by somebody who already counts in
+        // hundreds of hands, which is nobody the trend view is for.
+        label: 'Given up a hand',
         values: cut.map((block) => block.evLostPer100),
-        format: (v) => `${v.toFixed(1)}bb/100`,
+        format: (v) => `${(v / 100).toFixed(1)}bb`,
         better: 'lower',
       },
       {
-        label: 'Result',
+        label: 'Won or lost a hand',
         values: cut.map((block) => block.bbPer100),
-        format: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(0)}bb/100`,
+        format: (v) => `${v >= 0 ? '+' : ''}${(v / 100).toFixed(1)}bb`,
       },
     ]
     return {
