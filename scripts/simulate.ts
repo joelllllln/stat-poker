@@ -53,6 +53,9 @@ interface Policy {
 
 const pick = <T,>(options: T[], rng: Rng): T => options[rng.nextInt(options.length)]!
 
+/** Below this share of the pot, the no-bluff policy declines to bet at all. */
+const NO_BLUFF_BELOW = 0.5
+
 /**
  * The coach's answer for a decision, worked out once.
  *
@@ -91,6 +94,28 @@ const POLICIES: Policy[] = [
     blurb: 'plays whatever the live coach says is worth the most',
     scale: 0.4,
     act: (state, heroSeat) => coachOn(state, heroSeat).options[0]!.action,
+  },
+  {
+    /**
+     * The same coach, minus the bluffs.
+     *
+     * The complaint this exists to test is that the coach bets hands that have
+     * nothing, backing them with a raise big enough to fold the field out. This
+     * follows every one of its recommendations except that one: where it says
+     * to bet a hand that is behind what the field is modelled to hold, this
+     * takes the best of the other options instead. Everything else — the same
+     * model, the same sizes, the same seed — is held fixed, so the difference
+     * between the two rows is the bluffs and nothing else.
+     */
+    name: 'Coach, no bluffs',
+    blurb: 'the coach, except it will not bet a hand that is behind',
+    scale: 0.4,
+    act: (state, heroSeat) => {
+      const advice = coachOn(state, heroSeat)
+      const best = advice.options[0]!
+      if (best.action.type !== 'raise' || advice.equity >= NO_BLUFF_BELOW) return best.action
+      return (advice.options.find((o) => o.action.type !== 'raise') ?? best).action
+    },
   },
   {
     name: 'Solid human',
