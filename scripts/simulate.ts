@@ -528,17 +528,23 @@ const HANDS = handsArg >= 0 ? Number(argv[handsArg + 1]) : 1_000
 // `--only Coach` runs one policy at length, which is what answering "did that
 // change help?" needs: the coach is the slow one, and a comparison at a sample
 // size that could settle anything cannot afford the other five as well.
+// `--seed` runs the whole thing over a different set of decks. A change that
+// only helps on one shuffle has not helped.
+const seedArg = argv.indexOf('--seed')
+const SEED = seedArg >= 0 ? Number(argv[seedArg + 1]) : 1234
 const onlyArg = argv.indexOf('--only')
 const ONLY = onlyArg >= 0 ? argv[onlyArg + 1] : null
 const PLAYING = ONLY ? POLICIES.filter((policy) => policy.name === ONLY) : POLICIES
 if (PLAYING.length === 0) throw new Error(`No policy called ${ONLY}`)
 
-console.log(`Playing ${HANDS} hands per policy (the coach plays fewer; it thinks).\n`)
+console.log(
+  `Playing ${HANDS} hands per policy from seed ${SEED} (the coach plays fewer; it thinks).\n`,
+)
 
 const outcomes = PLAYING.map((policy) => {
   const hands = Math.max(40, Math.round(HANDS * (policy.scale ?? 1)))
   process.stdout.write(`  ${policy.name}: ${hands} hands… `)
-  const outcome = play(policy, hands, 1234)
+  const outcome = play(policy, hands, SEED)
   console.log(`${outcome.seconds.toFixed(1)}s`)
   return outcome
 })

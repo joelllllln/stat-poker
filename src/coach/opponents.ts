@@ -23,7 +23,7 @@
  */
 
 import { ARCHETYPES, type Archetype } from '../bots/archetypes'
-import type { HandState } from '../engine/types'
+import type { HandState, Street } from '../engine/types'
 
 /**
  * How much of its raw equity a calling hand is assumed to keep, absent any
@@ -73,3 +73,33 @@ export const styleAt = (state: HandState, seat: number): Archetype | null => {
 export const preflopRaises = (state: HandState): number =>
   state.actions.filter((entry) => entry.street === 'preflop' && entry.action.type === 'raise')
     .length
+
+/**
+ * How much of its equity a *called* bet actually gets to realise.
+ *
+ * The scope note on the pricing model says it plainly: this is a one-street
+ * model, and where the hand does not end on this street it is an
+ * approximation. Measuring the approximation showed how large it is. Every
+ * price the coach quotes says an action is worth so many chips more than
+ * folding; settling those against the chips they returned, over a thousand
+ * hands, its bets came back 17bb light apiece while its checks came back
+ * within the noise.
+ *
+ * That difference is the whole story. Checking does not build a pot; betting
+ * and being called does, and the model then hands the hero the whole of that
+ * pot at showdown as though there were no more betting to come. There is, and
+ * it is played with a range the bet has already announced.
+ *
+ * So a called bet realises less than its raw equity, by more the further the
+ * hand still has to travel. On the river it realises all of it, because there
+ * is nothing left to travel: the model is exact there and must stay exact.
+ *
+ * This does not make the model see the next street. It makes it stop pricing
+ * the next street as though it were already won.
+ */
+const REALISED_PER_STREET = 0.9
+
+const STREETS_LEFT: Record<Street, number> = { preflop: 3, flop: 2, turn: 1, river: 0 }
+
+export const realisedWhenCalled = (street: Street): number =>
+  REALISED_PER_STREET ** STREETS_LEFT[street]

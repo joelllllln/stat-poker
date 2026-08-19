@@ -6,7 +6,7 @@ import { applyAction, legalActions, startHand } from '../engine/hand'
 import { potSize, type HandState } from '../engine/types'
 import { preflopStrength } from '../equity/preflop'
 import { evContext, evaluateActions } from './ev'
-import { defendWidthOf, preflopRaises, styleAt } from './opponents'
+import { defendWidthOf, preflopRaises, realisedWhenCalled, styleAt } from './opponents'
 
 /**
  * The coach's opponents have to be the opponents.
@@ -248,5 +248,52 @@ describe('how often nobody calls', () => {
     }
     const [fewer] = foldEquityOf(shortened, seat, [raise.min!])
     expect(fewer).toBeGreaterThan(everybody!)
+  })
+})
+
+describe('what a called bet gets to keep', () => {
+  it('keeps all of it on the river and less the further the hand has to travel', () => {
+    // The pricing is exact where the hand ends on the street it prices, and
+    // that has to survive: every river test in the grader depends on it.
+    expect(realisedWhenCalled('river')).toBe(1)
+    expect(realisedWhenCalled('turn')).toBeLessThan(realisedWhenCalled('river'))
+    expect(realisedWhenCalled('flop')).toBeLessThan(realisedWhenCalled('turn'))
+    expect(realisedWhenCalled('preflop')).toBeLessThan(realisedWhenCalled('flop'))
+    // And it is a discount, not a write-off.
+    expect(realisedWhenCalled('preflop')).toBeGreaterThan(0.5)
+  })
+
+  it('keeps all of it when the bet is for the last chip, whatever the street', () => {
+    // A shove ends the betting. There is no next street to be outplayed on, so
+    // discounting one would invent a cost the hand cannot incur.
+    //
+    // The same flop, the same board, the same opponents and the same number of
+    // chips going in — the only difference is whether that leaves the hero
+    // anything behind. Nothing else in the pricing reads the hero's stack, so
+    // the gap between the two prices is the discount and nothing else.
+    const start = toTheFlop(tableOf('tag', 21))
+    expect(start.street).toBe('flop')
+    const seat = start.toAct!
+    const raise = legalActions(start).find((option) => option.type === 'raise')!
+    const to = Math.min(raise.max!, Math.max(raise.min!, Math.round(potSize(start) * 0.6)))
+    const amount = to - start.seats[seat]!.committed
+    expect(amount).toBeGreaterThan(0)
+
+    const withStack = (stack: number): HandState => ({
+      ...start,
+      seats: start.seats.map((s) => (s.index === seat ? { ...s, stack } : { ...s })),
+    })
+    const priceOf = (state: HandState) =>
+      evaluateActions(evContext(state, seat, 4242), [to]).options.find(
+        (option) => option.action.type === 'raise',
+      )!
+
+    const forTheLastChip = priceOf(withStack(amount))
+    const withMoreBehind = priceOf(withStack(amount + 200))
+
+    expect(forTheLastChip.ev).toBeGreaterThan(withMoreBehind.ev)
+    // And the two agree about how often the field folds, because that part of
+    // the model has nothing to do with what is left behind.
+    expect(forTheLastChip.foldEquity).toBeCloseTo(withMoreBehind.foldEquity!, 12)
   })
 })

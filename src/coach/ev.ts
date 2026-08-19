@@ -23,7 +23,13 @@ import { removeBlocked, rangeWeight, type Combo, type Range } from '../equity/ra
 import { preflopStrength } from '../equity/preflop'
 import { normalCdf } from '../stats/inference'
 import type { Archetype } from '../bots/archetypes'
-import { callDisciplineOf, defendWidthOf, preflopRaises, styleAt } from './opponents'
+import {
+  callDisciplineOf,
+  defendWidthOf,
+  preflopRaises,
+  realisedWhenCalled,
+  styleAt,
+} from './opponents'
 import { requiredEquity } from './odds'
 
 /** Rollouts when pricing a single villain combo. */
@@ -482,6 +488,9 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
         },
       )
 
+      /** Nothing behind means no more decisions: the hand runs to showdown. */
+      const allIn = amount >= hero.stack
+
       /** Expected value of the bet, for a given set of folding frequencies. */
       const valueAt = (folds: number[]): { ev: number; error: number; noCall: number } => {
         let total = 0
@@ -511,7 +520,16 @@ export function evaluateActions(context: EVContext, sizings: number[]): Decision
           }
           if (probability <= 0) continue
 
-          const share = priced.equity[mask]!
+          // Where nobody calls the hand ends here and the pot is won outright.
+          // Where somebody does, it carries on, and the pot the bet has just
+          // built still has to be played for — so the equity behind it is not
+          // all collectable. Two cases collect all of it: the river, where
+          // there is nothing left to play, and a bet that puts this stack all
+          // in, where there is nothing left to play it with. The model is
+          // exact in both, and has to stay exact.
+          const realised =
+            mask === 0 || allIn ? 1 : realisedWhenCalled(state.street)
+          const share = priced.equity[mask]! * realised
           const won = pot + contributions
           const risked = Math.min(amount, largest)
           total += probability * (share * won - (1 - share) * risked)
