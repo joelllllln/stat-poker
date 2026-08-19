@@ -221,6 +221,35 @@ check(
   reported !== null && reported >= totalPlayed,
 )
 
+// A reload has to bring back the table you chose, not the one the app ships
+// with — the setup screen is a choice, and a choice that does not survive the
+// page being refreshed is a setting nobody made.
+await press(page.getByRole('button', { name: 'Table', exact: true }))
+await page.reload({ waitUntil: 'networkidle' })
+await page.waitForTimeout(1_500)
+// Nothing is dealt until you ask for it, so deal one: the seats are what say
+// which table came back.
+await press(page.locator(DEAL), 15_000)
+await page.waitForTimeout(1_200)
+const afterReload = await page.evaluate(() => ({
+  seats: document.querySelectorAll('[data-seat]').length,
+  text: document.body.innerText.slice(0, 400),
+}))
+check(
+  `the table survives a reload (${afterReload.seats} seat plates)`,
+  afterReload.seats >= 9,
+)
+check('and the game is dealt rather than the setup screen', !/choose a table/i.test(afterReload.text))
+
+// And the record survives with it.
+await press(page.getByRole('button', { name: 'Progress', exact: true }))
+await page.waitForTimeout(3_000)
+const reloaded = /([\d,]+) hands?\b/.exec((await page.locator('body').innerText()).toLowerCase())
+check(
+  `the record survives a reload (${reloaded ? reloaded[1] : 'none'} of ${totalPlayed})`,
+  reloaded !== null && Number(reloaded[1].replace(/,/g, '')) >= totalPlayed,
+)
+
 check('no console errors', problems.length === 0)
 if (problems.length) console.log(problems.slice(0, 10).join('\n'))
 
