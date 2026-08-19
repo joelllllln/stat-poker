@@ -112,17 +112,20 @@ export function Advice({
         })}
       </div>
 
-      {/* Measured, not hedged. Over a thousand hands the model now expects the
-          field to fold to these bets 22.8% of the time and it folds 25.8% —
-          it reads this table. What it does not do is look past this street,
-          and somebody following it bet after bet still loses more than
+      {/* Measured, not hedged. The model now reads this table: it expects the
+          field to fold to these bets about as often as the field does, and it
+          puts each of these players on the range they are really holding. What
+          it cannot do is see the next street. It charges a bet for having to
+          survive one, which is why it no longer recommends betting nine hands
+          in ten — but a bet is still worth about 20bb less than it is quoted
+          at, and somebody following this bet after bet loses more than
           somebody folding every hand. They should hear that from the panel
           giving the advice, not find it out. */}
       <p className="text-[11px] text-slate-500">
         Priced against what they are modelled to hold — including how each of these players
-        actually folds — one street at a time, in big blinds relative to folding. It reads
-        this decision well. It does not look at the betting still to come, so a line followed
-        street after street costs more than these numbers say.
+        really plays — one street at a time, in big blinds relative to folding. It reads this
+        decision well. It cannot see the betting still to come, only charge a hand for having
+        to survive it, so a line followed street after street costs more than these numbers say.
       </p>
     </div>
   )
