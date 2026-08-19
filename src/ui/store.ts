@@ -13,12 +13,17 @@ import {
 import type { GradeReply, LuckReply } from '../workers/analysis.worker'
 import {
   createSession,
-  defaultSessionConfig,
   heroAct,
   stepBot,
   startNextHand,
   type SessionState,
 } from '../game/session'
+import {
+  DEFAULT_TABLE,
+  isPlayable,
+  sessionConfigFor,
+  type TableConfig,
+} from '../game/table'
 import { ask } from './analysis-client'
 
 /**
@@ -65,6 +70,16 @@ const compact = (grade: DecisionGrade): GradedDecision => ({
 
 interface Store {
   session: SessionState
+  /** The table currently chosen, whether or not it has been sat down at. */
+  table: TableConfig
+  /** Whether the player has sat down, or is still choosing a table. */
+  seated: boolean
+  /** Start a new game at this table. */
+  sitDown: (table: TableConfig) => void
+  /** Go back to choosing, without touching what has already been played. */
+  leaveTable: () => void
+  /** Return to the game already in progress, having chosen nothing. */
+  returnToTable: () => void
   version: number
   /** How much of the odds overlay to show while deciding. */
   hudLevel: 'full' | 'predict' | 'off'
@@ -124,10 +139,20 @@ interface Preferences {
   hudLevel: Store['hudLevel']
   speed: Speed
   adviceLive: boolean
+  /** The last table sat down at, so coming back does not mean choosing again. */
+  table: TableConfig
+  /** False until somebody has actually sat down once. */
+  seated: boolean
 }
 
 function loadPreferences(): Preferences {
-  const fallback: Preferences = { hudLevel: 'full', speed: 'normal', adviceLive: true }
+  const fallback: Preferences = {
+    hudLevel: 'full',
+    speed: 'normal',
+    adviceLive: true,
+    table: DEFAULT_TABLE,
+    seated: false,
+  }
   try {
     const raw = localStorage.getItem(PREFERENCES)
     if (raw === null) return fallback
@@ -139,6 +164,10 @@ function loadPreferences(): Preferences {
           : fallback.hudLevel,
       speed: parsed.speed === 'fast' ? 'fast' : 'normal',
       adviceLive: parsed.adviceLive !== false,
+      // A remembered table is still checked before it is used: the rules can
+      // tighten between visits, and what is in storage is whatever was there.
+      table: parsed.table && isPlayable(parsed.table) ? parsed.table : fallback.table,
+      seated: parsed.seated === true,
     }
   } catch {
     // A browser with storage switched off is not a reason to fail to start.
@@ -170,6 +199,8 @@ export const useStore = create<Store>((set, get) => {
     savePreferences({
       hudLevel: get().hudLevel,
       speed: get().speed,
+      table: get().table,
+      seated: get().seated,
       adviceLive: get().adviceLive,
     })
 
@@ -299,7 +330,30 @@ export const useStore = create<Store>((set, get) => {
   }
 
   return {
-    session: createSession(defaultSessionConfig(Date.now() >>> 0)),
+    session: createSession(sessionConfigFor(preferences.table, Date.now() >>> 0)),
+    table: preferences.table,
+    seated: preferences.seated,
+    sitDown: (table) => {
+      // A fresh table is a fresh session: stacks, button and hand number all
+      // start again. The history is not touched — those hands were played and
+      // remain played, at whatever table they were played at.
+      set({
+        session: createSession(sessionConfigFor(table, Date.now() >>> 0)),
+        table,
+        seated: true,
+        guess: null,
+      })
+      remember()
+      bump()
+    },
+    leaveTable: () => {
+      set({ seated: false })
+      remember()
+    },
+    returnToTable: () => {
+      set({ seated: true })
+      remember()
+    },
     version: 0,
     hudLevel: preferences.hudLevel,
     adviceLive: preferences.adviceLive,

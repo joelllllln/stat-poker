@@ -21,36 +21,131 @@ import { CardBack, CardRow, CardSlot, PlayingCard } from './Cards'
  * arrangement, not to shrink it until it collides.
  */
 
-/** Where each seat sits, clockwise from the person's own seat at the bottom. */
-const SEAT_SPOTS = [
-  { left: 50, top: 82 },
-  { left: 15, top: 65 },
-  { left: 15, top: 31 },
-  { left: 50, top: 15 },
-  { left: 85, top: 31 },
-  { left: 85, top: 65 },
-] as const
+export interface Spot {
+  left: number
+  top: number
+}
 
 /**
- * Where each seat's chips sit: between the seat and the board.
+ * Where the seats go, for a table of any size.
  *
- * Given per seat rather than computed as a fraction of the way to the middle,
- * because the seats are not the same distance from it: the same fraction put
- * the top seat's chips underneath the top seat's own plate.
+ * Six hardcoded spots were fine while there was one table. Now that the size
+ * is a choice, the seats are placed on an ellipse: the player is always at the
+ * bottom, and everyone else runs anticlockwise from there so that the seat to
+ * the player's left — the one that acts after them — is drawn to their left,
+ * the way it is at a real table.
+ *
+ * The ellipse is squashed toward the sides rather than being a circle inside a
+ * square, because the felt is wide: a circle would leave the left and right
+ * seats floating in the middle of nothing and crowd the top. The vertical
+ * radius stops well short of the edge to leave room for the board and the pot,
+ * which live in the middle and are what everything else has to stay clear of.
+ *
+ * Two sizes are special. Heads-up puts the opponent straight across the table
+ * rather than at an angle, which is what heads-up looks like. And at the
+ * largest sizes the seats are pushed a little further out, because nine plates
+ * on one ellipse is the case that runs out of room first — which the overlap
+ * test measures rather than trusting.
  */
-const CHIP_SPOTS = [
-  { left: 50, top: 62.5 },
-  { left: 30, top: 67 },
-  { left: 30, top: 27 },
-  { left: 50, top: 33 },
-  { left: 70, top: 27 },
-  { left: 70, top: 67 },
-] as const
+export function seatSpots(numSeats: number): Spot[] {
+  return ring(numSeats, 1)
+}
+
+/**
+ * Where each seat's chips sit: beside the seat they came from.
+ *
+ * A ring of its own was the obvious idea and it does not survive measurement.
+ * The plates are tall — nearly a third of the felt — and at five seats the gap
+ * between a plate on the diagonal and the top of the board is seven tenths of
+ * one per cent. There is no corridor to put anything in.
+ *
+ * So the chips belong to their seat rather than to a ring: pushed off the
+ * plate toward the middle, along whichever axis has the room. Seats out to the
+ * side push their chips inward horizontally, where the board is not; seats at
+ * the top and bottom push vertically, where it is not either. That holds at
+ * every table size, because it is derived from where the plate actually is
+ * rather than from an angle that happens to work at six.
+ */
+export function chipSpots(numSeats: number, heroWidth = FELT.heroWidth): Spot[] {
+  const plateWidth = seatWidthFor(numSeats)
+  return seatSpots(numSeats).map((spot, i) => {
+    const wide = i === 0 ? heroWidth : plateWidth
+    const tall = wide * PLATE_ASPECT
+    const dx = 50 - spot.left
+    const dy = 49 - spot.top
+
+    // Sideways where there is more sideways than up: the comparison is
+    // weighted because the felt is wider than it is tall, so an equal number
+    // of per cent is a shorter distance across than down.
+    const sideways = { left: spot.left + Math.sign(dx || 1) * (wide / 2 + CHIP_GAP), top: spot.top }
+    const upright = { left: spot.left, top: spot.top + Math.sign(dy || 1) * (tall / 2 + CHIP_GAP) }
+    const preferred = Math.abs(dx) * 1.6 > Math.abs(dy) ? sideways : upright
+
+    // Unless that lands in the middle, which belongs to the board and the pot.
+    // Heads-up is the case: the opponent sits dead centre at the top, so the
+    // only way off its plate is downward, and downward is the board.
+    if (!inTheMiddle(preferred)) return preferred
+    const other = preferred === sideways ? upright : sideways
+    return inTheMiddle(other) ? preferred : other
+  })
+}
+
+/**
+ * How tall a seat plate is against how wide, and how far off it the chips sit.
+ *
+ * Both measured from the rendered felt rather than counted out of the markup:
+ * a plate at 17% of the width comes out at 28% of the height, and the chips
+ * need about four points of clearance to stay off it.
+ */
+const PLATE_ASPECT = 1.72
+const CHIP_GAP = 4
+
+/**
+ * The middle, which belongs to the board and the pot.
+ *
+ * Measured from the rendered felt: the board runs from 34% to 66% across and
+ * 36% to 51% down, the pot from 40% to 60% and 53% to 60%. This is the two of
+ * them together with room for a pile of chips on any side.
+ */
+const inTheMiddle = (spot: Spot): boolean =>
+  spot.left > 32 && spot.left < 68 && spot.top > 34 && spot.top < 62
+
+/** The radii the seats sit on, which grow a little as the table fills. */
+const radii = (numSeats: number) => ({
+  rx: numSeats >= 8 ? 45 : 42,
+  ry: numSeats >= 8 ? 36 : 34,
+})
+
+/**
+ * Points spaced evenly around the felt, at a share of the seating radius.
+ *
+ * Heads-up is the one arrangement that is not a ring: two seats on an ellipse
+ * would sit at an angle to each other, and heads-up is played across the table.
+ */
+function ring(numSeats: number, scaleX: number, scaleY = scaleX): Spot[] {
+  const { rx, ry } = radii(numSeats)
+  if (numSeats === 2) {
+    return [
+      { left: 50, top: 49 + ry * scaleY },
+      { left: 50, top: 49 - ry * scaleY },
+    ]
+  }
+
+  return Array.from({ length: numSeats }, (_, i) => {
+    // Straight down is the player; go anticlockwise from there, so the seat
+    // that acts after them is drawn to their left.
+    const angle = Math.PI / 2 + (i * 2 * Math.PI) / numSeats
+    return {
+      left: 50 + rx * scaleX * Math.cos(angle),
+      top: 49 + ry * scaleY * Math.sin(angle),
+    }
+  })
+}
 
 /** The dealer button rides just inside its seat, toward the middle. */
-const towardCentre = (spot: { left: number; top: number }, by: number) => ({
+const towardCentre = (spot: Spot, by: number): Spot => ({
   left: spot.left + (50 - spot.left) * by,
-  top: spot.top + (50 - spot.top) * by,
+  top: spot.top + (49 - spot.top) * by,
 })
 
 const STREET_LABEL: Record<Street, string> = {
@@ -76,6 +171,27 @@ const FELT = {
   heroCard: 5.4,
   boardCard: 5.8,
 }
+
+/**
+ * How wide a seat plate can be, given how many of them there are.
+ *
+ * Six plates at seventeen per cent of the felt fit around the ellipse with
+ * room to spare. Nine do not. Rather than sizing everything for the worst case
+ * — which would leave a heads-up table looking like a spreadsheet — the plate
+ * shrinks as the table fills, and the overlap test measures every size to say
+ * whether the numbers are right.
+ */
+export function seatWidthFor(numSeats: number): number {
+  if (numSeats <= 4) return 20
+  if (numSeats <= 6) return FELT.seatWidth
+  if (numSeats === 7) return 15
+  if (numSeats === 8) return 13
+  return 11.5
+}
+
+/** The cards on a plate follow the plate. */
+export const villainCardFor = (numSeats: number): number =>
+  (seatWidthFor(numSeats) / FELT.seatWidth) * FELT.villainCard
 
 /** What a seat did last on this street, in the words a client would use. */
 function lastActionLabel(state: HandState, seat: number): string | null {
@@ -264,6 +380,9 @@ export function Table({ session }: { session: SessionState }) {
   const state = session.current
   const heroSeat = session.config.heroSeat
   const numSeats = session.config.seats.length
+  // Computed per table size rather than looked up: the size is a choice now.
+  const spots = seatSpots(numSeats)
+  const chips = chipSpots(numSeats)
 
   if (!state) {
     return (
@@ -299,8 +418,8 @@ export function Table({ session }: { session: SessionState }) {
           small: 'clamp(8px, 1.5cqw, 12px)',
         }
       : {
-          plate: `${FELT.seatWidth}cqw`,
-          card: `${FELT.villainCard}cqw`,
+          plate: `${seatWidthFor(numSeats)}cqw`,
+          card: `${villainCardFor(numSeats)}cqw`,
           text: 'clamp(9px, 1.7cqw, 14px)',
           small: 'clamp(8px, 1.4cqw, 11px)',
         },
@@ -322,12 +441,12 @@ export function Table({ session }: { session: SessionState }) {
             />
           </div>
 
-          <DealerButton spot={SEAT_SPOTS[(state.buttonSeat - heroSeat + numSeats) % numSeats]!} />
+          <DealerButton spot={spots[(state.buttonSeat - heroSeat + numSeats) % numSeats]!} />
 
           {state.seats.map((s) => {
             const seatIndex = (s.index - heroSeat + numSeats) % numSeats
-            const spot = SEAT_SPOTS[seatIndex]!
-            const chipSpot = CHIP_SPOTS[seatIndex]!
+            const spot = spots[seatIndex]!
+            const chipSpot = chips[seatIndex]!
             return (
               <div key={s.index}>
                 <div

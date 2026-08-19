@@ -8,6 +8,7 @@ import { OddsPanel } from './OddsPanel'
 import { Reflection } from './Reflection'
 import { SessionCard } from './SessionCard'
 import { Table } from './Table'
+import { Setup } from './Setup'
 import { InfoTabs, type InfoTab } from './InfoTabs'
 import { useStore, type Speed } from './store'
 import { useAdvice } from './useAnalysis'
@@ -152,6 +153,11 @@ export function App() {
   const handOver = state === null || state.result !== null
   const heroSeat = session.config.heroSeat
   const yourTurn = state !== null && state.result === null && state.toAct === heroSeat
+  const table = useStore((s) => s.table)
+  const seated = useStore((s) => s.seated)
+  const sitDown = useStore((s) => s.sitDown)
+  const leaveTable = useStore((s) => s.leaveTable)
+  const sitBackDown = useStore((s) => s.returnToTable)
 
   // In predict-then-reveal the guess comes first, so the answer waits.
   const guess = useStore((s) => s.guess)
@@ -207,6 +213,30 @@ export function App() {
     ),
   })
 
+  // Choosing a table comes before playing at one, and returning to a game
+  // already in progress must not restart it — so this is "am I at the table",
+  // not another tab.
+  if (!seated) {
+    return (
+      <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-2 sm:p-4">
+        <header className="flex items-baseline justify-between gap-2">
+          <h1 className="wordmark shrink-0 text-base sm:text-xl">STAT&thinsp;POKER</h1>
+          <p className="text-[11px] text-[color:var(--color-bone-faint)]">
+            {storedHands > 0
+              ? `${storedHands.toLocaleString('en-US')} hand${storedHands === 1 ? '' : 's'} recorded`
+              : 'No hands recorded yet'}
+          </p>
+        </header>
+        <Setup
+          table={table}
+          onSitDown={sitDown}
+          canReturn={session.handNumber > 0}
+          onReturn={() => sitBackDown()}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-1.5 p-2 sm:gap-3 sm:p-4">
       <header className="flex items-center justify-between gap-2">
@@ -228,6 +258,16 @@ export function App() {
         {/* The two screens are a choice about where you are; the rest are
             settings for the table. Kept apart so they do not read as one row
             of six equal buttons. */}
+        {/* On a phone this lives in the settings drawer: a fourth control in
+            the header wraps it onto a second line and pushes the fold button
+            off a 360-pixel screen, which the reach check measures. */}
+        <button
+          onClick={leaveTable}
+          className="plate hidden min-h-9 shrink-0 px-3 text-[11px] uppercase tracking-[0.1em] text-[color:var(--color-bone-dim)] sm:block"
+        >
+          Table setup
+        </button>
+
         <nav className="plate flex shrink-0 p-0.5 text-sm" aria-label="Screen">
           {(
             [
@@ -271,6 +311,12 @@ export function App() {
           className={`${settingsOpen ? 'plate p-2' : 'hidden'} sm:block sm:bg-none sm:p-0 sm:shadow-none`}
         >
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-3 sm:p-0">
+            <button
+              onClick={leaveTable}
+              className="plate min-h-11 w-full px-3 text-[11px] uppercase tracking-[0.1em] text-[color:var(--color-bone-dim)] sm:hidden"
+            >
+              Table setup
+            </button>
             <Toggle
               label="Odds"
               hint="Show the numbers while you decide, ask you to guess them first, or hide them."

@@ -79,6 +79,15 @@ const dealNextHand = () =>
 
 check('app renders', /stat\s*poker/i.test(await page.locator('h1').innerText()))
 
+// A game starts by choosing a table. Everything after this is played at the
+// one the setup screen offers by default.
+check(
+  'the setup screen comes first',
+  /choose a table/i.test(await page.locator('body').innerText()),
+)
+await page.getByRole('button', { name: 'Sit down', exact: true }).click()
+await page.waitForTimeout(400)
+
 // Bots act with a pause between them, the way a client deals. The test does
 // not need the pauses and every wait below would have to allow for them.
 await page.getByRole('button', { name: 'Fast', exact: true }).click()
@@ -227,6 +236,44 @@ check('the other tab shows the record of the hand', onHand.includes('what happen
 check('and only its own panel', !onHand.includes('bb means big blinds'))
 await press(page.getByRole('tab', { name: /^What to do/ }))
 await page.waitForTimeout(250)
+
+/**
+ * The felt has to hold every table the setup screen offers.
+ *
+ * The seats are placed on an ellipse now rather than at six fixed spots, so
+ * the sizes that run out of room — two, and nine — are the ones worth
+ * measuring, not the one the app happened to be built around.
+ */
+async function seatAndMeasure(seats) {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await press(page.getByRole('button', { name: /^Table setup/ }))
+  await page.waitForTimeout(300)
+  const slider = page.getByRole('slider', { name: 'Players at the table' })
+  if ((await slider.count()) === 0) return null
+  await slider.fill(String(seats))
+  await page.waitForTimeout(150)
+  await press(page.getByRole('button', { name: 'Sit down', exact: true }))
+  await page.waitForTimeout(400)
+  await dealNextHand()
+  await page.waitForTimeout(700)
+  return overlapsAt(1280, 900)
+}
+
+for (const seats of [2, 5, 7, 9]) {
+  const measured = await seatAndMeasure(seats)
+  if (measured === null) {
+    check(`the felt seats ${seats} without collisions`, false)
+    continue
+  }
+  check(
+    `the felt seats ${seats} without collisions (${measured.tracked} boxes)`,
+    measured.tracked >= seats && measured.clashes.length === 0,
+  )
+  if (measured.clashes.length) console.log('   ', measured.clashes.slice(0, 6).join(', '))
+}
+
+// Back to the table the rest of this test expects.
+await seatAndMeasure(6)
 
 for (const [name, width, height] of [
   ['phone', 390, 844],
