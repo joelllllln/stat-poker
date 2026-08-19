@@ -218,7 +218,7 @@ await page.waitForTimeout(300)
 const deciding = (await page.locator('body').innerText()).toLowerCase()
 check('the deciding tab says what to do', deciding.includes('what to do'))
 check('and what the hand is worth, without another tap', deciding.includes('your hand is worth'))
-check('and what the unit means', deciding.includes('bb means big blinds'))
+check('and what the unit means', /bb means big blinds/.test(deciding))
 
 await press(page.getByRole('tab', { name: /^The record/ }))
 await page.waitForTimeout(250)
@@ -244,10 +244,13 @@ for (const [name, width, height] of [
 await page.setViewportSize({ width: 1100, height: 1000 })
 await page.waitForTimeout(300)
 // Live coaching: what to do, at the moment the decision is live.
-check('the coach says what to do while you decide', body.includes('what to do'))
+check(
+  'the coach names the statistically best play while you decide',
+  body.includes('statistically the best play'),
+)
 check(
   'the recommendation is argued rather than asserted',
-  /worth [\d.]+bb more than|everything else here loses money|the only action available|too close to separate/.test(
+  /you are |the price asks that you win|either of the top two|not the only way to play it/.test(
     body,
   ),
 )

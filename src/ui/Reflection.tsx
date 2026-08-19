@@ -31,25 +31,56 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/50">
+      {/* What you did and what the arithmetic says you could have done, side by
+          side and big enough to read on a phone at arm's length. This is the
+          whole point of a review, and it used to be a 14-pixel row that ran
+          "Optimal · flop · Raise 59 · −0.00bb" and expected somebody to
+          reconstruct the lesson from it. */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center gap-3 px-3 py-2 text-left"
+        className="w-full px-3 py-2.5 text-left"
       >
-        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${style.chip}`}>
-          {style.label}
-        </span>
-        <span className="text-xs uppercase tracking-wide text-slate-500">{decision.street}</span>
-        <span className="text-sm">{decision.chosenLabel}</span>
-        {/* Sampled spots carry an error bar, and hiding it would present a
-            figure as sharper than the sample behind it. Enumerated spots —
-            every river — have none to show. */}
-        <span className="ml-auto font-mono text-xs text-slate-400">
-          {decision.evLossBB > 0.005 ? `−${decision.evLossBB.toFixed(2)}bb` : '—'}
-          {decision.evLossBB > 0.005 && decision.evLossErrorBB > 0.005 && (
-            <span className="text-slate-600"> ±{decision.evLossErrorBB.toFixed(2)}</span>
+        <div className="flex items-center gap-2">
+          <span className={`rounded px-2 py-0.5 text-xs font-medium ${style.chip}`}>
+            {style.label}
+          </span>
+          <span className="text-xs uppercase tracking-wide text-slate-500">{decision.street}</span>
+          {/* Sampled spots carry an error bar, and hiding it would present a
+              figure as sharper than the sample behind it. Enumerated spots —
+              every river — have none to show. */}
+          <span className="ml-auto font-mono text-xs text-slate-400">
+            {decision.evLossBB > 0.005 ? `−${decision.evLossBB.toFixed(2)}bb` : '—'}
+            {decision.evLossBB > 0.005 && decision.evLossErrorBB > 0.005 && (
+              <span className="text-slate-600"> ±{decision.evLossErrorBB.toFixed(2)}</span>
+            )}
+          </span>
+          <span className="text-slate-600">{open ? '▾' : '▸'}</span>
+        </div>
+
+        <div className="mt-1.5 flex items-end gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] uppercase tracking-wide text-slate-500">You</div>
+            <div className="truncate text-lg font-semibold text-slate-100">
+              {decision.chosenLabel}
+            </div>
+          </div>
+          {decision.bestLabel !== decision.chosenLabel && (
+            <>
+              <div aria-hidden className="pb-1.5 text-slate-600">→</div>
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-emerald-400/70">
+                  Statistically best
+                </div>
+                <div className="truncate text-lg font-semibold text-emerald-300">
+                  {decision.bestLabel}
+                </div>
+              </div>
+            </>
           )}
-        </span>
-        <span className="text-slate-600">{open ? '▾' : '▸'}</span>
+          {decision.bestLabel === decision.chosenLabel && (
+            <div className="pb-0.5 text-sm text-emerald-300">— the statistically best play</div>
+          )}
+        </div>
       </button>
 
       {open && (
