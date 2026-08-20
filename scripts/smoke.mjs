@@ -75,7 +75,7 @@ async function press(locator, timeout = 4_000) {
 
 /** Deal the next hand, once the table is ready for one. */
 const dealNextHand = () =>
-  press(page.getByRole('button', { name: 'Deal', exact: true }), 10_000)
+  press(page.locator('button:has-text("Deal"):not([disabled])'), 12_000)
 
 check('app renders', /stat\s*poker/i.test(await page.locator('h1').innerText()))
 
@@ -201,14 +201,34 @@ for (const [name, width, height] of [
   ['iPhone', 390, 844],
   ['a small Android', 360, 740],
 ]) {
-  const reach = await reachAt(width, height)
+  // Measured over several hands rather than one. How far down the buttons sit
+  // depends on the hand — a holding whose name wraps, a blind that has to be
+  // explained, a bet to size — so a single sample passes for the easy hands
+  // and says nothing about the ones that push the controls off the screen.
+  await page.setViewportSize({ width, height })
+  let worst = null
+  for (let hand = 0; hand < 8; hand++) {
+    const reach = await reachAt(width, height)
+    if (reach.controlsBottom !== null && (worst === null || reach.controlsBottom > worst.controlsBottom)) {
+      worst = reach
+    }
+    // Out of this hand and into the next, to get a different one to measure.
+    if (!(await press(page.locator('[data-action="fold"]:not([disabled])'), 2_000))) break
+    if (!(await dealNextHand())) break
+    await page
+      .locator('[data-action="fold"]')
+      .first()
+      .waitFor({ timeout: 8_000 })
+      .catch(() => {})
+  }
+
   check(
-    `the table and the controls share one screen on ${name} (controls end at ${reach.controlsBottom} of ${reach.viewport})`,
-    reach.controlsBottom !== null && reach.controlsBottom <= reach.viewport,
+    `the table and the controls share one screen on ${name} (worst of 8 hands: ${worst?.controlsBottom} of ${worst?.viewport})`,
+    worst !== null && worst.controlsBottom <= worst.viewport,
   )
   check(
-    `every control on ${name} is thumb-sized (smallest ${reach.smallestTap}px: "${reach.smallestLabel}")`,
-    reach.smallestTap >= 44,
+    `every control on ${name} is thumb-sized (smallest ${worst?.smallestTap}px: "${worst?.smallestLabel}")`,
+    (worst?.smallestTap ?? 0) >= 44,
   )
 }
 

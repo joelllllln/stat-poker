@@ -355,9 +355,11 @@ export function evLostInWords(bbPer100: number): string {
  * it applies, is worth more than any amount of correct arithmetic elsewhere.
  */
 export function postedInWords(committed: number, blind: 'small' | 'big'): string {
+  // Short on purpose. It has to fit on a phone above the buttons, and the
+  // idea is one sentence long: the money is gone either way.
   return (
-    `You have ${committed} in already — the ${blind} blind, which you pay in turn like ` +
-    `everyone else. It is spent whatever you do now, so it is not a reason to play the hand.`
+    `The ${committed} you posted as the ${blind} blind is spent whatever you do, ` +
+    `so it is not a reason to play the hand.`
   )
 }
 

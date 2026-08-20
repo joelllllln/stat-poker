@@ -207,7 +207,7 @@ group('the blind you already posted', () => {
 
   it('says the money is gone rather than that folding is free', () => {
     const said = postedInWords(1, 'small')
-    expect(said).toContain('1 in already')
+    expect(said).toContain('The 1 you posted')
     expect(said).toContain('small blind')
     // The whole point: it is spent, and it is not an argument for playing on.
     expect(said).toContain('spent whatever you do')

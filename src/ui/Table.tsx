@@ -222,6 +222,16 @@ interface SeatProps {
   won: number
   /** CSS lengths, so the same seat renders on the felt and in the stack. */
   scale: { plate: string; card: string; text: string; small: string }
+  /**
+   * Leave out the row of card backs when there is nothing to see in it.
+   *
+   * Two face-down cards say only "this seat has cards", which the plate
+   * already says by not being greyed out and by the line underneath. On a
+   * phone that row is thirty pixels of no information, twice over, and those
+   * sixty pixels are the difference between the buttons being on the screen
+   * and being below it.
+   */
+  hideBacks?: boolean
 }
 
 /**
@@ -231,7 +241,7 @@ interface SeatProps {
  * what they just did, what they won — so a seat can never write on top of
  * anything outside itself.
  */
-function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
+function Seat({ state, seat, isHero, botName, won, scale, hideBacks = false }: SeatProps) {
   const s = state.seats[seat]!
   const toAct = state.toAct === seat
   const folded = s.status === 'folded'
@@ -254,26 +264,28 @@ function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
       }`}
       style={{ width: scale.plate, padding: `calc(${scale.plate} * 0.045)`, gap: '2px' }}
     >
-      <div className="flex" style={{ gap: '2px' }}>
-        {s.holeCards && !folded ? (
-          showCards ? (
-            <CardRow cards={s.holeCards} width={scale.card} dealt />
+      {(showCards || !hideBacks) && (
+        <div className="flex" style={{ gap: '2px' }}>
+          {s.holeCards && !folded ? (
+            showCards ? (
+              <CardRow cards={s.holeCards} width={scale.card} dealt />
+            ) : (
+              <>
+                <CardBack width={scale.card} dealt />
+                <CardBack width={scale.card} dealt delay={70} />
+              </>
+            )
           ) : (
-            <>
-              <CardBack width={scale.card} dealt />
-              <CardBack width={scale.card} dealt delay={70} />
-            </>
-          )
-        ) : (
-          <div
-            className="flex items-center justify-center text-[color:var(--color-bone-faint)]"
-            style={{ height: `calc(${scale.card} * 1.4)`, fontSize: scale.small }}
-            aria-hidden
-          >
-            —
-          </div>
-        )}
-      </div>
+            <div
+              className="flex items-center justify-center text-[color:var(--color-bone-faint)]"
+              style={{ height: `calc(${scale.card} * 1.4)`, fontSize: scale.small }}
+              aria-hidden
+            >
+              —
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="w-full truncate text-center font-medium" style={{ fontSize: scale.text }}>
         {s.name}{' '}
@@ -474,26 +486,27 @@ export function Table({ session }: { session: SessionState }) {
       {/* Too narrow for an oval. The same pieces, stacked in reading order:
           opponents, then the board, then you. Nothing is positioned, so
           nothing can land on anything else. */}
-      <div className="rail rounded-2xl p-2 sm:hidden">
-        <div className="felt space-y-2 rounded-xl px-2 py-2 @container">
-          <div className="grid grid-cols-3 gap-1.5">
+      <div className="rail rounded-2xl p-1.5 sm:hidden">
+        <div className="felt space-y-1.5 rounded-xl px-2 py-1.5 @container">
+          <div className="grid grid-cols-3 gap-1">
             {others.map((seat) => (
               <div key={seat} className="flex justify-center">
                 <Seat
                   {...seatProps(seat, false)}
+                  hideBacks
                   scale={{
-                    plate: '30cqw',
-                    card: '6.4cqw',
-                    text: 'clamp(10px, 3cqw, 13px)',
-                    small: 'clamp(9px, 2.5cqw, 11px)',
+                    plate: '29cqw',
+                    card: '7.4cqw',
+                    text: 'clamp(10px, 2.9cqw, 12px)',
+                    small: 'clamp(9px, 2.4cqw, 10px)',
                   }}
                 />
               </div>
             ))}
           </div>
 
-          <div className="flex flex-col items-center gap-2">
-            <Board state={state} cardWidth="10.5cqw" potFontSize="clamp(11px, 3.2cqw, 14px)" />
+          <div className="flex flex-col items-center gap-1.5">
+            <Board state={state} cardWidth="9.6cqw" potFontSize="clamp(11px, 3.2cqw, 14px)" />
             {state.seats.some((s) => s.committed > 0) && (
               <div className="flex flex-wrap justify-center gap-1.5">
                 {state.seats
@@ -512,10 +525,10 @@ export function Table({ session }: { session: SessionState }) {
             <Seat
               {...seatProps(heroSeat, true)}
               scale={{
-                plate: '42cqw',
-                card: '10.5cqw',
-                text: 'clamp(12px, 3.6cqw, 15px)',
-                small: 'clamp(10px, 2.8cqw, 12px)',
+                plate: '40cqw',
+                card: '9.6cqw',
+                text: 'clamp(12px, 3.4cqw, 14px)',
+                small: 'clamp(10px, 2.7cqw, 11px)',
               }}
             />
           </div>
