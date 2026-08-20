@@ -8,6 +8,7 @@ import { preflopStrength, topPercentRange } from '../equity/preflop'
 import { classOf } from '../solver/blueprint'
 import { breakEvenFold, inBigBlinds, potOddsRatio, requiredEquity, stackToPotRatio } from '../coach/odds'
 import type { AdviseReply } from '../workers/analysis.worker'
+import { Key, Meter, StackedBar } from './Figures'
 import { RangeGrid } from './RangeGrid'
 import { useEquity } from './useAnalysis'
 import { madeHandInWords, timesInTen } from './plain'
@@ -75,19 +76,7 @@ function ShareMeter({ equity, needed }: { equity: number; needed: number }) {
   const clears = needed <= 0 || equity >= needed
   return (
     <div>
-      <div className="relative h-6 overflow-hidden rounded-md bg-black/50 shadow-[inset_0_1px_0_rgba(0,0,0,.6)]">
-        <div
-          className={`h-full rounded-md ${clears ? 'bg-[color:var(--color-jade)]' : 'bg-[color:var(--color-oxblood)]'}`}
-          style={{ width: `${Math.max(2, share * 100)}%` }}
-        />
-        {needed > 0 && (
-          <div
-            className="absolute inset-y-0 w-0.5 bg-[color:var(--color-brass-bright)]"
-            style={{ left: `${Math.min(99, needed * 100)}%` }}
-            aria-hidden
-          />
-        )}
-      </div>
+      <Meter share={share} limit={needed} clears={clears} />
       <div className="mt-1 flex justify-between text-[11px] text-[color:var(--color-bone-dim)]">
         <span>
           <span className="font-semibold text-[color:var(--color-bone)]">{pct(share)}</span> yours
@@ -112,43 +101,73 @@ function ShareMeter({ equity, needed }: { equity: number; needed: number }) {
  * underneath — which is the whole of range-reading in two lines.
  */
 function AgainstTheirRange({ split }: { split: RangeSplit }) {
-  const parts = [
-    { key: 'ahead', share: split.ahead, colour: 'var(--color-jade)', label: 'you lead' },
-    { key: 'tied', share: split.tied, colour: 'var(--color-bone-faint)', label: 'chop' },
-    { key: 'behind', share: split.behind, colour: 'var(--color-oxblood)', label: 'has you' },
-  ].filter((part) => part.share > 0.005)
-
   return (
     <div>
       <div className="stamp">Their range, right now</div>
-      <div className="mt-1 flex h-5 overflow-hidden rounded-md bg-black/50">
-        {parts.map((part) => (
-          <div
-            key={part.key}
-            style={{ width: `${part.share * 100}%`, background: part.colour }}
-            className="h-full"
-            title={`${part.label} ${pct(part.share)}`}
-          />
-        ))}
+      <div className="mt-1">
+        <StackedBar
+          parts={[
+            { key: 'ahead', share: split.ahead, colour: 'var(--chart-lead)', label: 'you lead' },
+            { key: 'tied', share: split.tied, colour: 'var(--chart-cool)', label: 'chop' },
+            { key: 'behind', share: split.behind, colour: 'var(--chart-behind)', label: 'has you' },
+          ]}
+        />
       </div>
-      <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-[11px] text-[color:var(--color-bone-dim)]">
-        <span>
-          <span className="text-[color:var(--color-jade-bright)]">■</span> you lead {pct(split.ahead)}
-        </span>
-        {split.tied > 0.005 && <span>chop {pct(split.tied)}</span>}
-        <span>
-          <span className="text-[color:var(--color-oxblood-bright)]">■</span> has you {pct(split.behind)}
-        </span>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <Key colour="var(--chart-lead)">you lead {pct(split.ahead)}</Key>
+        {split.tied > 0.005 && <Key colour="var(--chart-cool)">chop {pct(split.tied)}</Key>}
+        <Key colour="var(--chart-behind)">has you {pct(split.behind)}</Key>
       </div>
       {split.beatenBy.length > 0 && (
         <p className="mt-1 text-[11px] leading-snug text-[color:var(--color-bone-faint)]">
-          beaten by{' '}
           {split.beatenBy
             .slice(0, 3)
             .map((kind) => `${kind.name} ${pct(kind.share)}`)
             .join(' · ')}
         </p>
       )}
+    </div>
+  )
+}
+
+/**
+ * Before the flop there is no board to read, so the reading is a ranking.
+ *
+ * One axis, every starting hand from the best on the left to the worst on the
+ * right. A bar for how wide the tightest range still in the pot is, and a mark
+ * for where this hand sits in the same ordering — which answers "am I ahead of
+ * what they are playing" without a made hand to compare.
+ */
+function AgainstTheirRanking({ percentile, width }: { percentile: number; width: number }) {
+  // `percentile` counts hands beaten, so the best hand is at 1. Both are drawn
+  // as "top x%", which is how a range is quoted.
+  const rank = Math.max(0.005, Math.min(1, 1 - percentile))
+  const inside = rank <= width
+
+  return (
+    <div>
+      <div className="stamp">Where your hand ranks</div>
+      <div className="relative mt-1 h-6 overflow-hidden rounded-md bg-black/50">
+        <div
+          className="h-full rounded-r-md"
+          style={{ width: `${Math.min(100, width * 100)}%`, background: 'var(--chart-cool)' }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-y-0 w-1 rounded-full"
+          style={{
+            left: `calc(${Math.min(99, rank * 100)}% - 2px)`,
+            background: inside ? 'var(--color-brass-bright)' : 'var(--chart-behind)',
+            boxShadow: '0 0 0 2px var(--color-ink-2)',
+          }}
+        />
+      </div>
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <Key colour={inside ? 'var(--color-brass-bright)' : 'var(--chart-behind)'}>
+          yours top {pct(rank)}
+        </Key>
+        <Key colour="var(--chart-cool)">they play top {pct(width)}</Key>
+      </div>
     </div>
   )
 }
@@ -306,7 +325,17 @@ export function Decision({
 
             <ShareMeter equity={share} needed={needed} />
 
-            {split && <AgainstTheirRange split={split} />}
+            {split ? (
+              <AgainstTheirRange split={split} />
+            ) : (
+              hero.holeCards &&
+              widths.length > 0 && (
+                <AgainstTheirRanking
+                  percentile={preflopStrength(hero.holeCards).percentile}
+                  width={Math.min(...widths.map((w) => w.width))}
+                />
+              )
+            )}
           </>
         )
       )}

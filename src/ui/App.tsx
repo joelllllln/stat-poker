@@ -45,8 +45,10 @@ function ResultBanner() {
       <span className="font-semibold">
         {net > 0 ? `You won ${net}` : net < 0 ? `You lost ${-net}` : 'You broke even'}
       </span>
+      {/* The hand itself is named in the review directly below. Saying it
+          here as well is the same sentence twice, a line apart. */}
       {heroValue !== null && heroValue !== undefined && (
-        <span className="text-sm text-[color:var(--color-bone-dim)]">You held {describe(heroValue)}.</span>
+        <span className="sr-only">You held {describe(heroValue)}.</span>
       )}
     </div>
   )
@@ -196,13 +198,11 @@ export function App() {
             advicePending={advicePending}
             showOdds={showOdds}
           />
-        ) : (
+        ) : state === null ? (
           <p className="plate px-3 py-3 text-sm text-[color:var(--color-bone-faint)]">
-            {state === null
-              ? 'Deal a hand and this is where the odds and the advice appear.'
-              : 'Nothing to decide right now.'}
+            Deal a hand and this is where the odds and the advice appear.
           </p>
-        )}
+        ) : null}
       </div>
     ),
   })

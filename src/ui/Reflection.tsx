@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
-import { describe as describeHand } from '../engine/evaluator'
 import {
   gradeHand,
+  replayHand,
   summariseGrades,
   type DecisionGrade,
   type HandGrade,
   type Verdict,
 } from '../coach/grade'
+import { pricedHand } from '../stats/all-in-adjusted'
 import type { HandRecord } from '../game/session'
+import { Figure, Key, StreetAxis, StreetChart } from './Figures'
 import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
 import { blindPosted, madeHandInWords } from './plain'
@@ -176,19 +178,13 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
   )
 }
 
-function Summary({ grade, record, heroSeat }: { grade: HandGrade; record: HandRecord; heroSeat: number }) {
-  const value = record.state.result?.handValues[heroSeat]
-  const showdown = record.state.result?.showdown
-
+function Summary({ grade }: { grade: HandGrade }) {
   if (grade.correctAndLost) {
     return (
       <div className="rounded-lg border border-[color:var(--color-jade)]/60 bg-[color:var(--color-jade-deep)] px-3 py-2">
-        <div className="text-sm font-medium text-[color:var(--color-brass-bright)]">
-          You played this hand correctly and lost it.
-        </div>
-        <div className="mt-1 text-xs text-[color:var(--color-brass-bright)]/70">
-          Every decision was the highest-value one available. Losing {-grade.net} chips here is
-          variance, not a mistake — the same decisions win this pot more often than not.
+        <div className="stamp !text-[color:var(--color-jade-bright)]">◆ Correct, and lost</div>
+        <div className="mt-0.5 text-sm text-[color:var(--color-bone)]">
+          Variance, not a mistake.
         </div>
       </div>
     )
@@ -197,19 +193,107 @@ function Summary({ grade, record, heroSeat }: { grade: HandGrade; record: HandRe
   if (grade.worst) {
     return (
       <div className="rounded-lg border border-[color:var(--color-brass)]/50 bg-[color:var(--color-brass-deep)]/30 px-3 py-2">
-        <div className="text-sm font-medium text-[color:var(--color-brass-bright)]">
-          Biggest leak: {grade.worst.chosenLabel} on the {grade.worst.street}, costing{' '}
-          {grade.worst.evLossBB.toFixed(2)}bb
+        <div className="stamp !text-[color:var(--color-brass-bright)]">▲ Biggest leak</div>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-sm text-[color:var(--color-bone)]">
+          <span className="font-medium">{grade.worst.chosenLabel}</span>
+          <span className="text-[color:var(--color-bone-dim)]">on the {grade.worst.street}</span>
+          <span className="ml-auto font-mono text-[color:var(--color-brass-bright)]">
+            −{grade.worst.evLossBB.toFixed(1)}bb
+          </span>
         </div>
-        <div className="mt-1 text-xs text-[color:var(--color-brass)]">{grade.worst.explanation}</div>
       </div>
     )
   }
 
   return (
-    <div className="plate px-3 py-2 text-sm text-[color:var(--color-bone-dim)]">
-      No mistakes in this hand.
-      {showdown && value != null && ` You showed down ${describeHand(value).toLowerCase()}.`}
+    <div className="rounded-lg border border-[color:var(--color-jade)]/40 bg-[color:var(--color-jade-deep)] px-3 py-2">
+      <div className="stamp !text-[color:var(--color-jade-bright)]">◆ No mistakes</div>
+    </div>
+  )
+}
+
+/**
+ * The hand you just played, as figures.
+ *
+ * What it cost, where the cost came from, and how it went street by street —
+ * read off the shapes rather than out of a paragraph. The three questions a
+ * player has after a hand are "how much", "was that me or the cards", and
+ * "where did it turn", and each of them is one picture.
+ */
+function HandShape({
+  grade,
+  record,
+  heroSeat,
+}: {
+  grade: HandGrade
+  record: HandRecord
+  heroSeat: number
+}) {
+  const bigBlind = record.bigBlind
+
+  // What the line was worth against what it actually paid. The gap is the
+  // cards; the expected-value given up is the decisions. Anything left is the
+  // sampling in the adjustment, and it is not attributed to either.
+  const { actual, adjusted, wasAllIn } = pricedHand(record.state)
+  const won = (actual[heroSeat] ?? 0) / bigBlind
+  const deserved = (adjusted[heroSeat] ?? 0) / bigBlind
+  const luck = wasAllIn ? won - deserved : 0
+
+  // Equity at each decision, and the chips that were in by the time it was
+  // made. Two measures, two figures, one shared run of streets — never two
+  // scales on one axis.
+  const steps = useMemo(() => {
+    const replay = replayHand(record)
+    const committed: number[] = []
+    for (const { state } of replay) {
+      if (state.toAct !== heroSeat) continue
+      committed.push(state.seats[heroSeat]!.totalCommitted)
+    }
+    return grade.decisions.map((decision, i) => ({
+      label: decision.street === 'preflop' ? 'pre' : decision.street,
+      equity: decision.equity,
+      chips: committed[i] ?? 0,
+    }))
+  }, [record, grade.decisions, heroSeat])
+
+  return (
+    <div className="space-y-3">
+      {/* Two figures rather than one bar in two colours. What you won and
+          what you gave up are not parts of a whole — a hand can be won badly
+          — and a stacked bar is a promise that the parts add up. */}
+      <div className="flex gap-2">
+        <Figure
+          label="This hand"
+          value={`${won > 0 ? '+' : ''}${won.toFixed(1)}bb`}
+          tone={won > 0 ? 'good' : won < 0 ? 'bad' : 'plain'}
+        />
+        <Figure
+          label="Given up"
+          value={grade.totalEvLossBB > 0.05 ? `−${grade.totalEvLossBB.toFixed(1)}bb` : 'nothing'}
+          tone={grade.totalEvLossBB > 0.05 ? 'mark' : 'good'}
+        />
+        {/* Only where the chips went in before the cards were out. Anywhere
+            else there is no counterfactual, and claiming one invents it. */}
+        {wasAllIn && (
+          <Figure
+            label="The cards"
+            value={`${luck >= 0 ? '+' : '−'}${Math.abs(luck).toFixed(1)}bb`}
+            tone={luck >= 0 ? 'good' : 'bad'}
+          />
+        )}
+      </div>
+
+      {steps.length > 1 && (
+        <div>
+          <div className="stamp">Street by street</div>
+          <StreetChart points={steps} />
+          <StreetAxis points={steps} />
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <Key colour="var(--chart-cool)">what it was worth</Key>
+            <Key colour="var(--chart-gold)">chips in</Key>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -246,52 +330,30 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
 
   return (
     <div className="space-y-2 plate p-3">
-      <div className="flex items-baseline justify-between">
-        <span className="stamp">
-          Hand {record.handNumber} review
-        </span>
-        <span className="font-mono text-xs text-[color:var(--color-bone-dim)]">
-          {grade.totalEvLossBB > 0.005
-            ? `−${grade.totalEvLossBB.toFixed(2)}bb given up`
-            : 'nothing given up'}
-        </span>
-      </div>
-
-      {/* What happened, before what to make of it.
-          Reflecting on a hand starts with remembering it, and by the time the
-          review appears the cards have gone from the felt. A beginner cannot
-          reconstruct "the flop came and I had two pair" from a list of graded
-          decisions — and every sentence under this one begins by assuming
-          they can. */}
-      <p className="text-sm text-[color:var(--color-bone-dim)]">
-        You had{' '}
-        <span className="font-medium text-[color:var(--color-brass-bright)]">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="stamp">Hand {record.handNumber} review</span>
+        {/* The hand, named once. It has gone from the felt by the time this
+            appears, and everything below assumes you remember it. */}
+        <span className="text-xs text-[color:var(--color-brass-bright)]">
           {madeHandInWords(
             record.state.seats[heroSeat]!.holeCards!,
             record.state.board.slice(0, record.state.result?.runoutFrom ?? record.state.board.length),
           )}
-        </span>{' '}
-        when the betting finished, and{' '}
-        {grade.net > 0
-          ? `won ${grade.net} chips.`
-          : grade.net < 0
-            ? `lost ${-grade.net} chips.`
-            : 'broke even.'}
-      </p>
+        </span>
+      </div>
+
+      <HandShape grade={grade} record={record} heroSeat={heroSeat} />
 
       {/* "Nothing given up" beside a stack that just went down by one is how
           an app loses somebody's trust. The blind is not a mistake and it is
-          not free — it is the rent everybody pays in turn, and the review has
-          to say so rather than leave the arithmetic looking wrong. */}
+          not free — it is the rent everybody pays in turn. */}
       {foldedTheBlind && (
         <p className="text-xs text-[color:var(--color-bone-dim)]">
-          You folded the {foldedTheBlind} blind, so it stayed in the middle. That is not a
-          mistake and it is not free: everybody pays it in turn, and it is already spent by
-          the time you look at your cards.
+          The {foldedTheBlind} blind is rent, not a mistake — already spent when you looked.
         </p>
       )}
 
-      <Summary grade={grade} record={record} heroSeat={heroSeat} />
+      <Summary grade={grade} />
 
       <Spread state={record.state} heroSeat={heroSeat} bigBlind={record.bigBlind} />
 

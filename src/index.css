@@ -84,6 +84,19 @@
   --color-oxblood-deep: #37121a;
   --color-rail: #3b2a20;
 
+  /* Chart steps.
+     The interface hues are chosen to sit under text and behind buttons; as
+     data marks on the ink surface they fail — oxblood is too dark to clear
+     3:1, bone-faint reads as gray rather than as a colour. These are the same
+     four hues re-stepped for the surface they are drawn on, and the set is
+     validated: inside the dark lightness band, above the chroma floor, and
+     separated under deuteranopia and protanopia as well as normal vision.
+     Marks only. Text keeps the bone tokens. */
+  --chart-lead: #3ba87c;
+  --chart-behind: #b03a50;
+  --chart-cool: #5b8fd0;
+  --chart-gold: #b58a2b;
+
   /* The blue off the back of a deck of cards, which is what the solved
      equilibrium is marked in: it is a different kind of claim from the
      coach's, and it should not be wearing the coach's colours. */

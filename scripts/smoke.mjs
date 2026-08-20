@@ -508,9 +508,17 @@ await page.waitForTimeout(300)
 check('the running record is beside the table', after.includes('this sitting'))
 check(
   'the review says what you had and what it cost',
-  /you had .*(pair|high|two pair|three|straight|flush|full house|four)/.test(after) &&
-    /(won|lost) \d+ chips|broke even/.test(after),
+  // Both as figures now rather than as a sentence: the hand named once beside
+  // the heading, and the result and the expected value given up as two
+  // numbers under it.
+  /(pair|high card|two pair|a set|straight|flush|full house|quads)/.test(after) &&
+    /this hand/.test(after) &&
+    /given up/.test(after) &&
+    /[+−-][\d.]+bb/.test(after),
 )
+// How the hand went, as a shape: what it was worth at each decision against
+// the chips that were in by then.
+check('and how it went street by street', /street by street/.test(after))
 check('the post-hand review appeared', after.includes('review'))
 check('the run-it-again spread appeared', /run it [\d,]+ times/.test(after))
 

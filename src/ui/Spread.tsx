@@ -139,22 +139,18 @@ export function Spread({
 
       {from < settled && (
         <p className="text-[11px] text-[color:var(--color-brass)]">
-          Dealt from before the betting ended, so the players are holding to
-          decisions they made after seeing a different board. That is a
-          what-if, not what this hand was worth.
+          A what-if — dealt from before the betting ended.
         </p>
       )}
 
       <p className="text-[11px] text-[color:var(--color-bone-dim)]">
         {run.counterfactual
-          ? `You folded. Had you called, the hand would have been worth ${(run.expected / bigBlind).toFixed(1)}bb — it wins ${(run.winRate * 100).toFixed(0)}% of the time at showdown, and the price of finding out is in that figure.`
+          ? `Folded · calling was worth ${(run.expected / bigBlind).toFixed(1)}bb`
           : run.actual < run.expected
-            ? run.expected > 0
-              ? `This line wins ${(run.winRate * 100).toFixed(0)}% of the time and was worth ${(run.expected / bigBlind).toFixed(1)}bb. This runout was one of the ${(100 - run.actualPercentile * 100).toFixed(0)}% that did not.`
-              : `This runout went badly, but so did the line: it was only worth ${(run.expected / bigBlind).toFixed(1)}bb before the cards came out.`
+            ? `This runout was in the worst ${(100 - run.actualPercentile * 100).toFixed(0)}%`
             : run.actual > run.expected
-              ? `This runout beat ${(run.actualPercentile * 100).toFixed(0)}% of the others — the result flattered the line, which was worth ${(run.expected / bigBlind).toFixed(1)}bb.`
-              : 'This hand finished exactly where the line was worth finishing.'}
+              ? `This runout beat ${(run.actualPercentile * 100).toFixed(0)}% of the others`
+              : 'This runout landed on the average'}
       </p>
     </div>
   )
