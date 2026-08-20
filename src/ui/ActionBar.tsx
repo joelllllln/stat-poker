@@ -146,7 +146,11 @@ export function ActionBar({
   const actedVoluntarily = state.actions.some((entry) => entry.seat === heroSeat)
 
   const button =
-    'plaque relative min-h-[52px] min-w-0 flex-1 touch-manipulation overflow-hidden whitespace-nowrap px-2 text-[15px] disabled:opacity-30 disabled:cursor-not-allowed fine:min-h-12 xs:px-3 xs:text-base sm:px-4 sm:text-sm'
+    // No `overflow-hidden`: the badge marking the recommended action hangs
+  // above the button's top edge, and clipping the button to its own box cut
+  // the badge in half. The label is kept inside by `truncate` on the text
+  // instead, which is where the problem actually was.
+  'plaque relative min-h-[52px] min-w-0 flex-1 touch-manipulation whitespace-nowrap px-2 text-[15px] disabled:opacity-30 disabled:cursor-not-allowed fine:min-h-12 xs:px-3 xs:text-base sm:px-4 sm:text-sm'
 
   // The recommendation is marked on the control it recommends, because that is
   // where somebody is looking when they need it. A recommended raise marks the
