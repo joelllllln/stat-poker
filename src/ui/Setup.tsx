@@ -73,11 +73,17 @@ function Choice({
   )
 }
 
-/** A little picture of the table you are about to sit at. */
+/**
+ * A little picture of the table you are about to sit at.
+ *
+ * `seed` is fixed rather than live so the preview holds still while the rest
+ * of the screen is being set up — the real mix is drawn when you sit down,
+ * and this is a picture of the table rather than a promise about who is in it.
+ */
 function Seating({ table }: { table: TableConfig }) {
   const spots = seatSpots(table.seats)
   const width = seatWidthFor(table.seats)
-  const seats = seatsFor(table)
+  const seats = seatsFor(table, 7)
 
   return (
     <div className="felt relative mx-auto aspect-[16/10] w-full max-w-sm overflow-hidden rounded-[45%/38%]">
@@ -147,9 +153,11 @@ export function Setup({
         </h2>
         <p className="mt-1 text-sm text-[color:var(--color-bone-dim)]">
           {table.seats} seats · {stackBB} big blinds each ·{' '}
-          {table.opponents.length === 1
-            ? `everyone plays like ${ARCHETYPES[table.opponents[0]!]?.name ?? table.opponents[0]!}`
-            : `${table.opponents.length} kinds of opponent`}
+          {table.random
+            ? 'strangers — you are not told who plays how'
+            : table.opponents.length === 1
+              ? `everyone plays like ${ARCHETYPES[table.opponents[0]!]?.name ?? table.opponents[0]!}`
+              : `a random mix of ${table.opponents.length} kinds`}
         </p>
       </div>
 
@@ -208,7 +216,32 @@ export function Setup({
 
       <div className="plate space-y-2 p-4">
         <div className="stamp">Who you are playing</div>
-        <div className="grid gap-2 sm:grid-cols-2">
+
+        <div className="flex flex-wrap gap-2">
+          <Choice
+            label="Pick the styles"
+            hint="you can see who is who"
+            chosen={!table.random}
+            onClick={() => change({ random: false })}
+          />
+          <Choice
+            label="Strangers"
+            hint="every style, none of them named"
+            chosen={table.random}
+            onClick={() => change({ random: true })}
+          />
+        </div>
+
+        <p className="text-xs leading-snug text-[color:var(--color-bone-dim)]">
+          {table.random
+            ? 'Any style can be in any seat, and nothing on the table says which. Work out who you are up against the way you would have to for real — from what they do.'
+            : 'Every seat is drawn from the styles you pick, so the mix changes each time you sit down. Three of one and none of another is a table that happens.'}
+        </p>
+
+        {/* Hidden rather than greyed out when the table is strangers: a
+            column of styles each labelled "at the table" says nothing true
+            about a table drawn from all of them, and it is a screenful. */}
+        <div className={`gap-2 sm:grid-cols-2 ${table.random ? 'hidden' : 'grid'}`}>
           {ARCHETYPE_IDS.map((id) => {
             const style = ARCHETYPES[id]!
             const chosen = table.opponents.includes(id)
@@ -217,6 +250,7 @@ export function Setup({
                 key={id}
                 onClick={() => toggleOpponent(id)}
                 aria-pressed={chosen}
+                disabled={table.random}
                 className={`rounded-md p-3 text-left transition ${
                   chosen
                     ? 'plate-brass'

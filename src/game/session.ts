@@ -19,6 +19,14 @@ export interface SeatConfig {
   name: string
   /** Archetype id, or null for the human. */
   bot: string | null
+  /**
+   * Whether to keep the style to itself.
+   *
+   * The coach still needs to know who it is pricing against, so this hides the
+   * label rather than the fact: a random table plays exactly as it would
+   * otherwise, and only stops telling you.
+   */
+  hidden: boolean
 }
 
 export interface SessionConfig {
@@ -88,12 +96,12 @@ export interface SessionState {
 }
 
 const DEFAULT_SEATS: SeatConfig[] = [
-  { name: 'You', bot: null },
-  { name: 'Rock', bot: 'nit' },
-  { name: 'Eagle', bot: 'tag' },
-  { name: 'Hawk', bot: 'lag' },
-  { name: 'Fish', bot: 'station' },
-  { name: 'Maniac', bot: 'maniac' },
+  { name: 'You', bot: null, hidden: false },
+  { name: 'Rock', bot: 'nit', hidden: false },
+  { name: 'Eagle', bot: 'tag', hidden: false },
+  { name: 'Hawk', bot: 'lag', hidden: false },
+  { name: 'Fish', bot: 'station', hidden: false },
+  { name: 'Maniac', bot: 'maniac', hidden: false },
 ]
 
 /**

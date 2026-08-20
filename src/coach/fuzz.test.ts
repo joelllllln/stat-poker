@@ -24,12 +24,12 @@ import { gradeHand } from './grade'
  */
 
 const TABLES: TableConfig[] = [
-  { seats: 2, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['tag'] },
-  { seats: 2, smallBlind: 25, bigBlind: 50, buyIn: 500, opponents: ['maniac'] },
-  { seats: 3, smallBlind: 1, bigBlind: 3, buyIn: 300, opponents: ['nit', 'station'] },
-  { seats: 6, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['nit', 'tag', 'lag', 'station', 'maniac'] },
-  { seats: 9, smallBlind: 2, bigBlind: 5, buyIn: 50, opponents: ['lag'] },
-  { seats: 9, smallBlind: 25, bigBlind: 50, buyIn: 25_000, opponents: ['nit', 'maniac'] },
+  { seats: 2, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['tag'], random: false },
+  { seats: 2, smallBlind: 25, bigBlind: 50, buyIn: 500, opponents: ['maniac'], random: false },
+  { seats: 3, smallBlind: 1, bigBlind: 3, buyIn: 300, opponents: ['nit', 'station'], random: false },
+  { seats: 6, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['nit', 'tag', 'lag', 'station', 'maniac'], random: false },
+  { seats: 9, smallBlind: 2, bigBlind: 5, buyIn: 50, opponents: ['lag'], random: false },
+  { seats: 9, smallBlind: 25, bigBlind: 50, buyIn: 25_000, opponents: ['nit', 'maniac'], random: false },
 ]
 
 /** Advice a player could act on, whatever the table. */

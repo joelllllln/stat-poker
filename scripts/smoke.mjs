@@ -232,9 +232,33 @@ for (const [name, width, height] of [
   )
 }
 
+/**
+ * Get to a live decision, dealing hands until there is one.
+ *
+ * The panels below only have anything to say while the hero is on the clock,
+ * and how a hand runs is not fixed: the table's mix is drawn when you sit
+ * down, so a fold-round that ended the hand in one sitting reaches the flop in
+ * the next. Asserting against whatever state the last block happened to leave
+ * behind is how a check becomes a coin toss.
+ */
+async function untilYourTurn(tries = 6) {
+  for (let attempt = 0; attempt < tries; attempt++) {
+    const live = await page
+      .locator('[data-action="fold"]:not([disabled])')
+      .first()
+      .waitFor({ timeout: 6_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (live) return true
+    if (!(await dealNextHand())) return false
+  }
+  return false
+}
+
 // The panels beside the table on a desktop are tabs under the controls here.
 await page.setViewportSize({ width: 390, height: 844 })
 await page.waitForTimeout(300)
+check('the table gives you a decision to make', await untilYourTurn())
 const tabs = await page.getByRole('tab').count()
 // Two, not four. Everything needed to make the decision belongs on one of
 // them; the record of what has happened belongs on the other.

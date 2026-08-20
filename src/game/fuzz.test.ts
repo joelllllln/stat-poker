@@ -46,6 +46,9 @@ function anyTable(rng: Rng): TableConfig {
     bigBlind: stake.bigBlind,
     buyIn: depth * stake.bigBlind,
     opponents: Array.from({ length: howMany }, () => ARCHETYPE_IDS[rng.nextInt(ARCHETYPE_IDS.length)]!),
+    // A random table one time in four, so the anonymous seats and the
+    // everybody-is-in-the-pool draw get played too.
+    random: rng.nextInt(4) === 0,
   }
 }
 
@@ -173,7 +176,7 @@ describe('the spots that are meant to be hard', () => {
       smallBlind: 25,
       bigBlind: 50,
       buyIn: 500,
-      opponents: ['maniac'],
+      opponents: ['maniac'], random: false,
     }
     const session = createSession(sessionConfigFor(config, 5))
     for (let hand = 0; hand < 40; hand++) {
@@ -203,7 +206,7 @@ describe('the spots that are meant to be hard', () => {
   it('posts the blinds correctly heads-up, where the button is the small blind', () => {
     const session = createSession(
       sessionConfigFor(
-        { seats: 2, smallBlind: 5, bigBlind: 10, buyIn: 1_000, opponents: ['tag'] },
+        { seats: 2, smallBlind: 5, bigBlind: 10, buyIn: 1_000, opponents: ['tag'], random: false },
         9,
       ),
     )
@@ -230,7 +233,7 @@ describe('the spots that are meant to be hard', () => {
   it('refuses an illegal action rather than half-applying it', () => {
     const session = createSession(
       sessionConfigFor(
-        { seats: 3, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['nit'] },
+        { seats: 3, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['nit'], random: false },
         13,
       ),
     )

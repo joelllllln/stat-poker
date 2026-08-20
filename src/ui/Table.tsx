@@ -421,7 +421,10 @@ export function Table({ session }: { session: SessionState }) {
     state,
     seat,
     isHero,
-    botName: session.config.seats[seat]?.bot ?? null,
+    // A random table keeps its styles to itself: the badge is the answer key.
+    botName: session.config.seats[seat]?.hidden
+      ? null
+      : (session.config.seats[seat]?.bot ?? null),
     won: wonBySeat[seat]!,
     scale: isHero
       ? {

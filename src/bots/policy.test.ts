@@ -27,8 +27,8 @@ const breathe = () => new Promise((resolve) => setTimeout(resolve, 0))
 async function simulate(hands: number, seed = 4): Promise<AggregateStats[]> {
   const config: SessionConfig = {
     seats: ARCHETYPE_IDS.slice(0, 5)
-      .map((id) => ({ name: id, bot: id }))
-      .concat([{ name: 'tag2', bot: 'tag' }]),
+      .map((id) => ({ name: id, bot: id, hidden: false }))
+      .concat([{ name: 'tag2', bot: 'tag', hidden: false }]),
     // No human at this table: every seat is driven by a policy.
     heroSeat: -1,
     buyIn: 200,
@@ -113,7 +113,7 @@ describe('emergent bot signatures', () => {
 
   it('conserves chips across the session', async () => {
     const config: SessionConfig = {
-      seats: ARCHETYPE_IDS.map((id) => ({ name: id, bot: id })),
+      seats: ARCHETYPE_IDS.map((id) => ({ name: id, bot: id, hidden: false })),
       heroSeat: -1,
       buyIn: 200,
       smallBlind: 1,
@@ -136,7 +136,7 @@ describe('emergent bot signatures', () => {
 describe('policy safety', () => {
   it('only ever produces legal actions', async () => {
     const config: SessionConfig = {
-      seats: ARCHETYPE_IDS.map((id) => ({ name: id, bot: id })),
+      seats: ARCHETYPE_IDS.map((id) => ({ name: id, bot: id, hidden: false })),
       heroSeat: -1,
       buyIn: 200,
       smallBlind: 1,
@@ -165,7 +165,7 @@ describe('policy safety', () => {
   it('is reproducible from the session seed', async () => {
     const run = async () => {
       const config: SessionConfig = {
-        seats: ARCHETYPE_IDS.map((id) => ({ name: id, bot: id })),
+        seats: ARCHETYPE_IDS.map((id) => ({ name: id, bot: id, hidden: false })),
         heroSeat: -1,
         buyIn: 200,
         smallBlind: 1,

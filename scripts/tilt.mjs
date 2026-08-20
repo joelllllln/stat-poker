@@ -62,7 +62,10 @@ async function press(locator, timeout = 5_000) {
 await page.goto(URL, { waitUntil: 'networkidle' })
 
 /** Set the table up from the setup screen and sit down at it. */
-async function sitDownAt({ seats, stakes, stack, opponents }) {
+async function openSetup() {
+  // The way back only exists on the table screen, so start from there.
+  await press(page.getByRole('button', { name: 'Table', exact: true }), 1_500)
+  await page.waitForTimeout(200)
   // On a phone the way back to the setup screen is behind the settings button,
   // where it costs no room on the felt.
   if (!(await press(page.getByRole('button', { name: 'Table setup', exact: true }), 1_500))) {
@@ -70,7 +73,12 @@ async function sitDownAt({ seats, stakes, stack, opponents }) {
     await page.waitForTimeout(200)
     await press(page.getByRole('button', { name: 'Table setup', exact: true }))
   }
-  await page.waitForTimeout(250)
+  await page.waitForTimeout(300)
+  return (await page.getByRole('button', { name: 'Sit down', exact: true }).count()) > 0
+}
+
+async function sitDownAt({ seats, stakes, stack, opponents }) {
+  await openSetup()
   const slider = page.getByRole('slider', { name: 'Players at the table' })
   if ((await slider.count()) === 0) return false
   await slider.fill(String(seats))
@@ -220,6 +228,36 @@ check(
   `every hand across every table is in the record (${reported} of ${totalPlayed})`,
   reported !== null && reported >= totalPlayed,
 )
+
+// Strangers: a table where every style is in the pool and nothing on screen
+// says which seat is which. What is being checked is that the game is really
+// dealt that way and that nothing leaks the answer.
+{
+  check('the setup screen opens again', await openSetup())
+  check('strangers is an option', await press(page.getByRole('button', { name: /^Strangers/ }), 3_000))
+  await page.waitForTimeout(200)
+  await press(page.getByRole('button', { name: 'Sit down', exact: true }))
+  await page.waitForTimeout(500)
+
+  const tells = ['nit', 'tag', 'lag', 'station', 'maniac', 'rock', 'eagle', 'hawk', 'fish']
+  let dealt = 0
+  let leaked = null
+  for (let hand = 0; hand < 6 && leaked === null; hand++) {
+    if ((await playOneHand(hand % 2 === 0)) !== 'done') break
+    dealt += 1
+    const seats = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-seat]')].map((n) => (n.textContent ?? '').toLowerCase()),
+    )
+    for (const seat of seats) {
+      const tell = tells.find((t) => seat.includes(t))
+      if (tell) leaked = `${tell} in "${seat.trim().slice(0, 40)}"`
+    }
+  }
+
+  check(`strangers: ${dealt} hands dealt`, dealt === 6)
+  check('strangers: no seat says how it plays', leaked === null)
+  if (leaked) console.log('   ', leaked)
+}
 
 // A reload has to bring back the table you chose, not the one the app ships
 // with — the setup screen is a choice, and a choice that does not survive the

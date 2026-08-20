@@ -16,6 +16,7 @@
  */
 
 import { ARCHETYPES, ARCHETYPE_IDS } from '../bots/archetypes'
+import { Rng } from '../engine/cards'
 import type { SeatConfig, SessionConfig } from './session'
 
 /** The sizes the app deals. Heads-up at one end, a full ring at the other. */
@@ -34,12 +35,23 @@ export interface TableConfig {
   /** What every seat starts with, and is topped back up to. */
   buyIn: number
   /**
-   * Which opponents to seat, in order, as archetype ids.
+   * Which kinds of opponent may be seated, as archetype ids.
    *
-   * Shorter than the table needs is fine: the list repeats. That is what lets
-   * "I want to play three maniacs" be one choice rather than three.
+   * A pool rather than a running order: each seat is drawn from it at random,
+   * so picking two kinds at a six-handed table might give you four of one and
+   * one of the other. That is the point — a table with exactly one of each is
+   * a shape you learn to read, and no real table has it.
    */
   opponents: string[]
+  /**
+   * Sit down against strangers.
+   *
+   * Every style is in the pool, and nothing on screen says which seat is
+   * which — no style badge, and names that carry no hint. Reading an opponent
+   * from how they play is the skill; being told is the answer key, and there
+   * has to be a way to put the answer key away.
+   */
+  random: boolean
 }
 
 /** A six-handed game against one of each, which is the game this app grew up on. */
@@ -49,6 +61,7 @@ export const DEFAULT_TABLE: TableConfig = {
   bigBlind: 2,
   buyIn: 200,
   opponents: ['nit', 'tag', 'lag', 'station', 'maniac'],
+  random: false,
 }
 
 /**
@@ -81,7 +94,9 @@ export function faultsIn(table: TableConfig): string[] {
   if (table.buyIn > table.bigBlind * MAX_STACK_BB) {
     faults.push(`Stacks stop at ${MAX_STACK_BB} big blinds.`)
   }
-  if (table.opponents.length === 0) {
+  // A random table draws from every style, so an empty pool is only a fault
+  // when the pool is what the table is made from.
+  if (!table.random && table.opponents.length === 0) {
     faults.push('Pick at least one kind of opponent.')
   }
   for (const id of table.opponents) {
@@ -115,24 +130,64 @@ function nameSeats(ids: string[]): string[] {
 }
 
 /**
+ * Names for a table of strangers.
+ *
+ * Short, so they fit on a plate, and deliberately saying nothing: "Rock" and
+ * "Maniac" are how somebody plays, and half the point of a random table is
+ * that you have to work that out rather than read it off the felt.
+ */
+const STRANGERS = [
+  'Ari', 'Bo', 'Cleo', 'Dana', 'Eli', 'Fen', 'Gio', 'Hal', 'Ines', 'Jo',
+  'Kai', 'Lena', 'Milo', 'Nadia', 'Otto', 'Pia', 'Rey', 'Sam', 'Tess', 'Uma',
+]
+
+/** Pick `count` distinct names, in a shuffled order. */
+function strangerNames(count: number, rng: Rng): string[] {
+  const pool = [...STRANGERS]
+  const picked: string[] = []
+  for (let i = 0; i < count; i++) {
+    if (pool.length === 0) {
+      // More seats than names, which the table sizes make impossible today.
+      picked.push(`Seat ${i + 2}`)
+      continue
+    }
+    picked.push(pool.splice(rng.nextInt(pool.length), 1)[0]!)
+  }
+  return picked
+}
+
+/** The styles a table may seat: every one of them, or the ones chosen. */
+export const poolFor = (table: TableConfig): string[] =>
+  table.random ? [...ARCHETYPE_IDS] : table.opponents
+
+/**
  * The opponents this table seats, in order.
  *
- * The chosen list is repeated to fill the seats, so choosing two kinds at a
- * six-handed table gives you them alternating rather than an error.
+ * Each seat is drawn from the pool independently, so the mix is different
+ * every time you sit down — four maniacs and a rock is a table that happens,
+ * and it is a different game from one of each. `seed` is what makes it a draw
+ * rather than a shuffle you can predict, and what makes the same sitting deal
+ * the same table twice.
  */
-export function opponentsFor(table: TableConfig): string[] {
+export function opponentsFor(table: TableConfig, seed = 0): string[] {
   const wanted = table.seats - 1
-  if (wanted <= 0 || table.opponents.length === 0) return []
-  return Array.from({ length: wanted }, (_, i) => table.opponents[i % table.opponents.length]!)
+  const pool = poolFor(table)
+  if (wanted <= 0 || pool.length === 0) return []
+  const rng = new Rng(seed)
+  return Array.from({ length: wanted }, () => pool[rng.nextInt(pool.length)]!)
 }
 
 /** The seats of this table, the player first. */
-export function seatsFor(table: TableConfig): SeatConfig[] {
-  const ids = opponentsFor(table)
-  const names = nameSeats(ids)
+export function seatsFor(table: TableConfig, seed = 0): SeatConfig[] {
+  const ids = opponentsFor(table, seed)
+  // Named from a separate stream so that who is sitting where and what they
+  // are called are independent: reusing the draw would make the name a tell.
+  const names = table.random
+    ? strangerNames(ids.length, new Rng(seed ^ 0x5f5f5f5f))
+    : nameSeats(ids)
   return [
-    { name: 'You', bot: null },
-    ...ids.map((bot, i) => ({ name: names[i]!, bot })),
+    { name: 'You', bot: null, hidden: false },
+    ...ids.map((bot, i) => ({ name: names[i]!, bot, hidden: table.random })),
   ]
 }
 
@@ -148,7 +203,7 @@ export function sessionConfigFor(table: TableConfig, seed: number): SessionConfi
   if (faults.length > 0) throw new Error(`That table cannot be dealt: ${faults.join(' ')}`)
 
   return {
-    seats: seatsFor(table),
+    seats: seatsFor(table, seed),
     heroSeat: 0,
     buyIn: table.buyIn,
     smallBlind: table.smallBlind,

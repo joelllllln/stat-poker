@@ -145,6 +145,13 @@ interface Preferences {
   seated: boolean
 }
 
+/** A stored table, brought up to date and checked, or nothing. */
+function normaliseTable(table: TableConfig | undefined): TableConfig | null {
+  if (!table) return null
+  const brought: TableConfig = { ...table, random: table.random === true }
+  return isPlayable(brought) ? brought : null
+}
+
 function loadPreferences(): Preferences {
   const fallback: Preferences = {
     hudLevel: 'full',
@@ -166,7 +173,9 @@ function loadPreferences(): Preferences {
       adviceLive: parsed.adviceLive !== false,
       // A remembered table is still checked before it is used: the rules can
       // tighten between visits, and what is in storage is whatever was there.
-      table: parsed.table && isPlayable(parsed.table) ? parsed.table : fallback.table,
+      // A remembered table predating the random option has no flag on it, and
+      // an absent flag has to read as "off" rather than as undefined.
+      table: normaliseTable(parsed.table) ?? fallback.table,
       seated: parsed.seated === true,
     }
   } catch {

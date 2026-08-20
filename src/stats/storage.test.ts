@@ -17,9 +17,9 @@ import { hydrate } from './archive'
  */
 
 const TABLES: TableConfig[] = [
-  { seats: 2, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['tag'] },
-  { seats: 5, smallBlind: 2, bigBlind: 5, buyIn: 50, opponents: ['maniac', 'nit'] },
-  { seats: 9, smallBlind: 25, bigBlind: 50, buyIn: 25_000, opponents: ['lag', 'station'] },
+  { seats: 2, smallBlind: 1, bigBlind: 2, buyIn: 200, opponents: ['tag'], random: false },
+  { seats: 5, smallBlind: 2, bigBlind: 5, buyIn: 50, opponents: ['maniac', 'nit'], random: false },
+  { seats: 9, smallBlind: 25, bigBlind: 50, buyIn: 25_000, opponents: ['lag', 'station'], random: false },
 ]
 
 /** A session of hands played badly, at a given table. */

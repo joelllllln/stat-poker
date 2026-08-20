@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ARCHETYPE_IDS } from '../bots/archetypes'
+import { ARCHETYPES, ARCHETYPE_IDS } from '../bots/archetypes'
 import { Rng } from '../engine/cards'
 import { legalActions } from '../engine/hand'
 import { potSize } from '../engine/types'
@@ -93,12 +93,12 @@ describe('what makes a table playable', () => {
   })
 
   it('refuses an opponent it has never heard of', () => {
-    expect(faultsIn(table({ opponents: ['shark'] })).join(' ')).toContain('no player called')
-    expect(faultsIn(table({ opponents: [] })).join(' ')).toContain('at least one')
+    expect(faultsIn(table({ opponents: ['shark'], random: false })).join(' ')).toContain('no player called')
+    expect(faultsIn(table({ opponents: [], random: false })).join(' ')).toContain('at least one')
   })
 
   it('reports every fault at once, so a form is fixed once', () => {
-    const hopeless = table({ seats: 99, bigBlind: 1, opponents: [] })
+    const hopeless = table({ seats: 99, bigBlind: 1, opponents: [], random: false })
     expect(faultsIn(hopeless).length).toBeGreaterThanOrEqual(3)
   })
 
@@ -108,25 +108,57 @@ describe('what makes a table playable', () => {
 })
 
 describe('who ends up in the seats', () => {
-  it('seats the player first and fills the rest from the chosen opponents', () => {
-    const seats = seatsFor(table({ seats: 4, opponents: ['nit', 'tag', 'lag'] }))
+  it('seats the player first and fills the rest from the chosen styles', () => {
+    const seats = seatsFor(table({ seats: 4, opponents: ['nit', 'tag', 'lag'], random: false }), 5)
     expect(seats).toHaveLength(4)
-    expect(seats[0]).toEqual({ name: 'You', bot: null })
-    expect(seats.slice(1).map((s) => s.bot)).toEqual(['nit', 'tag', 'lag'])
+    expect(seats[0]).toEqual({ name: 'You', bot: null, hidden: false })
+    for (const seat of seats.slice(1)) {
+      expect(['nit', 'tag', 'lag']).toContain(seat.bot)
+    }
   })
 
-  it('repeats the choice to fill a bigger table', () => {
+  it('fills a bigger table from one choice', () => {
     // "I want to play maniacs" is one choice, not eight.
-    const ids = opponentsFor(table({ seats: 9, opponents: ['maniac'] }))
+    const ids = opponentsFor(table({ seats: 9, opponents: ['maniac'], random: false }), 5)
     expect(ids).toHaveLength(8)
     expect(new Set(ids)).toEqual(new Set(['maniac']))
   })
 
+  it('deals a different mix from the same choice', () => {
+    // The mix is drawn rather than dealt round-robin, so two sittings at the
+    // same table are two different games. One of each every time is a shape
+    // you learn to read instead of learning to play.
+    const chosen = table({ seats: 7, opponents: ['nit', 'tag', 'lag', 'station', 'maniac'], random: false })
+    const mixes = new Set(
+      Array.from({ length: 40 }, (_, seed) => opponentsFor(chosen, seed).join(',')),
+    )
+    expect(mixes.size).toBeGreaterThan(30)
+
+    // And the counts really do vary: somewhere in there is a style that turned
+    // up more than once, which round-robin could never produce at this size.
+    const doubled = Array.from({ length: 40 }, (_, seed) => opponentsFor(chosen, seed)).some(
+      (ids) => new Set(ids).size < ids.length,
+    )
+    expect(doubled, 'a style appears more than once').toBe(true)
+  })
+
+  it('draws only from the styles that were chosen', () => {
+    for (let seed = 0; seed < 50; seed++) {
+      const ids = opponentsFor(table({ seats: 9, opponents: ['nit', 'maniac'], random: false }), seed)
+      for (const id of ids) expect(['nit', 'maniac']).toContain(id)
+    }
+  })
+
+  it('is the same table twice from the same seed', () => {
+    const chosen = table({ seats: 6, opponents: ['nit', 'lag'], random: false })
+    expect(seatsFor(chosen, 99)).toEqual(seatsFor(chosen, 99))
+  })
+
   it('numbers them only when there is more than one', () => {
-    const one = seatsFor(table({ seats: 2, opponents: ['nit'] }))
+    const one = seatsFor(table({ seats: 2, opponents: ['nit'], random: false }), 1)
     expect(one[1]!.name).toBe('Rock')
 
-    const several = seatsFor(table({ seats: 4, opponents: ['nit'] }))
+    const several = seatsFor(table({ seats: 4, opponents: ['nit'], random: false }), 1)
     expect(several.slice(1).map((s) => s.name)).toEqual(['Rock 1', 'Rock 2', 'Rock 3'])
   })
 
@@ -134,9 +166,68 @@ describe('who ends up in the seats', () => {
     // Two seats sharing a name would make the history ambiguous, and the
     // stored format keys a seat by its name.
     for (const seats of [2, 5, 9]) {
-      const names = seatsFor(table({ seats, opponents: ['nit', 'nit', 'tag'] })).map((s) => s.name)
-      expect(new Set(names).size, `${seats}-handed`).toBe(names.length)
+      for (const random of [false, true]) {
+        const names = seatsFor(table({ seats, opponents: ['nit', 'nit', 'tag'], random }), seats).map(
+          (s) => s.name,
+        )
+        expect(new Set(names).size, `${seats}-handed, random ${random}`).toBe(names.length)
+      }
     }
+  })
+})
+
+describe('a table of strangers', () => {
+  const strangers = (seats: number, seed: number) =>
+    seatsFor(table({ seats, opponents: [], random: true }), seed)
+
+  it('is playable without choosing anybody', () => {
+    expect(faultsIn(table({ seats: 6, opponents: [], random: true }))).toEqual([])
+    // Where the styles are the table, an empty pool is still a fault.
+    expect(faultsIn(table({ seats: 6, opponents: [], random: false }))).not.toEqual([])
+  })
+
+  it('draws from every style rather than a chosen few', () => {
+    const seen = new Set<string>()
+    for (let seed = 0; seed < 60; seed++) {
+      for (const id of opponentsFor(table({ seats: 9, opponents: ['nit'], random: true }), seed)) {
+        seen.add(id)
+      }
+    }
+    expect(seen).toEqual(new Set(ARCHETYPE_IDS))
+  })
+
+  it('never names a seat after how it plays', () => {
+    const tells = ARCHETYPE_IDS.flatMap((id) => [id, (ARCHETYPES[id]?.name ?? id).replace(/^The /, '')])
+    for (let seed = 0; seed < 30; seed++) {
+      for (const seat of strangers(9, seed).slice(1)) {
+        for (const tell of tells) {
+          expect(seat.name.toLowerCase(), `seed ${seed}`).not.toContain(tell.toLowerCase())
+        }
+      }
+    }
+  })
+
+  it('marks every opponent hidden, so nothing draws the style', () => {
+    const seats = strangers(6, 3)
+    expect(seats[0]!.hidden, 'you know what you are').toBe(false)
+    expect(seats.slice(1).every((s) => s.hidden)).toBe(true)
+    // A chosen table hides nothing: picking them is the point.
+    expect(seatsFor(table({ seats: 6, opponents: ['nit'], random: false }), 3).every((s) => !s.hidden)).toBe(true)
+  })
+
+  it('still tells the coach who it is pricing against', () => {
+    // Hidden is about the screen, not about the model: a coach that did not
+    // know who was in the pot would price every bet against a stranger.
+    for (const seat of strangers(6, 11).slice(1)) {
+      expect(ARCHETYPE_IDS).toContain(seat.bot)
+    }
+  })
+
+  it('seats a different set of strangers each time', () => {
+    const names = new Set(
+      Array.from({ length: 30 }, (_, seed) => strangers(6, seed).slice(1).map((s) => s.name).join(',')),
+    )
+    expect(names.size).toBeGreaterThan(20)
   })
 })
 
@@ -175,7 +266,7 @@ describe('every table it offers deals a real game', () => {
 
   it('plays against a table made of any one archetype', () => {
     for (const id of ARCHETYPE_IDS) {
-      const { session, decisions } = play(table({ seats: 5, opponents: [id] }), 8, 11)
+      const { session, decisions } = play(table({ seats: 5, opponents: [id], random: false }), 8, 11)
       expect(session.history, id).toHaveLength(8)
       expect(decisions, id).toBeGreaterThan(0)
     }
@@ -200,10 +291,10 @@ describe('a record made of many different tables', () => {
    * and is now the ordinary case for anybody who tries the setup screen.
    */
   const tables: TableConfig[] = [
-    table({ seats: 2, smallBlind: 5, bigBlind: 10, buyIn: 1_000, opponents: ['lag'] }),
+    table({ seats: 2, smallBlind: 5, bigBlind: 10, buyIn: 1_000, opponents: ['lag'], random: false }),
     table({ seats: 6 }),
-    table({ seats: 9, smallBlind: 1, bigBlind: 2, buyIn: 60, opponents: ['station', 'maniac'] }),
-    table({ seats: 3, smallBlind: 25, bigBlind: 50, buyIn: 5_000, opponents: ['nit'] }),
+    table({ seats: 9, smallBlind: 1, bigBlind: 2, buyIn: 60, opponents: ['station', 'maniac'], random: false }),
+    table({ seats: 3, smallBlind: 25, bigBlind: 50, buyIn: 5_000, opponents: ['nit'], random: false }),
   ]
 
   const mixedHistory = () =>
