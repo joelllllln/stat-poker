@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <!-- What a shared link looks like. -->
+  <defs>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c65a"/>
+      <stop offset="1" stop-color="#a9821c"/>
+    </linearGradient>
+    <radialGradient id="felt" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="#1c4b3f"/>
+      <stop offset="1" stop-color="#0d211d"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#0e0c0a"/>
+  <ellipse cx="920" cy="315" rx="330" ry="250" fill="url(#felt)"/>
+  <ellipse cx="920" cy="315" rx="330" ry="250" fill="none" stroke="#c9a227" stroke-opacity="0.3" stroke-width="8"/>
+  <path fill="url(#brass)" opacity="0.92" transform="translate(920 315) scale(1.05) translate(-256 -240)"
+        d="M256 96c58 74 116 112 116 174a80 80 0 0 1-80 80 76 76 0 0 1-36-9l14 63h-28l14-63a76 76 0 0 1-36 9 80 80 0 0 1-80-80c0-62 58-100 116-174z"/>
+
+  <text x="90" y="290" font-family="Georgia, 'Times New Roman', serif" font-size="86" font-weight="700"
+        letter-spacing="6" fill="#e8c65a">STAT POKER</text>
+  <text x="92" y="356" font-family="Georgia, 'Times New Roman', serif" font-size="34" fill="#b3a894">
+    Learn hold&#8217;em by the numbers.
+  </text>
+  <text x="92" y="404" font-family="Georgia, 'Times New Roman', serif" font-size="34" fill="#b3a894">
+    Every decision priced, every hand reviewed.
+  </text>
+  <rect x="90" y="452" width="196" height="6" fill="#c9a227" opacity="0.6"/>
+</svg>

@@ -3,6 +3,8 @@
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // import.meta.env, which is how the app knows a real build from a dev one.
+    "types": ["vite/client"],
     "module": "ESNext",
     "skipLibCheck": true,
 

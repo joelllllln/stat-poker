@@ -8,11 +8,10 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # Without this the default is six hours. A browser download that hangs —
-    # which is a thing that happens — then holds the deploy for the rest of the
-    # day while every check that actually tests the code has already passed.
-    # Twenty minutes is roughly four times a normal run.
-    timeout-minutes: 20
+    # Without this the default is six hours. A step that hangs — which is a
+    # thing that happens — then holds the deploy for the rest of the day while
+    # every check that actually tests the code has already passed.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,6 +25,37 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  # The browser suites, one job each and all at once.
+  #
+  # They used to run one after another in `check`, which grew to within six
+  # minutes of its own timeout as they were added — a slow runner away from
+  # blocking a deploy for a reason that has nothing to do with the code. Run
+  # side by side they finish in the time the slowest one takes, and a failure
+  # names itself in the job list instead of being the fourth step of something
+  # called "check".
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # One failing screen size should not cancel the run that would have told
+      # you the game also wedges at a short-stacked table.
+      fail-fast: false
+      matrix:
+        suite:
+          - { script: smoke, name: 'It runs in a browser' }
+          - { script: tilt, name: 'Playing badly at every table' }
+          - { script: sizes, name: 'Fitting on every screen' }
+          - { script: install, name: 'Installing, and working offline' }
+    name: ${{ matrix.suite.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
       # Cached between runs: the download is the slowest step here by far and
       # the only one that has ever hung.
       - name: Cache the browser
@@ -36,9 +66,9 @@ jobs:
       # Without --with-deps. That flag shells out to apt-get to fetch system
       # libraries, and apt against a slow mirror is what hung this step twice
       # in a row for half an hour each time. The ubuntu-latest image already
-      # ships what Chromium needs; if it ever stops doing so the smoke test
-      # fails at launch and says so, which is a better failure than a stall.
-      - name: Install a browser for the smoke test
+      # ships what Chromium needs; if it ever stops doing so the run fails at
+      # launch and says so, which is a better failure than a stall.
+      - name: Install a browser
         timeout-minutes: 8
         run: npx playwright install chromium
       # Served from a subdirectory rather than the root, because that is what
@@ -55,30 +85,18 @@ jobs:
           done
           echo 'the built site never came up' >&2
           exit 1
-      - name: Smoke test
-        run: node scripts/smoke.mjs
+      - name: ${{ matrix.suite.name }}
+        run: node scripts/${{ matrix.suite.script }}.mjs
         env:
           SMOKE_URL: http://localhost:4180/stat-poker/
-      # Playing badly at four different tables, which is where the faults the
-      # smoke test cannot reach live: changing tables, busting a short stack,
-      # nine seats on a phone.
-      - name: Play badly at every table
-        run: node scripts/tilt.mjs
-        env:
           TILT_URL: http://localhost:4180/stat-poker/
-      # Nineteen real screens, from a 320-pixel phone to a 2560-pixel desktop,
-      # each with a touch screen where the real device has one: nothing
-      # overlaps, nothing scrolls sideways, the controls are reachable and
-      # everything you tap is big enough to tap.
-      - name: Fit on every screen
-        run: node scripts/sizes.mjs
-        env:
           SIZES_URL: http://localhost:4180/stat-poker/
-      - name: Screenshot from a failed smoke test
+          INSTALL_URL: http://localhost:4180/stat-poker/
+      - name: Screenshot from a failed run
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-screenshot
+          name: screenshot-${{ matrix.suite.script }}
           path: screenshot.png
           if-no-files-found: ignore
 
@@ -106,7 +124,7 @@ jobs:
   # (Settings -> Pages -> Source: GitHub Actions); the workflow token is not
   # allowed to switch it on by itself.
   publish:
-    needs: check
+    needs: [check, browser]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

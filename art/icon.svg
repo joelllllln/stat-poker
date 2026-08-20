@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The app's mark: a brass spade cut into a card-room black, with the
+       felt showing through behind it. Drawn once here and rendered out to
+       every size the platforms ask for by scripts/icons.mjs. -->
+  <defs>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c65a"/>
+      <stop offset="1" stop-color="#a9821c"/>
+    </linearGradient>
+    <radialGradient id="felt" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#1c4b3f"/>
+      <stop offset="1" stop-color="#0d211d"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="#0e0c0a"/>
+  <circle cx="256" cy="248" r="190" fill="url(#felt)"/>
+  <circle cx="256" cy="248" r="190" fill="none" stroke="#c9a227" stroke-opacity="0.35" stroke-width="6"/>
+
+  <!-- The spade, and the stem beneath it. -->
+  <path fill="url(#brass)" d="M256 96c58 74 116 112 116 174a80 80 0 0 1-80 80 76 76 0 0 1-36-9l14 63h-28l14-63a76 76 0 0 1-36 9 80 80 0 0 1-80-80c0-62 58-100 116-174z"/>
+</svg>

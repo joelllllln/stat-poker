@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The same mark, drawn inside the safe circle a maskable icon is cropped
+       to: platforms cut anything outside the middle 80%, so the felt runs to
+       the edge and the spade sits well inside it. -->
+  <defs>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c65a"/>
+      <stop offset="1" stop-color="#a9821c"/>
+    </linearGradient>
+    <radialGradient id="felt" cx="0.5" cy="0.42" r="0.7">
+      <stop offset="0" stop-color="#1c4b3f"/>
+      <stop offset="1" stop-color="#0b1a17"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#felt)"/>
+  <path fill="url(#brass)" transform="translate(256 262) scale(0.62) translate(-256 -240)"
+        d="M256 96c58 74 116 112 116 174a80 80 0 0 1-80 80 76 76 0 0 1-36-9l14 63h-28l14-63a76 76 0 0 1-36 9 80 80 0 0 1-80-80c0-62 58-100 116-174z"/>
+</svg>
