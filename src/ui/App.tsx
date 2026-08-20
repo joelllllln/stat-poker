@@ -36,10 +36,10 @@ function ResultBanner() {
     <div
       className={`flex flex-wrap items-baseline gap-x-3 rounded-xl border px-4 py-2.5 ${
         net > 0
-          ? 'border-emerald-700/70 bg-emerald-950/50'
+          ? 'border-[color:var(--color-jade)]/60 bg-[color:var(--color-jade-deep)]'
           : net < 0
-            ? 'border-rose-900/70 bg-rose-950/40'
-            : 'border-slate-800 bg-slate-900/50'
+            ? 'border-[color:var(--color-oxblood)]/60 bg-[color:var(--color-oxblood-deep)]'
+            : 'border-[color:var(--color-ink-4)] bg-black/40'
       }`}
       role="status"
     >
@@ -47,7 +47,7 @@ function ResultBanner() {
         {net > 0 ? `You won ${net}` : net < 0 ? `You lost ${-net}` : 'You broke even'}
       </span>
       {heroValue !== null && heroValue !== undefined && (
-        <span className="text-sm text-slate-400">You held {describe(heroValue)}.</span>
+        <span className="text-sm text-[color:var(--color-bone-dim)]">You held {describe(heroValue)}.</span>
       )}
     </div>
   )
@@ -75,8 +75,8 @@ function Toggle<T extends string>({
 }) {
   return (
     <label className="flex items-center gap-1.5 text-xs" title={hint}>
-      <span className="text-slate-500">{label}</span>
-      <span className="flex rounded-lg border border-slate-800 p-0.5">
+      <span className="text-[color:var(--color-bone-faint)]">{label}</span>
+      <span className="flex rounded-lg border border-[color:var(--color-ink-4)] p-0.5">
         {options.map((option) => (
           <button
             key={option.value}
@@ -84,8 +84,8 @@ function Toggle<T extends string>({
             aria-pressed={value === option.value}
             className={`min-h-11 touch-manipulation rounded px-3 transition sm:min-h-8 ${
               value === option.value
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[color:var(--color-ink-4)] text-[color:var(--color-bone)]'
+                : 'text-[color:var(--color-bone-dim)] hover:text-[color:var(--color-bone)]'
             }`}
           >
             {option.label}
@@ -122,8 +122,8 @@ function SeatKey() {
       <dl className="mt-1 space-y-0.5">
         {seats.map(([code, meaning]) => (
           <div key={code} className="flex gap-2 text-[11px] leading-snug">
-            <dt className="w-9 shrink-0 font-mono text-slate-300">{code}</dt>
-            <dd className="text-slate-400">{meaning}</dd>
+            <dt className="w-9 shrink-0 font-mono text-[color:var(--color-bone)]">{code}</dt>
+            <dd className="text-[color:var(--color-bone-dim)]">{meaning}</dd>
           </div>
         ))}
       </dl>
@@ -349,7 +349,7 @@ export function App() {
               ]}
             />
             {/* Only worth saying where there is a keyboard to press. */}
-            <span className="hidden text-xs text-slate-600 sm:inline">
+            <span className="hidden text-xs text-[color:var(--color-bone-faint)] sm:inline">
               Keys: F fold · C check or call · R raise · A all in · Space deal
             </span>
           </div>

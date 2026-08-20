@@ -266,7 +266,7 @@ function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
           )
         ) : (
           <div
-            className="flex items-center justify-center text-slate-600"
+            className="flex items-center justify-center text-[color:var(--color-bone-faint)]"
             style={{ height: `calc(${scale.card} * 1.4)`, fontSize: scale.small }}
             aria-hidden
           >
@@ -277,7 +277,7 @@ function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
 
       <div className="w-full truncate text-center font-medium" style={{ fontSize: scale.text }}>
         {s.name}{' '}
-        <span className="text-slate-500" style={{ fontSize: scale.small }}>
+        <span className="text-[color:var(--color-bone-faint)]" style={{ fontSize: scale.small }}>
           {positionName(seat, state.buttonSeat, state.seats.length)}
         </span>
       </div>
@@ -296,15 +296,15 @@ function Seat({ state, seat, isHero, botName, won, scale }: SeatProps) {
         style={{ fontSize: scale.small, minHeight: `calc(${scale.small} * 1.4)` }}
       >
         {won > 0 ? (
-          <span className="font-mono font-semibold text-emerald-300">+{won}</span>
+          <span className="font-mono font-semibold text-[color:var(--color-jade-bright)]">+{won}</span>
         ) : showCards && handValue !== null && handValue !== undefined ? (
-          <span className="text-slate-400">{describeHand(handValue)}</span>
+          <span className="text-[color:var(--color-bone-dim)]">{describeHand(handValue)}</span>
         ) : folded ? (
-          <span className="uppercase tracking-wide text-slate-500">Folded</span>
+          <span className="uppercase tracking-wide text-[color:var(--color-bone-faint)]">Folded</span>
         ) : action !== null && !over ? (
-          <span className="uppercase tracking-wide text-slate-300">{action}</span>
+          <span className="uppercase tracking-wide text-[color:var(--color-bone)]">{action}</span>
         ) : botName ? (
-          <span className="uppercase tracking-wide text-slate-500">{botName}</span>
+          <span className="uppercase tracking-wide text-[color:var(--color-bone-faint)]">{botName}</span>
         ) : (
           ' '
         )}
@@ -321,11 +321,11 @@ function Chips({ amount, scale }: { amount: number; scale: string }) {
       style={{ gap: `calc(${scale} * 0.4)`, padding: `calc(${scale} * 0.25) calc(${scale} * 0.5)` }}
     >
       <span
-        className="rounded-full border border-black/40 bg-rose-600"
+        className="rounded-full border border-black/40 bg-[color:var(--color-oxblood)]"
         style={{ width: scale, height: `calc(${scale} * 0.55)` }}
         aria-hidden
       />
-      <span className="font-mono font-semibold text-amber-100" style={{ fontSize: scale }}>
+      <span className="font-mono font-semibold text-[color:var(--color-brass-bright)]" style={{ fontSize: scale }}>
         {amount}
       </span>
     </div>
@@ -368,10 +368,10 @@ function Board({
         className="flex items-center gap-2 rounded-full bg-black/50 px-3 py-1"
         style={{ fontSize: potFontSize }}
       >
-        <span className="uppercase tracking-[0.18em] text-emerald-200/60">
+        <span className="uppercase tracking-[0.18em] text-[color:var(--color-jade-bright)]/70">
           {STREET_LABEL[state.street]}
         </span>
-        <span className="font-mono text-amber-100">Pot {potSize(state)}</span>
+        <span className="font-mono text-[color:var(--color-brass-bright)]">Pot {potSize(state)}</span>
       </div>
     </div>
   )
@@ -388,7 +388,7 @@ export function Table({ session }: { session: SessionState }) {
   if (!state) {
     return (
       <div className="rail rounded-[12%/22%] p-2 sm:rounded-[46%/32%] sm:p-3">
-        <div className="felt flex aspect-[16/10] items-center justify-center rounded-[10%/20%] px-6 text-center text-sm text-emerald-200/60 sm:aspect-[16/9] sm:rounded-[46%/32%]">
+        <div className="felt flex aspect-[16/10] items-center justify-center rounded-[10%/20%] px-6 text-center text-sm text-[color:var(--color-jade-bright)]/70 sm:aspect-[16/9] sm:rounded-[46%/32%]">
           {tableName(numSeats)} no-limit hold’em. Press Deal to play a hand.
         </div>
       </div>
@@ -500,7 +500,7 @@ export function Table({ session }: { session: SessionState }) {
                   .filter((s) => s.committed > 0)
                   .map((s) => (
                     <div key={s.index} data-chips={s.name} className="flex items-center gap-1">
-                      <span className="text-[10px] text-slate-400">{s.name}</span>
+                      <span className="text-[10px] text-[color:var(--color-bone-dim)]">{s.name}</span>
                       <Chips amount={s.committed} scale="11px" />
                     </div>
                   ))}
@@ -529,7 +529,7 @@ function DealerButton({ spot }: { spot: { left: number; top: number } }) {
   const place = towardCentre(spot, 0.2)
   return (
     <div
-      className="absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white font-bold text-slate-900 shadow-md"
+      className="absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white font-bold text-[color:var(--color-ink)] shadow-md"
       style={{
         left: `${place.left + 9}%`,
         top: `${place.top}%`,

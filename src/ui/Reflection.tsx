@@ -14,10 +14,10 @@ import { blindPosted, madeHandInWords } from './plain'
 import { useStore } from './store'
 
 const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; bar: string }> = {
-  optimal: { label: 'Optimal', chip: 'bg-emerald-900/70 text-[color:var(--color-brass-bright)]', bar: 'bg-emerald-500' },
-  fine: { label: 'Fine', chip: 'bg-sky-900/70 text-sky-200', bar: 'bg-sky-500' },
-  mistake: { label: 'Mistake', chip: 'bg-amber-900/70 text-amber-200', bar: 'bg-amber-500' },
-  blunder: { label: 'Blunder', chip: 'bg-rose-900/70 text-rose-200', bar: 'bg-rose-500' },
+  optimal: { label: 'Optimal', chip: 'bg-[color:var(--color-jade-deep)] text-[color:var(--color-jade-bright)]', bar: 'bg-[color:var(--color-jade)]' },
+  fine: { label: 'Fine', chip: 'bg-[color:var(--color-royal-deep)] text-[color:var(--color-royal-bright)]', bar: 'bg-[color:var(--color-royal)]' },
+  mistake: { label: 'Mistake', chip: 'bg-[color:var(--color-brass-deep)]/50 text-[color:var(--color-brass-bright)]', bar: 'bg-[color:var(--color-brass)]' },
+  blunder: { label: 'Blunder', chip: 'bg-[color:var(--color-oxblood-deep)] text-[color:var(--color-oxblood-bright)]', bar: 'bg-[color:var(--color-oxblood)]' },
 }
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
@@ -51,10 +51,10 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
           <span className="ml-auto font-mono text-xs text-[color:var(--color-bone-dim)]">
             {decision.evLossBB > 0.005 ? `−${decision.evLossBB.toFixed(2)}bb` : '—'}
             {decision.evLossBB > 0.005 && decision.evLossErrorBB > 0.005 && (
-              <span className="text-slate-600"> ±{decision.evLossErrorBB.toFixed(2)}</span>
+              <span className="text-[color:var(--color-bone-faint)]"> ±{decision.evLossErrorBB.toFixed(2)}</span>
             )}
           </span>
-          <span className="text-slate-600">{open ? '▾' : '▸'}</span>
+          <span className="text-[color:var(--color-bone-faint)]">{open ? '▾' : '▸'}</span>
         </div>
 
         <div className="mt-1.5 flex items-end gap-3">
@@ -66,9 +66,9 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
           </div>
           {decision.bestLabel !== decision.chosenLabel && (
             <>
-              <div aria-hidden className="pb-1.5 text-slate-600">→</div>
+              <div aria-hidden className="pb-1.5 text-[color:var(--color-bone-faint)]">→</div>
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-wide text-emerald-400/70">
+                <div className="text-[11px] uppercase tracking-wide text-[color:var(--color-jade)]">
                   Statistically best
                 </div>
                 <div className="truncate text-lg font-semibold text-[color:var(--color-brass-bright)]">
@@ -88,18 +88,18 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
           <p className="text-sm text-[color:var(--color-bone-dim)]">{decision.explanation}</p>
 
           {decision.blueprint && (
-            <div className="rounded border border-violet-900/70 bg-violet-950/30 px-2 py-1.5">
+            <div className="rounded border border-[color:var(--color-royal)]/50 bg-[color:var(--color-royal-deep)] px-2 py-1.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[11px] uppercase tracking-wide text-violet-300/70">
+                <span className="text-[11px] uppercase tracking-wide text-[color:var(--color-royal-bright)]/70">
                   Solved strategy · {decision.blueprint.stack}bb
                 </span>
                 {/* How far from equilibrium the solve got, rather than a bare
                     claim that this is "GTO". */}
-                <span className="font-mono text-[10px] text-violet-300/50">
+                <span className="font-mono text-[10px] text-[color:var(--color-royal-bright)]/50">
                   exploitable for {decision.blueprint.exploitability.toFixed(6)}bb/hand
                 </span>
               </div>
-              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-violet-100">
+              <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[color:var(--color-bone)]">
                 {decision.blueprint.actions
                   .filter((a) => a.frequency >= 0.005)
                   .map((a) => (
@@ -109,7 +109,7 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
                   ))}
               </div>
               {decision.blueprint.mixed && (
-                <div className="mt-0.5 text-[11px] text-violet-300/60">
+                <div className="mt-0.5 text-[11px] text-[color:var(--color-royal-bright)]/60">
                   A mixed spot — more than one action is close to best, so any of
                   these is defensible.
                 </div>
@@ -147,14 +147,14 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
               return (
                 <div key={option.label} className="flex items-center gap-2 text-xs">
                   <span
-                    className={`w-28 shrink-0 ${chosen ? 'font-medium text-white' : 'text-[color:var(--color-bone-dim)]'}`}
+                    className={`w-28 shrink-0 ${chosen ? 'font-medium text-[color:var(--color-bone)]' : 'text-[color:var(--color-bone-dim)]'}`}
                   >
                     {option.label}
                     {chosen && ' ←'}
                   </span>
                   <div className="h-2 flex-1 overflow-hidden rounded bg-black/45">
                     <div
-                      className={`h-full ${isBest ? style.bar : 'bg-slate-600'}`}
+                      className={`h-full ${isBest ? style.bar : 'bg-[color:var(--color-bone-faint)]'}`}
                       style={{ width: `${Math.max(1, ((option.ev - worst) / span) * 100)}%` }}
                     />
                   </div>
@@ -162,7 +162,7 @@ function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind
                     {(option.ev / bigBlind).toFixed(2)}bb
                   </span>
                   {option.foldEquity !== undefined && (
-                    <span className="w-16 shrink-0 text-right text-slate-600">
+                    <span className="w-16 shrink-0 text-right text-[color:var(--color-bone-faint)]">
                       {pct(option.foldEquity)} fold
                     </span>
                   )}
@@ -182,7 +182,7 @@ function Summary({ grade, record, heroSeat }: { grade: HandGrade; record: HandRe
 
   if (grade.correctAndLost) {
     return (
-      <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2">
+      <div className="rounded-lg border border-[color:var(--color-jade)]/60 bg-[color:var(--color-jade-deep)] px-3 py-2">
         <div className="text-sm font-medium text-[color:var(--color-brass-bright)]">
           You played this hand correctly and lost it.
         </div>
@@ -196,12 +196,12 @@ function Summary({ grade, record, heroSeat }: { grade: HandGrade; record: HandRe
 
   if (grade.worst) {
     return (
-      <div className="rounded-lg border border-amber-900 bg-amber-950/30 px-3 py-2">
-        <div className="text-sm font-medium text-amber-200">
+      <div className="rounded-lg border border-[color:var(--color-brass)]/50 bg-[color:var(--color-brass-deep)]/30 px-3 py-2">
+        <div className="text-sm font-medium text-[color:var(--color-brass-bright)]">
           Biggest leak: {grade.worst.chosenLabel} on the {grade.worst.street}, costing{' '}
           {grade.worst.evLossBB.toFixed(2)}bb
         </div>
-        <div className="mt-1 text-xs text-amber-200/70">{grade.worst.explanation}</div>
+        <div className="mt-1 text-xs text-[color:var(--color-brass)]">{grade.worst.explanation}</div>
       </div>
     )
   }
@@ -265,7 +265,7 @@ export function Reflection({ record, heroSeat }: { record: HandRecord; heroSeat:
           they can. */}
       <p className="text-sm text-[color:var(--color-bone-dim)]">
         You had{' '}
-        <span className="font-medium text-amber-100">
+        <span className="font-medium text-[color:var(--color-brass-bright)]">
           {madeHandInWords(
             record.state.seats[heroSeat]!.holeCards!,
             record.state.board.slice(0, record.state.result?.runoutFrom ?? record.state.board.length),

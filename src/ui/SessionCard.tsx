@@ -70,7 +70,7 @@ export function SessionCard({ session }: { session: SessionState }) {
             netThisSitting > 0
               ? 'text-[color:var(--color-brass-bright)]'
               : netThisSitting < 0
-                ? 'text-rose-300'
+                ? 'text-[color:var(--color-oxblood-bright)]'
                 : 'text-[color:var(--color-bone-dim)]'
           }`}
         >

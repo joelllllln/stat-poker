@@ -110,7 +110,7 @@ export function Advice({
           <span className="stamp">
             If this goes all the way
           </span>
-          {pending && <span className="text-xs text-slate-600">updating…</span>}
+          {pending && <span className="text-xs text-[color:var(--color-bone-faint)]">updating…</span>}
         </div>
         <div className="figure mt-1 text-5xl text-[color:var(--color-brass-bright)]">
           {timesInTen(advice.equity)}

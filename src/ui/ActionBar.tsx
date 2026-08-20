@@ -245,7 +245,7 @@ export function ActionBar({
               max={raise.max}
               value={amount}
               onChange={(e) => setCustom(Number(e.target.value))}
-              className="h-11 min-w-16 flex-1 touch-manipulation accent-emerald-500 sm:h-auto"
+              className="h-11 min-w-16 flex-1 touch-manipulation accent-[color:var(--color-jade)] sm:h-auto"
               aria-label="Bet size"
             />
             <span className="w-10 shrink-0 text-right font-mono text-sm text-[color:var(--color-bone)] sm:hidden">

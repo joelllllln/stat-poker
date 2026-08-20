@@ -244,12 +244,12 @@ export function Dashboard({ session }: { session: SessionState }) {
               {evLostInWords(evLostPer100)}
             </div>
           ) : (
-            <span className="text-amber-500/80">
+            <span className="text-[color:var(--color-brass)]">
               {graded.length}/{MASTERY_SAMPLE} graded hands — placement is provisional
             </span>
           )}
           {stats.hands < STYLE_SAMPLE && (
-            <div className="text-amber-500/80">
+            <div className="text-[color:var(--color-brass)]">
               {stats.hands}/{STYLE_SAMPLE} hands — style is provisional too
             </div>
           )}
@@ -303,7 +303,7 @@ export function Dashboard({ session }: { session: SessionState }) {
             Where it goes
           </div>
           {leak.leak ? (
-            <div className="mt-0.5 text-sm text-amber-200">{describeLeak(leak.leak)}</div>
+            <div className="mt-0.5 text-sm text-[color:var(--color-brass-bright)]">{describeLeak(leak.leak)}</div>
           ) : (
             <div className="mt-0.5 text-xs text-[color:var(--color-bone-dim)]">
               {leak.decisions < MIN_SAMPLE
@@ -431,9 +431,12 @@ export function Dashboard({ session }: { session: SessionState }) {
         {/* A chart of two lines with no scale anybody knows. What separates
             them is the whole point of it, and it takes one sentence. */}
         <p className="text-[11px] leading-snug text-[color:var(--color-bone-dim)]">
-          The blue line is what you actually won. The orange line is what you would have won if
-          every hand you got all-in had been paid out at what it was worth, instead of however
-          the cards happened to fall. Orange above blue means the cards have been unkind.
+          The line marked <em className="not-italic text-[color:var(--color-bone)]">Actual</em> is
+          what you really won. The one marked{' '}
+          <em className="not-italic text-[color:var(--color-brass-bright)]">All-in adjusted</em> is
+          what you would have won if every hand you got all-in had been paid out at what it was
+          worth, instead of however the cards happened to fall. Adjusted above actual means the
+          cards have been unkind.
         </p>
         <LuckChart actual={curve.actual} adjusted={curve.adjusted} />
       </div>

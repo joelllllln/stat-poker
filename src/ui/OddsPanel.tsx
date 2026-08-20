@@ -38,7 +38,7 @@ function Tile({
   tone?: 'default' | 'good' | 'bad'
 }) {
   const colour =
-    tone === 'good' ? 'text-[color:var(--color-brass-bright)]' : tone === 'bad' ? 'text-rose-300' : 'text-[color:var(--color-bone)]'
+    tone === 'good' ? 'text-[color:var(--color-brass-bright)]' : tone === 'bad' ? 'text-[color:var(--color-oxblood-bright)]' : 'text-[color:var(--color-bone)]'
   return (
     <div className="plate px-3 py-2">
       <div className="stamp">{label}</div>
@@ -118,7 +118,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
         <span className="stamp">
           This decision
         </span>
-        {pending && <span className="text-[11px] text-slate-600">updating…</span>}
+        {pending && <span className="text-[11px] text-[color:var(--color-bone-faint)]">updating…</span>}
       </div>
 
       {hudLevel === 'predict' && (
@@ -152,8 +152,8 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
               toCall === 0
                 ? 'border-[color:var(--color-ink-4)] bg-black/25 text-[color:var(--color-bone-dim)]'
                 : callIsCorrect
-                  ? 'border-emerald-800 bg-emerald-950/40 text-[color:var(--color-brass-bright)]'
-                  : 'border-rose-900 bg-rose-950/40 text-rose-200'
+                  ? 'border-[color:var(--color-jade)]/60 bg-[color:var(--color-jade-deep)] text-[color:var(--color-brass-bright)]'
+                  : 'border-[color:var(--color-oxblood)]/60 bg-[color:var(--color-oxblood-deep)] text-[color:var(--color-oxblood-bright)]'
             }`}
           >
             {/* Said in words first. A beginner reading "85.1%" does not know
@@ -240,7 +240,7 @@ export function OddsPanel({ state, heroSeat }: { state: HandState; heroSeat: num
                       <span className="w-14 shrink-0 truncate text-[color:var(--color-bone-dim)]">{w.name}</span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded bg-black/45">
                         <div
-                          className="h-full bg-slate-500"
+                          className="h-full bg-[color:var(--color-bone-faint)]"
                           style={{ width: `${Math.min(100, w.width * 100)}%` }}
                         />
                       </div>

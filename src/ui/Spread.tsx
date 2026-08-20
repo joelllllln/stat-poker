@@ -50,9 +50,9 @@ export function Spread({
     .sort((a, b) => b.size - a.size)
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2">
+    <div className="space-y-2 rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 px-3 py-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">
+        <span className="text-[11px] uppercase tracking-wide text-[color:var(--color-bone-faint)]">
           Run it {TRIALS.toLocaleString('en-US')} times
         </span>
         <div className="flex gap-1">
@@ -62,8 +62,8 @@ export function Spread({
               onClick={() => setFrom(street.size)}
               className={`rounded px-1.5 py-0.5 text-[11px] ${
                 from === street.size
-                  ? 'bg-slate-700 text-white'
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-[color:var(--color-ink-4)] text-[color:var(--color-bone)]'
+                  : 'text-[color:var(--color-bone-faint)] hover:text-[color:var(--color-bone)]'
               }`}
             >
               from {street.label.toLowerCase()}
@@ -74,26 +74,26 @@ export function Spread({
 
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div>
-          <div className="text-slate-500">Wins</div>
-          <div className="font-mono text-sm text-slate-200">
+          <div className="text-[color:var(--color-bone-faint)]">Wins</div>
+          <div className="font-mono text-sm text-[color:var(--color-bone)]">
             {(run.winRate * 100).toFixed(1)}%
             {run.tieRate > 0.005 && (
-              <span className="text-slate-500"> +{(run.tieRate * 100).toFixed(1)}% chop</span>
+              <span className="text-[color:var(--color-bone-faint)]"> +{(run.tieRate * 100).toFixed(1)}% chop</span>
             )}
           </div>
         </div>
         <div>
-          <div className="text-slate-500">Worth</div>
-          <div className="font-mono text-sm text-slate-200">
+          <div className="text-[color:var(--color-bone-faint)]">Worth</div>
+          <div className="font-mono text-sm text-[color:var(--color-bone)]">
             {run.expected >= 0 ? '+' : ''}
             {(run.expected / bigBlind).toFixed(1)}bb
           </div>
         </div>
         <div>
-          <div className="text-slate-500">You got</div>
+          <div className="text-[color:var(--color-bone-faint)]">You got</div>
           <div
             className={`font-mono text-sm ${
-              run.actual >= run.expected ? 'text-emerald-300' : 'text-rose-300'
+              run.actual >= run.expected ? 'text-[color:var(--color-jade-bright)]' : 'text-[color:var(--color-oxblood-bright)]'
             }`}
           >
             {run.actual >= 0 ? '+' : ''}
@@ -112,24 +112,24 @@ export function Spread({
             <div key={outcome.net} className="flex items-center gap-2 text-xs">
               <span
                 className={`w-20 shrink-0 text-right font-mono ${
-                  outcome.net >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                  outcome.net >= 0 ? 'text-[color:var(--color-jade-bright)]' : 'text-[color:var(--color-oxblood-bright)]'
                 }`}
               >
                 {outcome.net >= 0 ? '+' : ''}
                 {(outcome.net / bigBlind).toFixed(1)}bb
               </span>
-              <div className="h-3 flex-1 overflow-hidden rounded bg-slate-800">
+              <div className="h-3 flex-1 overflow-hidden rounded bg-[color:var(--color-ink-3)]">
                 <div
                   className={`h-full ${
-                    outcome.net >= 0 ? 'bg-emerald-700' : 'bg-rose-800'
-                  } ${happened ? 'ring-1 ring-amber-400' : ''}`}
+                    outcome.net >= 0 ? 'bg-[color:var(--color-jade)]' : 'bg-[color:var(--color-oxblood)]'
+                  } ${happened ? 'ring-1 ring-[color:var(--color-brass-bright)]' : ''}`}
                   style={{ width: `${Math.max(1, outcome.probability * 100)}%` }}
                 />
               </div>
-              <span className="w-12 shrink-0 text-right font-mono text-slate-400">
+              <span className="w-12 shrink-0 text-right font-mono text-[color:var(--color-bone-dim)]">
                 {(outcome.probability * 100).toFixed(1)}%
               </span>
-              <span className="w-14 shrink-0 text-[10px] text-amber-400">
+              <span className="w-14 shrink-0 text-[10px] text-[color:var(--color-brass-bright)]">
                 {happened ? '← actual' : ''}
               </span>
             </div>
@@ -138,14 +138,14 @@ export function Spread({
       </div>
 
       {from < settled && (
-        <p className="text-[11px] text-amber-300/80">
+        <p className="text-[11px] text-[color:var(--color-brass)]">
           Dealt from before the betting ended, so the players are holding to
           decisions they made after seeing a different board. That is a
           what-if, not what this hand was worth.
         </p>
       )}
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-[color:var(--color-bone-dim)]">
         {run.counterfactual
           ? `You folded. Had you called, the hand would have been worth ${(run.expected / bigBlind).toFixed(1)}bb — it wins ${(run.winRate * 100).toFixed(0)}% of the time at showdown, and the price of finding out is in that figure.`
           : run.actual < run.expected

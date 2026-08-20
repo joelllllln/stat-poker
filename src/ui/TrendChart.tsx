@@ -60,9 +60,9 @@ function Panel({ series, blockSize }: { series: Series; blockSize: number }) {
 
   if (points.length < 2) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
-        <div className="text-[11px] uppercase tracking-wide text-slate-500">{series.label}</div>
-        <div className="flex h-[74px] items-center text-[11px] text-slate-600">
+      <div className="rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 px-3 py-2">
+        <div className="text-[11px] uppercase tracking-wide text-[color:var(--color-bone-faint)]">{series.label}</div>
+        <div className="flex h-[74px] items-center text-[11px] text-[color:var(--color-bone-faint)]">
           Not enough blocks yet.
         </div>
       </div>
@@ -81,10 +81,10 @@ function Panel({ series, blockSize }: { series: Series; blockSize: number }) {
       : (last.value - first.value) * (series.better === 'higher' ? 1 : -1)
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+    <div className="rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 px-3 py-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-slate-500">{series.label}</span>
-        <span className="font-mono text-sm text-slate-200">{series.format(shown.value)}</span>
+        <span className="text-[11px] uppercase tracking-wide text-[color:var(--color-bone-faint)]">{series.label}</span>
+        <span className="font-mono text-sm text-[color:var(--color-bone)]">{series.format(shown.value)}</span>
       </div>
 
       <svg
@@ -120,7 +120,7 @@ function Panel({ series, blockSize }: { series: Series; blockSize: number }) {
         ))}
       </svg>
 
-      <div className="text-[10px] text-slate-500">
+      <div className="text-[10px] text-[color:var(--color-bone-faint)]">
         {hover === null ? (
           direction === null || Math.abs(direction) < 1e-9 ? (
             <>

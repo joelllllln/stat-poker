@@ -523,9 +523,12 @@ if (await guessButton.count()) {
 
 check(
   'the speed setting survived the reload',
-  await page
+  // Asked of the control's own state rather than of its colour: a toggle says
+  // which option is chosen through aria-pressed, and that is what a screen
+  // reader and this test should both be reading.
+  (await page
     .getByRole('button', { name: 'Fast', exact: true })
-    .evaluate((node) => node.className.includes('bg-slate-700')),
+    .getAttribute('aria-pressed')) === 'true',
 )
 
 // Metrics over time: the whole point of recording hands is that the record

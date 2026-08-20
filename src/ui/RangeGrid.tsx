@@ -51,8 +51,8 @@ export function RangeGrid({
     <div className="space-y-1">
       {title && (
         <div className="flex items-baseline justify-between text-[11px]">
-          <span className="uppercase tracking-wide text-slate-500">{title}</span>
-          <span className="font-mono text-slate-400">top {(width * 100).toFixed(0)}%</span>
+          <span className="uppercase tracking-wide text-[color:var(--color-bone-faint)]">{title}</span>
+          <span className="font-mono text-[color:var(--color-bone-dim)]">top {(width * 100).toFixed(0)}%</span>
         </div>
       )}
       <div className="grid grid-cols-13 gap-px" style={{ gridTemplateColumns: 'repeat(13, 1fr)' }}>
@@ -67,10 +67,10 @@ export function RangeGrid({
                 title={hand}
                 className={`aspect-square text-[6px] leading-none flex items-center justify-center rounded-[1px] ${
                   isHighlight
-                    ? 'bg-amber-400 text-slate-900 font-bold'
+                    ? 'bg-[color:var(--color-brass)] text-[color:var(--color-ink)] font-bold'
                     : inRange
-                      ? 'bg-emerald-700/80 text-emerald-50'
-                      : 'bg-slate-800/60 text-slate-600'
+                      ? 'bg-[color:var(--color-jade)]/80 text-[color:var(--color-bone)]'
+                      : 'bg-[color:var(--color-ink-3)] text-[color:var(--color-bone-faint)]'
                 }`}
               >
                 {hand.slice(0, 2)}

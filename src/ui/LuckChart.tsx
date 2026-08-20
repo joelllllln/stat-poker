@@ -56,7 +56,7 @@ export function LuckChart({ actual, adjusted }: Props) {
 
   if (actual.length < 2) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-slate-800 text-xs text-slate-600">
+      <div className="flex h-32 items-center justify-center rounded-lg border border-[color:var(--color-ink-4)] text-xs text-[color:var(--color-bone-faint)]">
         Play a few hands to see the curve.
       </div>
     )
@@ -79,7 +79,7 @@ export function LuckChart({ actual, adjusted }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-2">
+    <div className="rounded-lg border border-[color:var(--color-ink-4)] bg-black/40 p-2">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full"
@@ -109,7 +109,7 @@ export function LuckChart({ actual, adjusted }: Props) {
               x={PADDING.left - 6}
               y={geometry.y(value) + 3}
               textAnchor="end"
-              className="fill-slate-500"
+              className="fill-[color:var(--color-bone-faint)]"
               style={{ fontSize: 9, fontFamily: 'ui-monospace, monospace' }}
             >
               {value.toFixed(0)}
@@ -156,7 +156,7 @@ export function LuckChart({ actual, adjusted }: Props) {
         <text
           x={PADDING.left}
           y={HEIGHT - 6}
-          className="fill-slate-500"
+          className="fill-[color:var(--color-bone-faint)]"
           style={{ fontSize: 9 }}
         >
           hand 1
@@ -165,7 +165,7 @@ export function LuckChart({ actual, adjusted }: Props) {
           x={WIDTH - PADDING.right}
           y={HEIGHT - 6}
           textAnchor="end"
-          className="fill-slate-500"
+          className="fill-[color:var(--color-bone-faint)]"
           style={{ fontSize: 9 }}
         >
           hand {actual.length}
@@ -175,7 +175,7 @@ export function LuckChart({ actual, adjusted }: Props) {
       <div className="flex items-center justify-between px-1 pt-1 text-[11px]">
         <div className="flex gap-3">
           {Object.values(SERIES).map((series) => (
-            <span key={series.label} className="flex items-center gap-1 text-slate-400">
+            <span key={series.label} className="flex items-center gap-1 text-[color:var(--color-bone-dim)]">
               <span
                 className="inline-block h-0.5 w-3 rounded"
                 style={{ background: series.colour }}
@@ -185,7 +185,7 @@ export function LuckChart({ actual, adjusted }: Props) {
           ))}
         </div>
         {hover !== null && (
-          <span className="font-mono text-slate-400">
+          <span className="font-mono text-[color:var(--color-bone-dim)]">
             hand {hover + 1}: {actual[hover]!.toFixed(1)}bb vs {adjusted[hover]!.toFixed(1)}bb
           </span>
         )}

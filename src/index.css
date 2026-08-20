@@ -46,8 +46,19 @@
   --color-felt-dark: #0d211d;
   --color-felt-lit: #1c4b3f;
   --color-jade: #2f8f6b;
+  --color-jade-bright: #6fd0a5;
+  --color-jade-deep: #123528;
   --color-oxblood: #8e2434;
+  --color-oxblood-bright: #e0798a;
+  --color-oxblood-deep: #37121a;
   --color-rail: #3b2a20;
+
+  /* The blue off the back of a deck of cards, which is what the solved
+     equilibrium is marked in: it is a different kind of claim from the
+     coach's, and it should not be wearing the coach's colours. */
+  --color-royal: #35608f;
+  --color-royal-bright: #8fb4dd;
+  --color-royal-deep: #131f2e;
 }
 
 html,

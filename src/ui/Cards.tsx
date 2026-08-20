@@ -93,7 +93,7 @@ export function CardBack({
   const box = width ?? PRESETS[size]
   return (
     <div
-      className={`shrink-0 border border-slate-900/60 shadow-[0_2px_6px_rgba(0,0,0,0.45)] ${
+      className={`shrink-0 border border-[color:var(--color-ink-4)] shadow-[0_2px_6px_rgba(0,0,0,0.45)] ${
         dealt ? 'deal-in' : ''
       }`}
       style={{
