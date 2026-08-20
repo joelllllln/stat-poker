@@ -54,7 +54,9 @@ function Line({
           : 'text-[color:var(--color-bone)]'
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 text-sm">
-      <span className="min-w-0 truncate text-[color:var(--color-bone-dim)]">{label}</span>
+      {/* Wraps rather than truncates. A row whose label is cut to "Bet…" has
+          spent its width saying nothing. */}
+      <span className="min-w-0 text-[color:var(--color-bone-dim)]">{label}</span>
       <span className="shrink-0 text-right">
         <span className={`font-mono ${colour}`}>{value}</span>
         {note && <span className="ml-2 text-[11px] text-[color:var(--color-bone-faint)]">{note}</span>}
@@ -238,6 +240,10 @@ export function Decision({
   const spr =
     behindAfter !== null && betSize !== null ? stackToPotRatio(behindAfter, pot + 2 * betSize) : null
 
+  // Behind on the board as it stands where there is a board to read, and by
+  // the forecast where there is not.
+  const behind = split ? split.behind > split.ahead : (equity?.equity ?? 1) < 0.5
+
   const guessing = hudLevel === 'predict' && guess === null
   const toAct = live.filter((s) => s.status === 'active').length
 
@@ -345,18 +351,29 @@ export function Decision({
             tone={theyFold !== undefined && theyFold >= mustFold ? 'good' : 'bad'}
           />
         )}
-        {spr !== null && Number.isFinite(spr) && spr < 1.5 && betSize !== null && (
-          <Line
-            label="Betting leaves you"
-            value={`${behindAfter} behind`}
-            note={`${spr.toFixed(1)} of the pot — you are committed`}
-            tone="mark"
-          />
-        )}
-        {equity?.outs && (
-          // Shown at zero too. "Nothing gets you there" is a fact worth
-          // knowing — it is the difference between a draw and drawing dead —
-          // and a line that disappears reads as a line that failed to load.
+        {/* Only where there is a stack left to be committed with. Betting
+            everything is not commitment — it is the end of the decision, and
+            the button already says All in. */}
+        {spr !== null &&
+          Number.isFinite(spr) &&
+          spr < 1.5 &&
+          betSize !== null &&
+          behindAfter !== null &&
+          behindAfter > 0 && (
+            <Line
+              label="Betting leaves"
+              value={`${behindAfter} behind`}
+              note={`${spr.toFixed(1)}× the pot — you are committed`}
+              tone="mark"
+            />
+          )}
+        {/* Outs answer a question only somebody who is behind is asking. Shown
+            to a hand that is already ahead, "none — nothing gets you there"
+            reads as drawing dead to a player who is winning. So the line
+            appears when the board says the hand needs help, and at zero as
+            well as above it: the difference between a draw and drawing dead
+            is worth being told. */}
+        {equity?.outs && behind && (
           <Line
             label="Cards that put you ahead"
             value={equity.outs.cards.length === 0 ? 'none' : String(equity.outs.cards.length)}
