@@ -447,8 +447,13 @@ export function Table({ session }: { session: SessionState }) {
     <>
       {/* Wide enough for an oval: everything sized against the felt, so the
           arrangement is the same at every width. */}
-      <div className="rail hidden rounded-[46%/32%] p-3 sm:block">
-        <div className="felt relative aspect-[16/9] rounded-[46%/32%] @container">
+      <div className="rail felt-oval hidden rounded-[46%/32%] p-2 sm:block sm:p-3">
+        {/* Rounder where the screen is short and wide. The seats sit on an
+            ellipse scaled to the felt, and a plate's height comes from the
+            words in it rather than from the felt — so on a letterbox felt the
+            ring closes in on the board until they touch. Giving the oval back
+            its height on a landscape phone is what keeps them apart. */}
+        <div className="felt relative aspect-[16/9] rounded-[46%/32%] @container sideways:aspect-[4/3]">
           <div className="absolute left-1/2 top-[48%] -translate-x-1/2 -translate-y-1/2">
             <Board
               state={state}
@@ -490,7 +495,7 @@ export function Table({ session }: { session: SessionState }) {
           opponents, then the board, then you. Nothing is positioned, so
           nothing can land on anything else. */}
       <div className="rail rounded-2xl p-1.5 sm:hidden">
-        <div className="felt space-y-1.5 rounded-xl px-2 py-1.5 @container">
+        <div className="felt felt-stack space-y-1.5 rounded-xl px-2 py-1.5 @container">
           <div className="grid grid-cols-3 gap-1">
             {others.map((seat) => (
               <div key={seat} className="flex justify-center">
@@ -498,10 +503,10 @@ export function Table({ session }: { session: SessionState }) {
                   {...seatProps(seat, false)}
                   hideBacks
                   scale={{
-                    plate: '29cqw',
-                    card: '7.4cqw',
-                    text: 'clamp(10px, 2.9cqw, 12px)',
-                    small: 'clamp(9px, 2.4cqw, 10px)',
+                    plate: 'var(--seat-plate)',
+                    card: 'var(--seat-card)',
+                    text: 'var(--seat-text)',
+                    small: 'var(--seat-small)',
                   }}
                 />
               </div>
@@ -509,9 +514,9 @@ export function Table({ session }: { session: SessionState }) {
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
-            <Board state={state} cardWidth="9.6cqw" potFontSize="clamp(11px, 3.2cqw, 14px)" />
+            <Board state={state} cardWidth="var(--board-card)" potFontSize="clamp(11px, 3.2cqw, 14px)" />
             {state.seats.some((s) => s.committed > 0) && (
-              <div className="flex flex-wrap justify-center gap-1.5">
+              <div className="flex flex-wrap justify-center gap-1.5 max-[620px]:hidden">
                 {state.seats
                   .filter((s) => s.committed > 0)
                   .map((s) => (
@@ -528,10 +533,10 @@ export function Table({ session }: { session: SessionState }) {
             <Seat
               {...seatProps(heroSeat, true)}
               scale={{
-                plate: '40cqw',
-                card: '9.6cqw',
-                text: 'clamp(12px, 3.4cqw, 14px)',
-                small: 'clamp(10px, 2.7cqw, 11px)',
+                plate: 'var(--hero-plate)',
+                card: 'var(--hero-card)',
+                text: 'var(--hero-text)',
+                small: 'var(--hero-small)',
               }}
             />
           </div>

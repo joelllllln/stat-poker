@@ -66,6 +66,14 @@ jobs:
         run: node scripts/tilt.mjs
         env:
           TILT_URL: http://localhost:4180/stat-poker/
+      # Nineteen real screens, from a 320-pixel phone to a 2560-pixel desktop,
+      # each with a touch screen where the real device has one: nothing
+      # overlaps, nothing scrolls sideways, the controls are reachable and
+      # everything you tap is big enough to tap.
+      - name: Fit on every screen
+        run: node scripts/sizes.mjs
+        env:
+          SIZES_URL: http://localhost:4180/stat-poker/
       - name: Screenshot from a failed smoke test
         if: failure()
         uses: actions/upload-artifact@v4

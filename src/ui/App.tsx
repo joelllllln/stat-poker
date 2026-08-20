@@ -82,7 +82,7 @@ function Toggle<T extends string>({
             key={option.value}
             onClick={() => onChange(option.value)}
             aria-pressed={value === option.value}
-            className={`min-h-11 touch-manipulation rounded px-3 transition sm:min-h-8 ${
+            className={`min-h-11 touch-manipulation rounded px-3 transition fine:min-h-8 ${
               value === option.value
                 ? 'bg-[color:var(--color-ink-4)] text-[color:var(--color-bone)]'
                 : 'text-[color:var(--color-bone-dim)] hover:text-[color:var(--color-bone)]'
@@ -218,7 +218,7 @@ export function App() {
   // not another tab.
   if (!seated) {
     return (
-      <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-2 sm:p-4">
+      <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-2 sm:p-4 xl:max-w-[86rem]">
         <header className="flex items-baseline justify-between gap-2">
           <h1 className="wordmark shrink-0 text-base sm:text-xl">STAT&thinsp;POKER</h1>
           <p className="text-[11px] text-[color:var(--color-bone-faint)]">
@@ -238,9 +238,9 @@ export function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-1.5 p-2 sm:gap-3 sm:p-4">
+    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-1.5 p-2 sm:gap-3 sm:p-4 xl:max-w-[86rem] 2xl:max-w-[104rem]">
       <header className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5 max-[620px]:flex-row max-[620px]:items-baseline max-[620px]:gap-2 sm:flex-row sm:items-baseline sm:gap-3">
           <h1 className="wordmark shrink-0 text-base sm:text-xl">STAT&thinsp;POKER</h1>
           {/* Three facts fit a phone header; the words around them do not. */}
           <p className="truncate text-[11px] leading-tight text-[color:var(--color-bone-faint)]">
@@ -263,7 +263,7 @@ export function App() {
             off a 360-pixel screen, which the reach check measures. */}
         <button
           onClick={leaveTable}
-          className="plate hidden min-h-9 shrink-0 px-3 text-[11px] uppercase tracking-[0.1em] text-[color:var(--color-bone-dim)] sm:block"
+          className="plate hidden min-h-11 shrink-0 px-3 text-[11px] uppercase fine:min-h-9 tracking-[0.1em] text-[color:var(--color-bone-dim)] sm:block"
         >
           Table setup
         </button>
@@ -279,7 +279,7 @@ export function App() {
               key={tab.value}
               onClick={() => setScreen(tab.value)}
               aria-current={screen === tab.value ? 'page' : undefined}
-              className={`min-h-11 touch-manipulation rounded-md px-3 text-[11px] uppercase tracking-[0.1em] transition sm:min-h-9 sm:px-5 sm:text-xs sm:tracking-[0.14em] ${
+              className={`min-h-11 touch-manipulation rounded-md px-3 text-[11px] uppercase tracking-[0.1em] transition fine:min-h-9 sm:px-5 sm:text-xs sm:tracking-[0.14em] ${
                 screen === tab.value
                   ? 'plaque-brass font-bold'
                   : 'text-[color:var(--color-bone-dim)] hover:text-[color:var(--color-bone)]'
@@ -294,7 +294,7 @@ export function App() {
           <button
             onClick={() => setSettingsOpen((open) => !open)}
             aria-expanded={settingsOpen}
-            className={`plate min-h-11 min-w-11 shrink-0 touch-manipulation transition sm:hidden ${
+            className={`plate min-h-11 min-w-11 shrink-0 touch-manipulation transition sideways:block sm:hidden ${
               settingsOpen ? 'text-[color:var(--color-brass-bright)]' : 'text-[color:var(--color-bone-dim)]'
             }`}
             aria-label="Settings"
@@ -305,15 +305,16 @@ export function App() {
       </header>
 
       {screen === 'table' && (
-        // Folded away on a phone, where six settings buttons would cost a
-        // third of the screen the game is played on.
+        // Folded away wherever the screen has no height to spare — a phone
+        // held upright, and a phone lying down, where six settings buttons and
+        // a line of keyboard hints would cost a quarter of the game.
         <div
-          className={`${settingsOpen ? 'plate p-2' : 'hidden'} sm:block sm:bg-none sm:p-0 sm:shadow-none`}
+          className={`${settingsOpen ? 'plate p-2' : 'hidden'} sideways:hidden sm:block sm:bg-none sm:p-0 sm:shadow-none`}
         >
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-3 sm:p-0">
             <button
               onClick={leaveTable}
-              className="plate min-h-11 w-full px-3 text-[11px] uppercase tracking-[0.1em] text-[color:var(--color-bone-dim)] sm:hidden"
+              className="plate min-h-11 w-full px-3 text-[11px] uppercase tracking-[0.1em] text-[color:var(--color-bone-dim)] sideways:block sm:hidden"
             >
               Table setup
             </button>
@@ -349,7 +350,7 @@ export function App() {
               ]}
             />
             {/* Only worth saying where there is a keyboard to press. */}
-            <span className="hidden text-xs text-[color:var(--color-bone-faint)] sm:inline">
+            <span className="hidden text-xs text-[color:var(--color-bone-faint)] fine:sm:inline">
               Keys: F fold · C check or call · R raise · A all in · Space deal
             </span>
           </div>
@@ -357,12 +358,18 @@ export function App() {
       )}
 
       {screen === 'table' ? (
-        <div className="grid gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-1.5 sm:space-y-3">
+        // Four pieces in one grid rather than nested columns, so the same
+        // elements can be arranged three ways — stacked on a phone, side by
+        // side on a phone lying down, and with the coaching alongside where
+        // there is room. Every piece stays mounted through the change.
+        <div className="game gap-1.5 sm:gap-3">
+          <div className="game-table">
             <Table session={session} />
-            {/* Deliberately in the flow rather than floating: a bar that
-                hovers over the page covers whatever is under it, and the
-                controls sit directly below the table anyway. */}
+          </div>
+
+          {/* Deliberately in the flow rather than floating: a bar that hovers
+              over the page covers whatever is under it. */}
+          <div className="game-controls space-y-1.5 sm:space-y-3">
             <ActionBar
               state={state}
               heroSeat={heroSeat}
@@ -371,24 +378,26 @@ export function App() {
                 : {})}
             />
             <ResultBanner />
+          </div>
 
-            {/* On a phone the same panels are one at a time, directly under
-                the controls, so the whole game stays on one screen. */}
-            <div className="lg:hidden">
-              <InfoTabs tabs={panels} />
-            </div>
+          {/* One panel at a time wherever the coaching cannot sit beside the
+              table, so the whole game stays on one screen. */}
+          <div className="game-info roomy:hidden">
+            <InfoTabs tabs={panels} />
+          </div>
 
-            {handOver && session.history.length > 0 && (
+          {handOver && session.history.length > 0 && (
+            <div className="game-review">
               <Reflection
                 record={session.history[session.history.length - 1]!}
                 heroSeat={heroSeat}
               />
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Where there is room, the coaching sits beside the table, so the
               numbers are visible at the moment they are about to be used. */}
-          <aside className="hidden space-y-3 lg:block">
+          <aside className="game-aside hidden space-y-3 roomy:block">
             {panels.map((panel) => (
               <div key={panel.id}>{panel.content}</div>
             ))}

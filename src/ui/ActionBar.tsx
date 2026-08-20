@@ -130,9 +130,9 @@ export function ActionBar({
         <button
           onClick={deal}
           disabled={waiting}
-          className="plaque plaque-brass min-h-12 touch-manipulation px-7 text-base disabled:opacity-30 sm:min-h-10 sm:text-sm"
+          className="plaque plaque-brass min-h-12 touch-manipulation px-7 text-base disabled:opacity-30 fine:min-h-10 sm:text-sm"
         >
-          Deal <span aria-hidden className="ml-1 text-[10px] opacity-70">space</span>
+          Deal <span aria-hidden className="ml-1 hidden text-[10px] opacity-70 fine:inline">space</span>
         </button>
       </div>
     )
@@ -146,7 +146,7 @@ export function ActionBar({
   const actedVoluntarily = state.actions.some((entry) => entry.seat === heroSeat)
 
   const button =
-    'plaque relative min-h-[52px] flex-1 touch-manipulation whitespace-nowrap px-3 text-base disabled:opacity-30 disabled:cursor-not-allowed sm:min-h-12 sm:px-4 sm:text-sm'
+    'plaque relative min-h-[52px] min-w-0 flex-1 touch-manipulation overflow-hidden whitespace-nowrap px-2 text-[15px] disabled:opacity-30 disabled:cursor-not-allowed fine:min-h-12 xs:px-3 xs:text-base sm:px-4 sm:text-sm'
 
   // The recommendation is marked on the control it recommends, because that is
   // where somebody is looking when they need it. A recommended raise marks the
@@ -215,7 +215,7 @@ export function ActionBar({
                   key={s.label}
                   onClick={() => setCustom(size)}
                   disabled={size <= raise.min! && s.fraction < 1 && size === amount}
-                  className={`min-h-11 flex-1 touch-manipulation rounded-md border text-sm transition sm:min-h-9 sm:flex-none sm:px-3 sm:text-xs ${
+                  className={`min-h-11 flex-1 touch-manipulation rounded-md border text-sm transition fine:min-h-9 fine:flex-none fine:px-3 fine:text-xs ${
                     amount === size
                       ? 'border-[color:var(--color-brass)] bg-[color:var(--color-brass)]/15 text-[color:var(--color-brass-bright)]'
                       : 'border-[color:var(--color-ink-4)] text-[color:var(--color-bone-dim)]'
@@ -228,13 +228,13 @@ export function ActionBar({
             <button
               data-size="allin"
               onClick={() => setCustom(raise.max!)}
-              className={`min-h-11 flex-1 touch-manipulation whitespace-nowrap rounded-md border text-sm transition sm:min-h-9 sm:flex-none sm:px-3 sm:text-xs ${
+              className={`min-h-11 flex-1 touch-manipulation whitespace-nowrap rounded-md border text-sm transition fine:min-h-9 fine:flex-none fine:px-3 fine:text-xs ${
                 amount === raise.max
                   ? 'border-[color:var(--color-oxblood)] bg-[color:var(--color-oxblood)]/25 text-[color:var(--color-bone)]'
                   : 'border-[color:var(--color-ink-4)] text-[color:var(--color-bone-dim)] hover:bg-black/45'
               }`}
             >
-              All in <span aria-hidden className="opacity-60">a</span>
+              All in <span aria-hidden className="hidden opacity-60 fine:inline">a</span>
             </button>
           </div>
 
@@ -245,7 +245,7 @@ export function ActionBar({
               max={raise.max}
               value={amount}
               onChange={(e) => setCustom(Number(e.target.value))}
-              className="h-11 min-w-16 flex-1 touch-manipulation accent-[color:var(--color-jade)] sm:h-auto"
+              className="h-11 min-w-16 flex-1 touch-manipulation accent-[color:var(--color-jade)] fine:h-auto"
               aria-label="Bet size"
             />
             <span className="w-10 shrink-0 text-right font-mono text-sm text-[color:var(--color-bone)] sm:hidden">
@@ -261,7 +261,7 @@ export function ActionBar({
                   Math.max(raise.min!, Math.min(raise.max!, Math.round(Number(e.target.value)))),
                 )
               }
-              className="hidden min-h-9 w-20 rounded-md border border-[color:var(--color-ink-4)] bg-black/40 px-2 text-right font-mono text-xs sm:block"
+              className="hidden min-h-11 w-20 rounded-md border border-[color:var(--color-ink-4)] bg-black/40 px-2 text-right font-mono text-xs fine:min-h-9 sm:block"
               aria-label="Bet amount"
             />
 
@@ -269,7 +269,7 @@ export function ActionBar({
             {best?.type === 'raise' && best.to !== amount && (
               <button
                 onClick={() => setCustom(best.to)}
-                className="min-h-11 shrink-0 touch-manipulation whitespace-nowrap rounded-md border border-[color:var(--color-brass)] px-3 text-sm text-[color:var(--color-brass-bright)] transition sm:min-h-9 sm:text-xs"
+                className="min-h-11 shrink-0 touch-manipulation whitespace-nowrap rounded-md border border-[color:var(--color-brass)] px-3 text-sm text-[color:var(--color-brass-bright)] transition fine:min-h-9 sm:text-xs"
               >
                 Best {best.to}
               </button>
@@ -286,7 +286,7 @@ export function ActionBar({
           onClick={() => act({ type: 'fold' })}
         >
           {bestBadge('fold')}
-          Fold <span aria-hidden className="text-[10px] opacity-60">f</span>
+          Fold <span aria-hidden className="hidden text-[10px] opacity-60 fine:inline">f</span>
         </button>
 
         {canCheck ? (
@@ -296,7 +296,7 @@ export function ActionBar({
             onClick={() => act({ type: 'check' })}
           >
             {bestBadge('check')}
-            Check <span aria-hidden className="text-[10px] opacity-60">c</span>
+            Check <span aria-hidden className="hidden text-[10px] opacity-60 fine:inline">c</span>
           </button>
         ) : (
           <button
@@ -306,7 +306,7 @@ export function ActionBar({
             onClick={() => act({ type: 'call' })}
           >
             {bestBadge('call')}
-            Call {toCall} <span aria-hidden className="text-[10px] opacity-60">c</span>
+            Call {toCall} <span aria-hidden className="hidden text-[10px] opacity-60 fine:inline">c</span>
           </button>
         )}
 
@@ -321,12 +321,15 @@ export function ActionBar({
               the preposition is the part nobody needs. */}
           {state.currentBet > 0 ? (
             <>
-              Raise<span className="hidden sm:inline"> to</span>
+              {/* "Raise to 17" is two words longer than a narrow column has,
+                  and the number is the half that matters. */}
+              Raise<span className="hidden sm:inline sideways:hidden"> to</span>
             </>
           ) : (
             'Bet'
           )}{' '}
-          {raise ? amount : '—'} <span aria-hidden className="text-[10px] opacity-60">r</span>
+          {raise ? amount : '—'}{' '}
+          <span aria-hidden className="hidden text-[10px] opacity-60 fine:inline">r</span>
         </button>
       </div>
     </div>

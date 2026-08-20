@@ -24,6 +24,37 @@
  * from straight-edged things.
  */
 
+/**
+ * A control shrinks for a mouse, never for a screen size.
+ *
+ * Tap targets used to come down at the `sm:` breakpoint, on the assumption
+ * that a wide screen has a pointer on it. A tablet is a wide screen you touch,
+ * and a thumb is the same size on a 1366-pixel iPad as on a 320-pixel phone —
+ * so the smaller sizes hang off the pointer instead, and a touch screen keeps
+ * its 44 pixels whatever its width.
+ */
+@custom-variant fine (@media (pointer: fine));
+
+/**
+ * The screens narrower than the ones anybody designs for.
+ *
+ * A 320-pixel phone is still a phone somebody owns, and the difference
+ * between it and a 390-pixel one is enough to push a row of three buttons
+ * wider than the page. `xs` is where the normal sizes start.
+ */
+@custom-variant xs (@media (width >= 360px));
+
+/**
+ * Short screens: a phone on its side has the width but not the height.
+ *
+ * `sideways` is a screen wide enough to put the table and the controls next to
+ * each other and too short to stack them — a phone in landscape, or a browser
+ * window somebody has squashed. `roomy` is the opposite: enough of both to
+ * put the coaching beside the game.
+ */
+@custom-variant sideways (@media (height < 600px) and (width >= 560px));
+@custom-variant roomy (@media (width >= 1024px) and (height >= 600px));
+
 @theme {
   /* Ground and surfaces: warm blacks, in four steps. */
   --color-ink: #0e0c0a;
@@ -331,5 +362,134 @@ body {
   .to-act,
   .seat-won {
     animation: none;
+  }
+}
+
+/**
+ * The game, laid out for the screen it is on.
+ *
+ * Three shapes rather than one that stretches. Stacked, which is a phone held
+ * upright and the shape the game is really played in. Beside, which is a phone
+ * on its side or a squashed window — the table on the left and everything you
+ * press on the right, because there is no room to put one under the other.
+ * And roomy, which is a laptop or an iPad: the game on the left with the
+ * coaching alongside it.
+ */
+.game {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'table' 'controls' 'info' 'review';
+}
+
+@media (width >= 1024px) and (height >= 600px) {
+  .game {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    grid-template-areas: 'table aside' 'controls aside' 'info aside' 'review aside';
+  }
+}
+
+/* A big display gets a bigger table and a wider column of coaching beside it,
+   rather than the same 1150-pixel page with empty room either side. */
+@media (width >= 1536px) and (height >= 600px) {
+  .game {
+    grid-template-columns: minmax(0, 1fr) 26rem;
+  }
+}
+
+/* Last, so that a wide-but-short window takes this rather than the roomy
+   layout: height is the constraint that decides, and it is the tighter one. */
+@media (height < 600px) and (width >= 560px) {
+  .game {
+    /* The table takes two thirds: the ring needs width before the plates
+       start crowding the board, and the controls read fine in a narrow
+       column because every button in them can shrink. */
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 40%);
+    grid-template-areas: 'table controls' 'table info' 'table review';
+    align-items: start;
+  }
+}
+
+.game-table { grid-area: table; min-width: 0; }
+.game-controls { grid-area: controls; min-width: 0; }
+.game-info { grid-area: info; min-width: 0; }
+.game-review { grid-area: review; min-width: 0; }
+.game-aside { grid-area: aside; min-width: 0; }
+
+/**
+ * How big a seat is drawn on the stacked felt.
+ *
+ * In the container's own width normally, and smaller on a screen too short to
+ * spare it — a 568-pixel phone gives the felt two thirds of everything it has
+ * if nobody stops it, and the buttons end up under the fold.
+ */
+.felt-stack {
+  --seat-plate: 29cqw;
+  --seat-card: 7.4cqw;
+  --seat-text: clamp(10px, 2.9cqw, 12px);
+  --seat-small: clamp(9px, 2.4cqw, 10px);
+  --hero-plate: 40cqw;
+  --hero-card: 9.6cqw;
+  --hero-text: clamp(12px, 3.4cqw, 14px);
+  --hero-small: clamp(10px, 2.7cqw, 11px);
+  --board-card: 9.6cqw;
+}
+
+@media (height < 700px) {
+  .felt-stack {
+    --seat-plate: 22cqw;
+    --seat-card: 5.6cqw;
+    --seat-text: clamp(9px, 2.2cqw, 11px);
+    --seat-small: clamp(8px, 1.9cqw, 10px);
+    --hero-plate: 31cqw;
+    --hero-card: 7.4cqw;
+    --hero-text: clamp(11px, 2.7cqw, 13px);
+    --hero-small: clamp(9px, 2.2cqw, 11px);
+    --board-card: 7.6cqw;
+  }
+}
+
+/* The smallest phone anybody still owns is 568 tall, and the felt has to give
+   up more of it again for the buttons to be on the screen at all. */
+@media (height < 620px) {
+  .felt-stack {
+    --seat-plate: 18cqw;
+    --seat-card: 4.5cqw;
+    --seat-text: clamp(8px, 1.8cqw, 10px);
+    --seat-small: clamp(8px, 1.6cqw, 9px);
+    --hero-plate: 25cqw;
+    --hero-card: 6cqw;
+    --hero-text: clamp(10px, 2.2cqw, 12px);
+    --hero-small: clamp(9px, 1.9cqw, 10px);
+    --board-card: 6.2cqw;
+  }
+}
+
+/**
+ * How big the oval gets.
+ *
+ * Sized by the height there is rather than by the width, because width is
+ * never what runs out: a 16:9 felt given a 1200-pixel column is 675 pixels
+ * tall, and on a 720-pixel laptop that leaves nothing for the buttons. So the
+ * felt grows until it would start crowding them, and stops.
+ *
+ * Roomy screens get more of their height, but never so much that the header,
+ * the controls and the gaps between them do not fit in what is left — which is
+ * what the 21rem is. Short screens are the other way round: the controls are
+ * beside the felt rather than under it, so the felt can have nearly all of it.
+ */
+.felt-oval {
+  margin-inline: auto;
+  max-width: calc(46dvh * 16 / 9);
+}
+
+@media (width >= 1024px) and (height >= 600px) {
+  .felt-oval {
+    max-width: calc(min(58dvh, 100dvh - 21rem) * 16 / 9);
+  }
+}
+
+@media (height < 600px) and (width >= 560px) {
+  .felt-oval {
+    max-width: calc(76dvh * 4 / 3);
   }
 }

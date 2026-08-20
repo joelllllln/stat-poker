@@ -36,7 +36,11 @@ function browserPath() {
 
 const executablePath = browserPath()
 const browser = await chromium.launch(executablePath ? { executablePath } : {})
-const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } })
+// With a touch screen, because most of what this measures is the app on a
+// phone — and controls now take their size from the pointer rather than from
+// the width of the window, so a context without one measures the mouse sizes
+// and calls a 36-pixel button a phone button.
+const page = await browser.newPage({ viewport: { width: 1100, height: 1000 }, hasTouch: true })
 
 const errors = []
 page.on('console', (message) => {
