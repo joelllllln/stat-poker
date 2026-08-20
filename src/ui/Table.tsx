@@ -356,7 +356,9 @@ function Board({
   const over = state.result !== null
   return (
     <div className="flex flex-col items-center" style={{ gap: `calc(${cardWidth} * 0.22)` }}>
-      <div data-board className="flex" style={{ gap: `calc(${cardWidth} * 0.14)` }}>
+      {/* How many are actually dealt, rather than how many slots are drawn:
+          the board always has five places and usually fewer cards. */}
+      <div data-board data-dealt={state.board.length} className="flex" style={{ gap: `calc(${cardWidth} * 0.14)` }}>
         {Array.from({ length: 5 }, (_, i) => {
           const card = state.board[i]
           return card === undefined ? (

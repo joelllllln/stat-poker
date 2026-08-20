@@ -51,3 +51,25 @@ export function stackToPotRatio(effectiveStack: number, pot: number): number {
 
 /** Chips expressed in big blinds, for display. */
 export const inBigBlinds = (chips: number, bigBlind: number): number => chips / bigBlind
+
+/**
+ * How often a bet has to win the pot outright to break even.
+ *
+ * The number that explains a bluff. Betting `bet` into `pot` risks the bet to
+ * win the pot, so it needs to work `bet / (pot + bet)` of the time — a
+ * pot-sized bet needs to work half the time, which is the single most useful
+ * fact in no-limit and one almost nobody is taught.
+ *
+ * `equity` is what the hand is worth when it *is* called, and it earns a
+ * discount: a bet that still makes money once called needs no folds at all,
+ * which is the difference between a bluff and a value bet. Zero means the bet
+ * stands on its own.
+ */
+export function breakEvenFold(equity: number, bet: number, pot: number): number {
+  if (bet <= 0) return 0
+  // What being called is worth, relative to giving up: you win the pot and
+  // their call, or you lose the bet.
+  const called = equity * (pot + 2 * bet) - bet
+  if (called >= 0) return 0
+  return Math.min(1, -called / (pot - called))
+}

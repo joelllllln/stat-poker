@@ -21,6 +21,7 @@
 
 import { writeFileSync } from 'node:fs'
 import { legalActions } from '../src/engine/hand'
+import { breakEvenFold } from '../src/coach/odds'
 import { potSize, type HandState } from '../src/engine/types'
 import {
   createSession, defaultSessionConfig, heroAct, runBotsUntilHero, startNextHand,
@@ -53,13 +54,6 @@ interface Decision {
   passiveEv: number
   stackBefore: number
   realised: number
-}
-
-/** The fold frequency a bet needs to be worth making at all. */
-export function needsToFold(equity: number, bet: number, pot: number): number {
-  const called = equity * (pot + 2 * bet) - bet
-  if (called >= 0) return 0 // it makes money even when called
-  return Math.min(1, -called / (pot - called))
 }
 
 /** Did every villain still to act fold to the hero's bet? */
@@ -110,7 +104,7 @@ for (let hand = 0; hand < HANDS; hand++) {
       action: action.type,
       bet,
       pot,
-      needs: action.type === 'raise' ? needsToFold(advice.equity, bet, pot) : 0,
+      needs: action.type === 'raise' ? breakEvenFold(advice.equity, bet, pot) : 0,
       expected: best.foldEquity ?? 0,
       folded: null,
       ev: best.ev,

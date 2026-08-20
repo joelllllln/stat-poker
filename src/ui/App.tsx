@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { describe } from '../engine/evaluator'
 import { ActionBar } from './ActionBar'
 import { ActionLog } from './ActionLog'
-import { Advice } from './Advice'
 import { Dashboard } from './Dashboard'
-import { OddsPanel } from './OddsPanel'
+import { Decision } from './Decision'
 import { Reflection } from './Reflection'
 import { SessionCard } from './SessionCard'
 import { Table } from './Table'
@@ -186,11 +185,18 @@ export function App() {
     badge: acting && advice?.options[0] ? 'best' : undefined,
     content: (
       <div className="space-y-2">
-        {acting && (
-          <Advice advice={advice} pending={advicePending} bigBlind={session.config.bigBlind} />
-        )}
-        {showOdds && state && <OddsPanel state={state} heroSeat={heroSeat} />}
-        {!acting && !showOdds && (
+        {state && (acting || showOdds) ? (
+          // One panel rather than two. Pricing the spot and saying what to do
+          // about it are the same question, and two components each trying to
+          // answer it whole put the same numbers on screen five times.
+          <Decision
+            state={state}
+            heroSeat={heroSeat}
+            advice={acting ? advice : null}
+            advicePending={advicePending}
+            showOdds={showOdds}
+          />
+        ) : (
           <p className="plate px-3 py-3 text-sm text-[color:var(--color-bone-faint)]">
             {state === null
               ? 'Deal a hand and this is where the odds and the advice appear.'

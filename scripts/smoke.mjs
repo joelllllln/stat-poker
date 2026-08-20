@@ -274,14 +274,17 @@ await press(page.getByRole('tab', { name: /^What to do/ }))
 await page.waitForTimeout(300)
 const deciding = (await page.locator('body').innerText()).toLowerCase()
 check('the deciding tab says what to do', deciding.includes('what to do'))
-check('and what the hand is worth, without another tap', deciding.includes('your hand is worth'))
-check('and what the unit means', /bb means big blinds/.test(deciding))
+check(
+  'and what the hand is worth, without another tap',
+  /if it goes all the way/.test(deciding) && /\d+% yours/.test(deciding),
+)
+check('and what the price asks for', /price asks \d+%|free to see/.test(deciding))
 
 await press(page.getByRole('tab', { name: /^The record/ }))
 await page.waitForTimeout(250)
 const onHand = (await page.locator('body').innerText()).toLowerCase()
 check('the other tab shows the record of the hand', onHand.includes('what happened'))
-check('and only its own panel', !onHand.includes('bb means big blinds'))
+check('and only its own panel', !onHand.includes('if it goes all the way'))
 await press(page.getByRole('tab', { name: /^What to do/ }))
 await page.waitForTimeout(250)
 
@@ -345,9 +348,9 @@ check(
 )
 check(
   'the recommendation is argued rather than asserted',
-  /you are |the price asks that you win|either of the top two|not the only way to play it/.test(
-    body,
-  ),
+  // Not with a paragraph — with the numbers the argument is made of: what the
+  // hand is worth, and what the price is asking for.
+  /if it goes all the way/.test(body) && /\d+% yours/.test(body),
 )
 // The advice is worked out off the interface thread, so it lands a moment
 // after the decision does.
@@ -380,13 +383,54 @@ check(
   ),
 )
 
-check('the odds panel says what the hand is worth', body.includes('your hand is worth'))
-check('the price is stated in plain words', /the price is (good|bad)|nobody has bet/.test(body))
-check('calling needs a number of its own', body.includes('calling needs'))
+check('the odds panel says what the hand is worth', /if it goes all the way/.test(body))
+check('the share is a figure and a meter, not a sentence', /\d+% yours/.test(body))
+
+/**
+ * Play on until the hero is deciding with a board in front of them.
+ *
+ * What beats you can only be read off a board, so the checks below need a
+ * flop rather than whatever street the last block happened to leave behind.
+ */
+async function reachAFlop() {
+  for (let hand = 0; hand < 8; hand++) {
+    for (let step = 0; step < 4; step++) {
+      await page.waitForTimeout(700)
+      const acting = (await page.locator('[data-action="fold"]:not([disabled])').count()) > 0
+      // Counted off the board itself. Reading the street out of the page text
+      // finds the word "flop" in the legend explaining what the button is.
+      const dealt = Number(
+        (await page.locator('[data-board]').first().getAttribute('data-dealt')) ?? '0',
+      )
+      if (acting && dealt >= 3) return (await page.locator('body').innerText()).toLowerCase()
+      if (await press(page.locator('[data-action="check"]:not([disabled])'), 2_000)) continue
+      if (await press(page.locator('[data-action="call"]:not([disabled])'), 2_000)) continue
+      break
+    }
+    if (!(await dealNextHand())) break
+  }
+  return null
+}
+
+const onFlop = await reachAFlop()
+// What beats you, rather than only how often — the modelled range split into
+// the part you lead and the part that has you, with the beating named.
+check('their range is split by what beats you', onFlop !== null && /their range, right now/.test(onFlop))
+check(
+  'and the beating is named',
+  onFlop !== null && /you lead \d+%/.test(onFlop) && /has you \d+%/.test(onFlop),
+)
 
 // The rest is deliberately folded away: two numbers answer the question being
 // asked, and the working is one click behind them.
 check('the detail is closed until asked for', !body.includes('what they might hold'))
+// The panel used to be two, each saying the same two numbers in its own
+// words. Nothing on the face of it should now say a thing twice.
+check(
+  'nothing on the face of it is said twice',
+  (body.match(/if it goes all the way/g) ?? []).length === 1 &&
+    (body.match(/statistically the best play/g) ?? []).length <= 1,
+)
 // On a phone the odds live behind a tab; open it before reaching for what is
 // inside it, and look the control up again afterwards — the panel is remounted
 // by the switch, so a locator resolved before it points at nothing.
@@ -550,13 +594,13 @@ if (await solveButton.count()) {
 
 // Predict-then-reveal: the guess has to be asked for before the answer shows.
 await page.getByRole('button', { name: 'Guess first', exact: true }).click()
-await page.getByRole('button', { name: 'Deal', exact: true }).click()
+await dealNextHand()
 await page.waitForTimeout(1200)
 const predicting = (await page.locator('body').innerText()).toLowerCase()
-check('predict mode asks for an estimate first', predicting.includes('estimate your equity'))
-// The prompt itself says "estimate your equity", so the tell that the numbers
-// are still hidden is the absence of the tiles beside it.
-check('the equity is hidden until it is guessed', !predicting.includes('need to call'))
+check('predict mode asks for an estimate first', /your guess first/.test(predicting))
+// The prompt is one thing; the tell that the answer is still withheld is the
+// absence of the figure it would be shown in.
+check('the equity is hidden until it is guessed', !predicting.includes('if it goes all the way'))
 
 const guessButton = page.getByRole('button', { name: '40%', exact: true })
 if (await guessButton.count()) {
@@ -564,7 +608,7 @@ if (await guessButton.count()) {
   await page.waitForTimeout(700)
   const revealed = (await page.locator('body').innerText()).toLowerCase()
   check('the guess is scored against the truth', /you guessed 40%/.test(revealed))
-  check('the equity appears once guessed', revealed.includes('your hand is worth'))
+  check('the equity appears once guessed', /if it goes all the way/.test(revealed))
 } else {
   check('predict mode offers guesses', false)
 }
