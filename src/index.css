@@ -111,6 +111,45 @@ body,
   height: 100%;
 }
 
+/**
+ * The room the phone will not let us draw in.
+ *
+ * The page is served with `viewport-fit=cover`, which is what lets it run
+ * edge to edge and fill the screen when it is installed — and which puts the
+ * top of the page underneath the notch unless something says otherwise. On an
+ * iPhone 11 that is the camera and the earpiece sitting on top of the header.
+ *
+ * Held as variables rather than used inline so a test can set them: `env()`
+ * cannot be faked, and a safe area nobody can simulate is a safe area nobody
+ * checks.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/**
+ * The shell keeps out of the hardware's way.
+ *
+ * Added to the padding rather than replacing it: the insets are zero on a
+ * screen with nothing in the corners, and where they are not, the app still
+ * wants its own margin inside them.
+ */
+.shell {
+  padding-top: calc(var(--safe-top) + var(--shell-pad, 0.5rem));
+  padding-right: calc(var(--safe-right) + var(--shell-pad, 0.5rem));
+  padding-bottom: calc(var(--safe-bottom) + var(--shell-pad, 0.5rem));
+  padding-left: calc(var(--safe-left) + var(--shell-pad, 0.5rem));
+}
+
+@media (width >= 640px) {
+  .shell {
+    --shell-pad: 1rem;
+  }
+}
+
 body {
   background-color: var(--color-ink);
   /* A grain over the whole thing, so the black is a surface and not a void. */

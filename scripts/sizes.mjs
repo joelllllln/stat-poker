@@ -39,6 +39,18 @@ const URL = process.env.SIZES_URL ?? 'http://localhost:4173'
  */
 const SCREENS = [
   { name: 'iPhone SE', width: 320, height: 568, touch: true },
+  // `safe` is what the phone keeps for itself: the notch and the earpiece at
+  // the top, the home indicator at the bottom, and in landscape the notch
+  // moves to whichever side the camera is on.
+  { name: 'iPhone 11', width: 414, height: 896, touch: true, safe: { top: 44, bottom: 34 } },
+  { name: 'iPhone 14 Pro', width: 393, height: 852, touch: true, safe: { top: 59, bottom: 34 } },
+  {
+    name: 'iPhone 11 landscape',
+    width: 896,
+    height: 414,
+    touch: true,
+    safe: { top: 0, bottom: 21, left: 44, right: 44 },
+  },
   { name: 'Galaxy S8', width: 360, height: 740, touch: true },
   { name: 'iPhone 13 mini', width: 375, height: 812, touch: true },
   { name: 'iPhone 14', width: 390, height: 844, touch: true },
@@ -116,11 +128,40 @@ const survey = () =>
       })
       .sort((a, b) => a.size - b.size)
 
+    // Anything a hand has to reach, against the glass the phone keeps for
+    // itself. Read back off the same variables the layout uses, so this
+    // measures the app rather than restating the numbers it was given.
+    const read = (name) =>
+      parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0
+    const safe = {
+      top: read('--safe-top'),
+      right: read('--safe-right'),
+      bottom: read('--safe-bottom'),
+      left: read('--safe-left'),
+    }
+    const underTheHardware = [...document.querySelectorAll('button, [role="tab"], h1')]
+      .filter(seen)
+      .flatMap((node) => {
+        const box = node.getBoundingClientRect()
+        const label = (node.textContent ?? '?').trim().slice(0, 14) || node.tagName
+        const faults = []
+        if (box.top < safe.top - 0.5) faults.push(`${label} under the notch`)
+        if (box.bottom > window.innerHeight - safe.bottom + 0.5) {
+          faults.push(`${label} under the home bar`)
+        }
+        if (box.left < safe.left - 0.5) faults.push(`${label} past the left edge`)
+        if (box.right > window.innerWidth - safe.right + 0.5) {
+          faults.push(`${label} past the right edge`)
+        }
+        return faults
+      })
+
     const felt = [...document.querySelectorAll('.felt')].find(seen) ?? null
     const main = document.querySelector('main') ?? document.body.firstElementChild
 
     return {
       clashes,
+      underTheHardware,
       tracked: boxes.length,
       overflows: document.documentElement.scrollWidth > window.innerWidth + 1,
       pageHeight: Math.round(document.documentElement.scrollHeight),
@@ -159,6 +200,14 @@ for (const screen of SCREENS) {
   page.on('pageerror', (e) => problems.push(`${screen.name} page: ${String(e)}`))
 
   await page.goto(URL, { waitUntil: 'networkidle' })
+  // `env(safe-area-inset-*)` cannot be emulated, so the app reads it into
+  // variables and this sets those instead. It is the same code path the
+  // hardware drives; only the numbers come from here.
+  await page.addStyleTag({
+    content: `:root{${['top', 'right', 'bottom', 'left']
+      .map((side) => `--safe-${side}:${screen.safe?.[side] ?? 0}px`)
+      .join(';')}}`,
+  })
   await press(page.getByRole('button', { name: 'Sit down', exact: true }))
   await page.waitForTimeout(400)
 
@@ -226,6 +275,15 @@ for (const { screen, measured } of rows) {
       `${screen.name}: everything is tappable (${measured.smallestTap}px "${measured.smallestLabel}")`,
       measured.smallestTap >= 44,
     )
+  }
+  if (screen.safe) {
+    check(
+      `${screen.name}: nothing sits under the notch or the home bar`,
+      measured.underTheHardware.length === 0,
+    )
+    if (measured.underTheHardware.length) {
+      console.log('   ', measured.underTheHardware.slice(0, 4).join(', '))
+    }
   }
 }
 

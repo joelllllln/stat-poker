@@ -224,7 +224,7 @@ export function App() {
   // not another tab.
   if (!seated) {
     return (
-      <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-3 p-2 sm:p-4 xl:max-w-[86rem]">
+      <div className="shell mx-auto flex min-h-full max-w-6xl flex-col gap-3 xl:max-w-[86rem]">
         <header className="flex items-baseline justify-between gap-2">
           <h1 className="wordmark shrink-0 text-base sm:text-xl">STAT&thinsp;POKER</h1>
           <p className="text-[11px] text-[color:var(--color-bone-faint)]">
@@ -244,7 +244,7 @@ export function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-6xl flex-col gap-1.5 p-2 sm:gap-3 sm:p-4 xl:max-w-[86rem] 2xl:max-w-[104rem]">
+    <div className="shell mx-auto flex min-h-full max-w-6xl flex-col gap-1.5 sm:gap-3 xl:max-w-[86rem] 2xl:max-w-[104rem]">
       <header className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-0.5 max-[620px]:flex-row max-[620px]:items-baseline max-[620px]:gap-2 sm:flex-row sm:items-baseline sm:gap-3">
           <h1 className="wordmark shrink-0 text-base sm:text-xl">STAT&thinsp;POKER</h1>
