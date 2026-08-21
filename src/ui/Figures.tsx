@@ -14,6 +14,8 @@
  * beside a label carries the identity instead.
  */
 
+import { dialArc } from './dial'
+
 /** The gap that separates touching marks, in pixels. */
 const GAP = 2
 
@@ -311,15 +313,7 @@ export function Dial({
   const r = 78
   const thickness = 14
 
-  const at = (fraction: number) => {
-    const angle = Math.PI * (1 - Math.max(0, Math.min(1, fraction)))
-    return { x: cx + r * Math.cos(angle), y: cy - r * Math.sin(angle) }
-  }
-  const arc = (fraction: number) => {
-    const start = at(0)
-    const end = at(fraction)
-    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${fraction > 0.5 ? 1 : 0} 1 ${end.x} ${end.y}`
-  }
+  const arc = (fraction: number) => dialArc(cx, cy, r, fraction)
 
   const tickAngle = Math.PI * (1 - Math.min(1, Math.max(0, limit)))
   const inner = r - thickness / 2 - 3
