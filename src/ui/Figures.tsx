@@ -378,10 +378,13 @@ export function RankedBars({
   rows,
   colour = 'var(--chart-behind)',
   max,
+  format = (share) => `${Math.round(share * 100)}%`,
 }: {
   rows: Ranked[]
   colour?: string
   max?: number
+  /** How to read the value. A share is a percentage; chips are not. */
+  format?: (value: number) => string
 }) {
   if (rows.length === 0) return null
   const top = max ?? Math.max(...rows.map((row) => row.share), 0.01)
@@ -398,8 +401,8 @@ export function RankedBars({
               style={{ width: `${Math.max(2, (row.share / top) * 100)}%`, background: colour }}
             />
           </div>
-          <span className="w-10 shrink-0 text-right font-mono text-[11px] text-[color:var(--color-bone-dim)]">
-            {Math.round(row.share * 100)}%
+          <span className="w-12 shrink-0 text-right font-mono text-[11px] text-[color:var(--color-bone-dim)]">
+            {format(row.share)}
           </span>
         </div>
       ))}

@@ -13,6 +13,8 @@ import {
   winrateInterval,
 } from '../stats/profile'
 import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '../coach/leaks'
+import { leaning } from '../coach/mistakes'
+import { Key, RankedBars } from './Figures'
 import { describeAccuracy, summarise } from '../stats/estimates'
 import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
 import { DataCard } from './DataCard'
@@ -166,6 +168,9 @@ export function Dashboard({ session }: { session: SessionState }) {
     return {
       leak: biggestLeak(findLeaks(tagged)),
       decisions: tagged.length,
+      // Which way the mistakes lean, which is the one cut somebody can act on
+      // without first working out what it implies.
+      lean: leaning(tagged.map((item) => item.grade)),
       // The same graded decisions answer a different and often sharper
       // question: whether the player is the same player on every street.
       streets: styleByStreet(
@@ -311,6 +316,39 @@ export function Dashboard({ session }: { session: SessionState }) {
                 : 'No single spot stands out yet: what you give up is spread evenly rather than concentrated anywhere.'}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Which way you lean.
+          Every other cut says where the money goes; this says what you did
+          there. "You give up most on the turn" is a map reference, and "you
+          fold too much" is something to practise. */}
+      {leak && leak.lean.length > 0 && leak.decisions >= MIN_SAMPLE && (
+        <div className="plate px-3 py-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="stamp">Which way you lean</span>
+            <span className="text-[11px] text-[color:var(--color-bone-faint)]">
+              {leak.lean.reduce((sum, habit) => sum + habit.count, 0)} mistakes
+            </span>
+          </div>
+          <div className="mt-1.5">
+            {/* The total given up, not a rate. Scaling a few dozen hands to a
+                hundred states a figure the sample cannot support, and dividing
+                by a guarded denominator — which is what this did — prints the
+                total with a rate's label on it. */}
+            <RankedBars
+              colour="var(--chart-gold)"
+              format={(bb) => `${bb.toFixed(1)}bb`}
+              rows={leak.lean.slice(0, 4).map((habit) => ({
+                label: habit.mistake,
+                share: habit.costBB,
+              }))}
+              max={Math.max(...leak.lean.map((habit) => habit.costBB))}
+            />
+          </div>
+          <div className="mt-1">
+            <Key colour="var(--chart-gold)">big blinds given up, by habit</Key>
+          </div>
         </div>
       )}
 

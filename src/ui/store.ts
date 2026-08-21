@@ -66,6 +66,7 @@ const compact = (grade: DecisionGrade): GradedDecision => ({
   evLossBB: grade.evLossBB,
   verdict: grade.verdict,
   chosen: grade.chosen,
+  best: grade.best,
 })
 
 interface Store {

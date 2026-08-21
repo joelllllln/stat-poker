@@ -28,7 +28,7 @@ import { lookupPreflop, type BlueprintAdvice } from '../solver/blueprint'
  * whenever a change here would give a hand a different verdict: every cached
  * verdict below it is discarded and worked out again.
  */
-export const GRADER_VERSION = 4
+export const GRADER_VERSION = 5
 
 export type Verdict = 'optimal' | 'fine' | 'mistake' | 'blunder'
 
@@ -91,6 +91,15 @@ export interface GradedDecision {
   evLossBB: number
   verdict: Verdict
   chosen: Action
+  /**
+   * The action the arithmetic preferred.
+   *
+   * Kept beside the one taken because the pair is what says *what kind* of
+   * mistake it was. "You give up most on the turn" tells somebody where to
+   * look; "you fold too much on the turn" tells them what to change, and the
+   * difference between those two is this field.
+   */
+  best: Action
 }
 
 export interface DecisionGrade extends GradedDecision {
@@ -313,6 +322,7 @@ export function gradeHand(record: HandRecord, heroSeat: number, seed = GRADE_SEE
       requiredEquity: requiredEquity(toCall, winnable),
       options: priced.options,
       chosen: action,
+      best: best.action,
       chosenLabel: chosen.label,
       bestLabel: best.label,
       evLoss,

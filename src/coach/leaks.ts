@@ -15,6 +15,7 @@ import { positionName, type Street } from '../engine/types'
 import { compareMeans, holm } from '../stats/inference'
 import type { HandRecord } from '../game/session'
 import { gradeHand, type GradedDecision } from './grade'
+import { mistakeIn } from './mistakes'
 
 /** Decisions a group needs before it is worth naming. */
 export const MIN_SAMPLE = 20
@@ -109,7 +110,8 @@ export function tagDecisions(
 }
 
 interface Dimension {
-  label: (decision: TaggedDecision) => string
+  /** The group this decision belongs to, or null where the cut does not apply. */
+  label: (decision: TaggedDecision) => string | null
 }
 
 /**
@@ -125,6 +127,12 @@ const DIMENSIONS: Dimension[] = [
   { label: (d) => (d.facingBet ? 'facing a bet' : 'when nobody has bet') },
   { label: (d) => (d.raisedPot ? 'in raised pots' : 'in unraised pots') },
   { label: (d) => `${d.facingBet ? 'facing a bet' : 'with the betting lead'} on the ${d.street}` },
+  // What kind of mistake, rather than where it happened. Every cut above
+  // says which spots cost the most; these say what the player did in them,
+  // which is the only cut somebody can act on directly. Decisions that gave
+  // up nothing belong to no habit, so they join no group.
+  { label: (d) => mistakeIn(d.grade) },
+  { label: (d) => (mistakeIn(d.grade) === null ? null : `${mistakeIn(d.grade)} on the ${d.street}`) },
 ]
 
 /**
@@ -142,6 +150,7 @@ export function findLeaks(decisions: readonly TaggedDecision[]): Leak[] {
   decisions.forEach((decision, index) => {
     for (const dimension of DIMENSIONS) {
       const label = dimension.label(decision)
+      if (label === null) continue
       const group = groups.get(label)
       if (group) group.add(index)
       else groups.set(label, new Set([index]))

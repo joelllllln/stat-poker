@@ -33,6 +33,7 @@ const decision = (
     requiredEquity: 0.3,
     options: [],
     chosen: { type: 'check' },
+    best: { type: 'check' },
     chosenLabel: 'Check',
     bestLabel: 'Check',
     evLoss: evLossBB * 2,
