@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { Card } from '../engine/cards'
 import { legalActions, winnablePot } from '../engine/hand'
 import { potSize, type HandState } from '../engine/types'
 import { splitAgainstAll, type RangeSplit } from '../equity/breakdown'
@@ -8,7 +9,7 @@ import { preflopStrength, topPercentRange } from '../equity/preflop'
 import { classOf } from '../solver/blueprint'
 import { breakEvenFold, inBigBlinds, potOddsRatio, requiredEquity, stackToPotRatio } from '../coach/odds'
 import type { AdviseReply } from '../workers/analysis.worker'
-import { Key, Meter, StackedBar } from './Figures'
+import { Dial, Key, RankedBars, StackedBar } from './Figures'
 import { RangeGrid } from './RangeGrid'
 import { useEquity } from './useAnalysis'
 import { madeHandInWords, timesInTen } from './plain'
@@ -71,27 +72,6 @@ function Line({
  *
  * One track, one fill, and a mark where the limit sits — a meter, not a chart.
  */
-function ShareMeter({ equity, needed }: { equity: number; needed: number }) {
-  const share = Math.max(0, Math.min(1, equity))
-  const clears = needed <= 0 || equity >= needed
-  return (
-    <div>
-      <Meter share={share} limit={needed} clears={clears} />
-      <div className="mt-1 flex justify-between text-[11px] text-[color:var(--color-bone-dim)]">
-        <span>
-          <span className="font-semibold text-[color:var(--color-bone)]">{pct(share)}</span> yours
-        </span>
-        {needed > 0 && (
-          <span>
-            price asks{' '}
-            <span className="font-semibold text-[color:var(--color-brass-bright)]">{pct(needed)}</span>
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /**
  * What beats you, not just how often.
  *
@@ -103,9 +83,18 @@ function ShareMeter({ equity, needed }: { equity: number; needed: number }) {
 function AgainstTheirRange({ split }: { split: RangeSplit }) {
   return (
     <div>
-      <div className="stamp">Their range, right now</div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="stamp">Their range, right now</span>
+        <span className="text-[11px] text-[color:var(--color-bone-dim)]">
+          <span className="font-mono text-[color:var(--color-oxblood-bright)]">
+            {pct(split.behind)}
+          </span>{' '}
+          has you
+        </span>
+      </div>
       <div className="mt-1">
         <StackedBar
+          height={12}
           parts={[
             { key: 'ahead', share: split.ahead, colour: 'var(--chart-lead)', label: 'you lead' },
             { key: 'tied', share: split.tied, colour: 'var(--chart-cool)', label: 'chop' },
@@ -113,60 +102,47 @@ function AgainstTheirRange({ split }: { split: RangeSplit }) {
           ]}
         />
       </div>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3">
         <Key colour="var(--chart-lead)">you lead {pct(split.ahead)}</Key>
         {split.tied > 0.005 && <Key colour="var(--chart-cool)">chop {pct(split.tied)}</Key>}
-        <Key colour="var(--chart-behind)">has you {pct(split.behind)}</Key>
       </div>
+      {/* Each kind of hand on its own baseline. In one stacked bar a set at
+          three per cent is a sliver you cannot see, and it is the reason you
+          are folding. */}
       {split.beatenBy.length > 0 && (
-        <p className="mt-1 text-[11px] leading-snug text-[color:var(--color-bone-faint)]">
-          {split.beatenBy
-            .slice(0, 3)
-            .map((kind) => `${kind.name} ${pct(kind.share)}`)
-            .join(' · ')}
-        </p>
+        <div className="mt-2">
+          <RankedBars rows={split.beatenBy.slice(0, 4).map((k) => ({ label: k.name, share: k.share }))} />
+        </div>
       )}
     </div>
   )
 }
 
 /**
- * Before the flop there is no board to read, so the reading is a ranking.
+ * Before the flop there is no board to read, so the reading is the grid.
  *
- * One axis, every starting hand from the best on the left to the worst on the
- * right. A bar for how wide the tightest range still in the pot is, and a mark
- * for where this hand sits in the same ordering — which answers "am I ahead of
- * what they are playing" without a made hand to compare.
+ * The 169 starting hands in the layout every poker player already knows, with
+ * the range still in the pot shaded and this hand marked in it. A percentage
+ * says how wide they are; the grid says *which* hands, which is the thing a
+ * number never manages — and it is a shape rather than another bar.
+ *
+ * Where nobody has acted yet there is nothing to shade: a seat that has only
+ * posted a blind is holding everything, and 169 filled cells is a picture of
+ * no information. The grid then shows only where this hand sits among the
+ * 169, which is the thing that *is* knowable before anybody has done anything.
  */
-function AgainstTheirRanking({ percentile, width }: { percentile: number; width: number }) {
-  // `percentile` counts hands beaten, so the best hand is at 1. Both are drawn
-  // as "top x%", which is how a range is quoted.
-  const rank = Math.max(0.005, Math.min(1, 1 - percentile))
-  const inside = rank <= width
-
+function BeforeTheFlop({ hole, width }: { hole: readonly [Card, Card]; width: number }) {
+  const narrowed = width < 0.9
   return (
     <div>
-      <div className="stamp">Where your hand ranks</div>
-      <div className="relative mt-1 h-6 overflow-hidden rounded-md bg-black/50">
-        <div
-          className="h-full rounded-r-md"
-          style={{ width: `${Math.min(100, width * 100)}%`, background: 'var(--chart-cool)' }}
-        />
-        <div
-          aria-hidden
-          className="absolute inset-y-0 w-1 rounded-full"
-          style={{
-            left: `calc(${Math.min(99, rank * 100)}% - 2px)`,
-            background: inside ? 'var(--color-brass-bright)' : 'var(--chart-behind)',
-            boxShadow: '0 0 0 2px var(--color-ink-2)',
-          }}
-        />
+      <div className="flex items-baseline justify-between gap-2 text-[11px]">
+        <span className="stamp">{narrowed ? 'What they are playing' : 'Nobody has acted yet'}</span>
+        <span className="font-mono text-[color:var(--color-bone-dim)]">
+          {narrowed ? `top ${pct(width)}` : 'your hand marked'}
+        </span>
       </div>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <Key colour={inside ? 'var(--color-brass-bright)' : 'var(--chart-behind)'}>
-          yours top {pct(rank)}
-        </Key>
-        <Key colour="var(--chart-cool)">they play top {pct(width)}</Key>
+      <div className="mt-1">
+        <RangeGrid width={narrowed ? width : 0} highlight={classOf(hole)} />
       </div>
     </div>
   )
@@ -307,31 +283,34 @@ export function Decision({
       ) : (
         showOdds && (
           <>
-            {/* The hero figure, and the only sentence on the face of the
-                panel: a percentage is not a quantity most people feel. */}
-            <div>
-              {/* The figure needs its unit: "about 8 times in 10" is not a
-                  quantity until you know what is being counted. */}
-              <div className="stamp">If it goes all the way</div>
-              <div className="figure text-3xl leading-tight text-[color:var(--color-brass-bright)] sm:text-5xl">
+            {/* One dial rather than a figure with a bar under it: your share
+                is the fill, the price is the tick, and the answer is whether
+                one has passed the other. */}
+            <Dial
+              share={share}
+              limit={needed}
+              caption={needed > 0 ? `price asks ${pct(needed)}` : 'nothing to call'}
+            >
+              <span className="figure text-4xl leading-none text-[color:var(--color-bone)]">
+                {pct(share)}
+              </span>
+              <span className="text-[11px] text-[color:var(--color-bone-dim)]">
                 {timesInTen(share)}
-              </div>
-              {hudLevel === 'predict' && guess !== null && (
-                <p className="text-[11px] text-[color:var(--color-bone-faint)]">
-                  you guessed {guess}% — off by {Math.abs(guess - share * 100).toFixed(0)} points
-                </p>
-              )}
-            </div>
-
-            <ShareMeter equity={share} needed={needed} />
+              </span>
+            </Dial>
+            {hudLevel === 'predict' && guess !== null && (
+              <p className="-mt-1 text-center text-[11px] text-[color:var(--color-bone-faint)]">
+                you guessed {guess}% — off by {Math.abs(guess - share * 100).toFixed(0)} points
+              </p>
+            )}
 
             {split ? (
               <AgainstTheirRange split={split} />
             ) : (
               hero.holeCards &&
               widths.length > 0 && (
-                <AgainstTheirRanking
-                  percentile={preflopStrength(hero.holeCards).percentile}
+                <BeforeTheFlop
+                  hole={hero.holeCards}
                   width={Math.min(...widths.map((w) => w.width))}
                 />
               )

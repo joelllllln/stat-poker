@@ -9,7 +9,7 @@ import {
 } from '../coach/grade'
 import { pricedHand } from '../stats/all-in-adjusted'
 import type { HandRecord } from '../game/session'
-import { Figure, Key, StreetAxis, StreetChart } from './Figures'
+import { DecisionStrip, Figure, Key, StreetAxis, StreetChart } from './Figures'
 import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
 import { blindPosted, madeHandInWords } from './plain'
@@ -23,6 +23,14 @@ const VERDICT_STYLE: Record<Verdict, { label: string; chip: string; bar: string 
 }
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
+
+/** The verdict, as a mark rather than as a word. Chart steps, not interface hues. */
+const VERDICT_MARK: Record<Verdict, string> = {
+  optimal: 'var(--chart-lead)',
+  fine: 'var(--chart-cool)',
+  mistake: 'var(--chart-gold)',
+  blunder: 'var(--chart-behind)',
+}
 
 function DecisionRow({ decision, bigBlind }: { decision: DecisionGrade; bigBlind: number }) {
   const [open, setOpen] = useState(false)
@@ -291,6 +299,24 @@ function HandShape({
           <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <Key colour="var(--chart-cool)">what it was worth</Key>
             <Key colour="var(--chart-gold)">chips in</Key>
+          </div>
+        </div>
+      )}
+
+      {/* How each decision was graded, in the order they were made. A hand
+          that went wrong once late looks different from one that leaked the
+          whole way through, and the shape says which. */}
+      {grade.decisions.length > 0 && (
+        <div>
+          <div className="stamp">How you played it</div>
+          <div className="mt-1">
+            <DecisionStrip
+              decisions={grade.decisions.map((decision) => ({
+                label: decision.street === 'preflop' ? 'pre' : decision.street,
+                tone: VERDICT_MARK[decision.verdict],
+                cost: decision.evLossBB,
+              }))}
+            />
           </div>
         </div>
       )}

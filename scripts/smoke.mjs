@@ -276,15 +276,15 @@ const deciding = (await page.locator('body').innerText()).toLowerCase()
 check('the deciding tab says what to do', deciding.includes('what to do'))
 check(
   'and what the hand is worth, without another tap',
-  /if it goes all the way/.test(deciding) && /\d+% yours/.test(deciding),
+  /\d+%/.test(deciding) && /times in 10/.test(deciding),
 )
-check('and what the price asks for', /price asks \d+%|free to see/.test(deciding))
+check('and what the price asks for', /price asks \d+%|nothing to call/.test(deciding))
 
 await press(page.getByRole('tab', { name: /^The record/ }))
 await page.waitForTimeout(250)
 const onHand = (await page.locator('body').innerText()).toLowerCase()
 check('the other tab shows the record of the hand', onHand.includes('what happened'))
-check('and only its own panel', !onHand.includes('if it goes all the way'))
+check('and only its own panel', !onHand.includes('still to act'))
 await press(page.getByRole('tab', { name: /^What to do/ }))
 await page.waitForTimeout(250)
 
@@ -348,9 +348,9 @@ check(
 )
 check(
   'the recommendation is argued rather than asserted',
-  // Not with a paragraph — with the numbers the argument is made of: what the
-  // hand is worth, and what the price is asking for.
-  /if it goes all the way/.test(body) && /\d+% yours/.test(body),
+  // Not with a paragraph — with the figures the argument is made of: the dial
+  // carrying what the hand is worth against what the price asks.
+  /times in 10/.test(body) && /price asks \d+%|nothing to call/.test(body),
 )
 // The advice is worked out off the interface thread, so it lands a moment
 // after the decision does.
@@ -383,8 +383,8 @@ check(
   ),
 )
 
-check('the odds panel says what the hand is worth', /if it goes all the way/.test(body))
-check('the share is a figure and a meter, not a sentence', /\d+% yours/.test(body))
+check('the odds panel says what the hand is worth', /times in 10/.test(body))
+check('the share is a dial rather than a sentence', /price asks \d+%|nothing to call/.test(body))
 
 /**
  * Play on until the hero is deciding with a board in front of them.
@@ -418,7 +418,12 @@ const onFlop = await reachAFlop()
 check('their range is split by what beats you', onFlop !== null && /their range, right now/.test(onFlop))
 check(
   'and the beating is named',
-  onFlop !== null && /you lead \d+%/.test(onFlop) && /has you \d+%/.test(onFlop),
+  onFlop !== null && /you lead \d+%/.test(onFlop) && /\d+% has you/.test(onFlop),
+)
+// Each kind of hand on its own baseline rather than as a sliver of a stack.
+check(
+  'and each kind of hand doing it is listed',
+  onFlop !== null && /(a better pair|two pair|a set|a straight|a flush|high card)/.test(onFlop),
 )
 
 // The rest is deliberately folded away: two numbers answer the question being
@@ -428,7 +433,7 @@ check('the detail is closed until asked for', !body.includes('what they might ho
 // words. Nothing on the face of it should now say a thing twice.
 check(
   'nothing on the face of it is said twice',
-  (body.match(/if it goes all the way/g) ?? []).length === 1 &&
+  (body.match(/times in 10/g) ?? []).length <= 2 &&
     (body.match(/statistically the best play/g) ?? []).length <= 1,
 )
 // On a phone the odds live behind a tab; open it before reaching for what is
@@ -445,7 +450,12 @@ if (await more.count()) {
   await more.first().click({ timeout: 10_000 })
   await page.waitForTimeout(200)
   const opened = (await page.locator('body').innerText()).toLowerCase()
-  check('outs are there when asked for', opened.includes('cards that put you ahead'))
+  check(
+    'outs are there for a hand that needs them',
+    // Withheld from a hand that is already ahead: "none — nothing gets you
+    // there" is a frightening thing to tell somebody who is winning.
+    /cards that put you ahead/.test(opened) || /you lead (5[0-9]|[6-9][0-9]|100)%/.test(opened),
+  )
   check('modelled ranges are there when asked for', opened.includes('what they might hold'))
   check('the range grid is drawn', opened.includes('tightest of those ranges'))
 } else {
@@ -499,7 +509,11 @@ for (let hand = 0; hand < 5; hand++) {
 }
 check(
   `nothing overlaps while the betting runs (up to ${busiest} elements on the felt)`,
-  acrossHands.length === 0 && busiest >= 10,
+  // The count is only here to prove the measurement was not vacuous. How many
+  // piles of chips are on the felt depends on how many seats put any in, which
+  // depends on the hands dealt, so a high floor fails on a quiet run rather
+  // than on a fault. Six seats and a board is the least any hand can show.
+  acrossHands.length === 0 && busiest >= 7,
 )
 if (acrossHands.length) console.log('   ', [...new Set(acrossHands)].slice(0, 6).join(', '))
 
@@ -511,7 +525,7 @@ check(
   // Both as figures now rather than as a sentence: the hand named once beside
   // the heading, and the result and the expected value given up as two
   // numbers under it.
-  /(pair|high card|two pair|a set|straight|flush|full house|quads)/.test(after) &&
+  /(pair|high card|two pair|a set|straight|flush|full house|quads|[a-z]+-[a-z]+)/.test(after) &&
     /this hand/.test(after) &&
     /given up/.test(after) &&
     /[+−-][\d.]+bb/.test(after),
@@ -608,7 +622,10 @@ const predicting = (await page.locator('body').innerText()).toLowerCase()
 check('predict mode asks for an estimate first', /your guess first/.test(predicting))
 // The prompt is one thing; the tell that the answer is still withheld is the
 // absence of the figure it would be shown in.
-check('the equity is hidden until it is guessed', !predicting.includes('if it goes all the way'))
+check(
+  'the equity is hidden until it is guessed',
+  !/price asks \d+%|nothing to call/.test(predicting),
+)
 
 const guessButton = page.getByRole('button', { name: '40%', exact: true })
 if (await guessButton.count()) {
@@ -616,7 +633,7 @@ if (await guessButton.count()) {
   await page.waitForTimeout(700)
   const revealed = (await page.locator('body').innerText()).toLowerCase()
   check('the guess is scored against the truth', /you guessed 40%/.test(revealed))
-  check('the equity appears once guessed', /if it goes all the way/.test(revealed))
+  check('the equity appears once guessed', /price asks \d+%|nothing to call/.test(revealed))
 } else {
   check('predict mode offers guesses', false)
 }

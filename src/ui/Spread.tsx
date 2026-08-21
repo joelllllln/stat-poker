@@ -93,7 +93,12 @@ export function Spread({
           <div className="text-[color:var(--color-bone-faint)]">You got</div>
           <div
             className={`font-mono text-sm ${
-              run.actual >= run.expected ? 'text-[color:var(--color-jade-bright)]' : 'text-[color:var(--color-oxblood-bright)]'
+              // By the sign, not by whether it beat the line. A loss printed
+              // in green because it was the loss the line deserved is a
+              // number arguing with its own colour.
+              run.actual >= 0
+                ? 'text-[color:var(--color-jade-bright)]'
+                : 'text-[color:var(--color-oxblood-bright)]'
             }`}
           >
             {run.actual >= 0 ? '+' : ''}
