@@ -14,7 +14,7 @@ import {
 } from '../stats/profile'
 import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '../coach/leaks'
 import { leaning } from '../coach/mistakes'
-import { Key, RankedBars } from './Figures'
+import { Figure, Key, RankedBars } from './Figures'
 import { describeAccuracy, summarise } from '../stats/estimates'
 import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
 import { DataCard } from './DataCard'
@@ -171,6 +171,8 @@ export function Dashboard({ session }: { session: SessionState }) {
       // Which way the mistakes lean, which is the one cut somebody can act on
       // without first working out what it implies.
       lean: leaning(tagged.map((item) => item.grade)),
+      // Everything given up, not only what was big enough to name as a habit.
+      givenUpBB: tagged.reduce((sum, item) => sum + item.grade.evLossBB, 0),
       // The same graded decisions answer a different and often sharper
       // question: whether the player is the same player on every street.
       streets: styleByStreet(
@@ -185,6 +187,9 @@ export function Dashboard({ session }: { session: SessionState }) {
   )
 
   const { records, stats, curve, winrate } = data
+  // What the record actually came to, in big blinds: the end of the curve the
+  // luck chart draws, so the headline and the chart cannot disagree.
+  const won = curve.actual.at(-1) ?? 0
 
   // An empty screen reads as a broken one. Before there are any hands, say
   // what will appear here and offer the one thing that is useful now.
@@ -228,6 +233,50 @@ export function Dashboard({ session }: { session: SessionState }) {
           {storedHands > ARCHIVE_LIMIT && ` · showing your last ${ARCHIVE_LIMIT.toLocaleString('en-US')}`}
         </span>
       </div>
+
+      {/* The question everybody actually asks.
+          Three figures, deliberately not a bar: what you won, what the cards
+          did, and what the decisions cost do not add up to each other. A hand
+          can be won badly and lost well, and most of the difference between
+          winnings and skill is neither of these — it is everything a one-street
+          model cannot see. Three numbers side by side say that; a stack would
+          claim they are parts of one thing. */}
+      {leak && leak.decisions >= MIN_SAMPLE && (
+        <div className="plate px-3 py-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="stamp">Unlucky, or outplayed?</span>
+            <span className="text-[11px] text-[color:var(--color-bone-faint)]">
+              {curve.allInHands > 0
+                ? `${curve.allInHands} all-in${curve.allInHands === 1 ? '' : 's'} · `
+                : ''}
+              {leak.decisions} decisions
+            </span>
+          </div>
+          <div className="mt-1.5 flex gap-2">
+            {/* The label carries the direction, so the number never has to
+                read "you won minus three hundred". */}
+            <Figure
+              label={won > 0 ? 'You won' : won < 0 ? 'You lost' : 'You broke'}
+              value={won === 0 ? 'even' : `${Math.abs(won).toFixed(1)}bb`}
+              tone={won > 0 ? 'good' : won < 0 ? 'bad' : 'plain'}
+            />
+            {/* Only where chips went in before the cards were out. Anywhere
+                else there is nothing to compare a runout against. */}
+            {curve.allInHands > 0 && (
+              <Figure
+                label="The cards"
+                value={`${curve.luckBB >= 0 ? '+' : '−'}${Math.abs(curve.luckBB).toFixed(1)}bb`}
+                tone={curve.luckBB >= 0 ? 'good' : 'bad'}
+              />
+            )}
+            <Figure
+              label="Your play"
+              value={`−${leak.givenUpBB.toFixed(1)}bb`}
+              tone="mark"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Style and mastery are separate questions: how you play, and how well. */}
       <div className="flex flex-wrap items-center gap-3 plate px-3 py-2">
