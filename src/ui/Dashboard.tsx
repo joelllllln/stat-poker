@@ -14,7 +14,8 @@ import {
 } from '../stats/profile'
 import { biggestLeak, describeLeak, findLeaks, tagDecisions, MIN_SAMPLE } from '../coach/leaks'
 import { leaning } from '../coach/mistakes'
-import { Figure, Key, RankedBars } from './Figures'
+import { Figure, inBB, Key, RankedBars, SignedBars } from './Figures'
+import { byPosition, showdownSplit } from '../stats/money'
 import { describeAccuracy, summarise } from '../stats/estimates'
 import { STREET_SAMPLE, styleByStreet, styleContradiction } from '../stats/profile'
 import { DataCard } from './DataCard'
@@ -117,7 +118,13 @@ export function Dashboard({ session }: { session: SessionState }) {
       allInHands: (archiveLuck?.allInHands ?? 0) + live.allInHands,
     }
     const winrate = winrateInterval(records, bigBlind)
-    return { records, stats, curve, winrate }
+    // Counted off what happened rather than off a model, so these two hold
+    // whatever the coach thinks of the play.
+    // `records` above is the per-seat statistics; these two want the hands
+    // themselves, which carry the result and the button.
+    const split = showdownSplit(history, heroSeat)
+    const seats = byPosition(history, heroSeat)
+    return { records, stats, curve, winrate, split, seats }
   }, [history, archiveLuck, session, version, heroSeat, bigBlind])
 
   const overTime = useMemo(() => {
@@ -186,7 +193,7 @@ export function Dashboard({ session }: { session: SessionState }) {
     [session, version],
   )
 
-  const { records, stats, curve, winrate } = data
+  const { records, stats, curve, winrate, split, seats } = data
   // What the record actually came to, in big blinds: the end of the curve the
   // luck chart draws, so the headline and the chart cannot disagree.
   const won = curve.actual.at(-1) ?? 0
@@ -252,12 +259,12 @@ export function Dashboard({ session }: { session: SessionState }) {
               {leak.decisions} decisions
             </span>
           </div>
-          <div className="mt-1.5 flex gap-2">
+          <div className="mt-1.5 flex flex-wrap gap-2">
             {/* The label carries the direction, so the number never has to
                 read "you won minus three hundred". */}
             <Figure
               label={won > 0 ? 'You won' : won < 0 ? 'You lost' : 'You broke'}
-              value={won === 0 ? 'even' : `${Math.abs(won).toFixed(1)}bb`}
+              value={won === 0 ? 'even' : inBB(Math.abs(won))}
               tone={won > 0 ? 'good' : won < 0 ? 'bad' : 'plain'}
             />
             {/* Only where chips went in before the cards were out. Anywhere
@@ -265,14 +272,71 @@ export function Dashboard({ session }: { session: SessionState }) {
             {curve.allInHands > 0 && (
               <Figure
                 label="The cards"
-                value={`${curve.luckBB >= 0 ? '+' : '−'}${Math.abs(curve.luckBB).toFixed(1)}bb`}
+                value={inBB(curve.luckBB, { sign: true })}
                 tone={curve.luckBB >= 0 ? 'good' : 'bad'}
               />
             )}
             <Figure
               label="Your play"
-              value={`−${leak.givenUpBB.toFixed(1)}bb`}
+              value={inBB(-leak.givenUpBB)}
               tone="mark"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Won by betting, against won by having it.
+          The oldest diagnosis in poker, and it works because the two halves
+          come from different skills: taking a pot without a showdown is
+          betting, taking one at a showdown is holding the best hand. Winning
+          at showdown while bleeding everywhere else is the passive player's
+          signature, and a single winrate hides it completely. */}
+      {stats.hands >= MIN_SAMPLE && (
+        <div className="plate px-3 py-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="stamp">Won by betting, or by showing down</span>
+            <span className="text-[11px] text-[color:var(--color-bone-faint)]">big blinds</span>
+          </div>
+          <div className="mt-1.5">
+            <SignedBars
+              format={(bb) => `${bb >= 0 ? '+' : '−'}${Math.abs(bb).toFixed(1)}`}
+              rows={[
+                {
+                  label: 'shown',
+                  value: split.atShowdown,
+                  note: `${split.showdownHands}`,
+                },
+                {
+                  label: 'not',
+                  value: split.withoutShowdown,
+                  note: `${split.otherHands}`,
+                },
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* What each seat has been worth.
+          The blinds lose money for everybody; how much is the question. */}
+      {stats.hands >= MIN_SAMPLE && seats.length > 1 && (
+        <div className="plate px-3 py-2">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="stamp">By seat</span>
+            <span className="text-[11px] text-[color:var(--color-bone-faint)]">bb/100 · hands</span>
+          </div>
+          <div className="mt-1.5">
+            {/* Thin samples are drawn quietly rather than left out: a seat you
+                have played nine times has a figure, and it is not one to act
+                on. Hiding it would suggest the seat was never dealt. */}
+            <SignedBars
+              format={(bb) => `${bb >= 0 ? '+' : '−'}${Math.abs(bb).toFixed(0)}`}
+              faint={(row) => Number(row.note) < MIN_SAMPLE}
+              rows={seats.map((seat) => ({
+                label: seat.position,
+                value: seat.per100,
+                note: `${seat.hands}`,
+              }))}
             />
           </div>
         </div>

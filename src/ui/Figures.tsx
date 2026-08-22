@@ -267,12 +267,32 @@ export function Figure({
         : tone === 'mark'
           ? 'text-[color:var(--color-brass-bright)]'
           : 'text-[color:var(--color-bone)]'
+  // A minimum width, and the row it sits in is allowed to wrap: three of
+  // these across a 320-pixel screen leaves sixty-four pixels each, which no
+  // figure fits in. Two rows of readable numbers beat one row of clipped ones.
   return (
-    <div className="plate min-w-0 flex-1 px-3 py-2">
-      <div className="stamp">{label}</div>
-      <div className={`figure text-2xl ${colour}`}>{value}</div>
+    <div className="plate min-w-[6.5rem] flex-1 px-2 py-2 xs:px-3">
+      <div className="stamp truncate">{label}</div>
+      {/* Sized to the box rather than to a guess: three of these side by side
+          on a 390-pixel phone leave about ninety pixels each, and a
+          seven-character figure at 24px is wider than that. */}
+      <div className={`figure text-xl leading-tight xs:text-2xl ${colour}`}>{value}</div>
     </div>
   )
+}
+
+/**
+ * Big blinds, at a length that fits where it has to fit.
+ *
+ * A tenth of a big blind matters at four and is noise at four hundred, so the
+ * decimal is dropped once it stops carrying anything — which is also the point
+ * at which the figure stops fitting beside two others on a phone.
+ */
+export function inBB(value: number, { sign = false }: { sign?: boolean } = {}): string {
+  const size = Math.abs(value)
+  const digits = size >= 100 ? 0 : 1
+  const lead = value < 0 ? '−' : sign ? '+' : ''
+  return `${lead}${size.toFixed(digits)}bb`
 }
 
 /**
@@ -440,6 +460,81 @@ export function DecisionStrip({
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+export interface Signed {
+  label: string
+  /** Positive or negative, in whatever unit the caller formats. */
+  value: number
+  /** How many observations sit behind it, where that matters. */
+  note?: string
+}
+
+/**
+ * Values that can go either way, drawn from a line down the middle.
+ *
+ * Money is not a magnitude — losing eight big blinds from the small blind and
+ * winning eight from the button are opposite facts, and a bar chart anchored
+ * at the left draws them the same length in the same direction. The zero line
+ * is the whole point of the shape: which side of it a row sits on is the
+ * answer, and the length is only how much.
+ */
+export function SignedBars({
+  rows,
+  format,
+  faint,
+}: {
+  rows: Signed[]
+  format: (value: number) => string
+  /** Rows to draw quietly, where the sample behind them is too thin to trust. */
+  faint?: (row: Signed) => boolean
+}) {
+  if (rows.length === 0) return null
+  const widest = Math.max(...rows.map((row) => Math.abs(row.value)), 1e-9)
+
+  return (
+    <div className="space-y-1">
+      {rows.map((row) => {
+        const share = Math.abs(row.value) / widest
+        const up = row.value >= 0
+        const quiet = faint?.(row) ?? false
+        return (
+          <div key={row.label} className="flex items-center gap-2">
+            <span className="w-10 shrink-0 truncate text-[11px] text-[color:var(--color-bone-dim)]">
+              {row.label}
+            </span>
+            <div className="relative h-3 flex-1">
+              {/* The line the answer is read against. */}
+              <div
+                aria-hidden
+                className="absolute inset-y-0 left-1/2 w-px bg-[color:var(--color-ink-4)]"
+              />
+              <div
+                className={`absolute top-0 h-full ${up ? 'left-1/2 rounded-r-sm' : 'right-1/2 rounded-l-sm'}`}
+                style={{
+                  width: `${Math.max(1, share * 50)}%`,
+                  background: up ? 'var(--chart-lead)' : 'var(--chart-behind)',
+                  opacity: quiet ? 0.4 : 1,
+                }}
+              />
+            </div>
+            <span
+              className={`w-14 shrink-0 text-right font-mono text-[11px] ${
+                quiet ? 'text-[color:var(--color-bone-faint)]' : 'text-[color:var(--color-bone-dim)]'
+              }`}
+            >
+              {format(row.value)}
+            </span>
+            {row.note && (
+              <span className="w-10 shrink-0 text-right text-[10px] text-[color:var(--color-bone-faint)]">
+                {row.note}
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

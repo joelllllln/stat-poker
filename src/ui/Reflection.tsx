@@ -9,7 +9,7 @@ import {
 } from '../coach/grade'
 import { pricedHand } from '../stats/all-in-adjusted'
 import type { HandRecord } from '../game/session'
-import { DecisionStrip, Figure, Key, StreetAxis, StreetChart } from './Figures'
+import { DecisionStrip, Figure, inBB, Key, StreetAxis, StreetChart } from './Figures'
 import { SolveRiver } from './SolveRiver'
 import { Spread } from './Spread'
 import { blindPosted, madeHandInWords } from './plain'
@@ -269,15 +269,15 @@ function HandShape({
       {/* Two figures rather than one bar in two colours. What you won and
           what you gave up are not parts of a whole — a hand can be won badly
           — and a stacked bar is a promise that the parts add up. */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Figure
           label="This hand"
-          value={`${won > 0 ? '+' : ''}${won.toFixed(1)}bb`}
+          value={inBB(won, { sign: true })}
           tone={won > 0 ? 'good' : won < 0 ? 'bad' : 'plain'}
         />
         <Figure
           label="Given up"
-          value={grade.totalEvLossBB > 0.05 ? `−${grade.totalEvLossBB.toFixed(1)}bb` : 'nothing'}
+          value={grade.totalEvLossBB > 0.05 ? inBB(-grade.totalEvLossBB) : 'nothing'}
           tone={grade.totalEvLossBB > 0.05 ? 'mark' : 'good'}
         />
         {/* Only where the chips went in before the cards were out. Anywhere
@@ -285,7 +285,7 @@ function HandShape({
         {wasAllIn && (
           <Figure
             label="The cards"
-            value={`${luck >= 0 ? '+' : '−'}${Math.abs(luck).toFixed(1)}bb`}
+            value={inBB(luck, { sign: true })}
             tone={luck >= 0 ? 'good' : 'bad'}
           />
         )}
